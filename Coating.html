@@ -235,23 +235,158 @@
     function verificarAccesoGlobal() {
         const sesion = localStorage.getItem('qc_current_user');
         
-        // Si hay una sesión activa, cargamos el nombre del usuario
         if(sesion) {
             const userObj = JSON.parse(sesion);
             currentUser = userObj.name;
         } else {
-            // Si entras directo sin pasar por el login, te asigna 'Marlon' por defecto
-            // para que no se rompa el registro de lotes.
-            currentUser = "Marlon"; 
+            // Si no hay sesión iniciada, currentUser mantiene su valor previo o "Invitado"
+            if (!currentUser) currentUser = "Invitado";
         }
         
         document.getElementById('display-user').innerText = currentUser.toUpperCase();
         
-        // Mantener las funciones de datos activas
         cargarDatosNube();
         setInterval(cargarDatosNube, 5000);
         setInterval(checkAutoLimpieza, 30000);
         setInterval(actualizarCronometrosLocales, 1000);
+    }
+
+    function toTitleCase(str) { return str.toLowerCase().replace(/(?:^|\s)\w/g, m => m.toUpperCase()); }
+    
+    function formatTime(ms) {
+        if(!ms || ms < 0) return "0m 0s";
+        let s = Math.floor(ms / 1000);
+        return `${Math.floor(s / 60)}m ${s % 60}s`;
+    }
+
+    function activarPausa() { pausaSincro = true; setTimeout(() => pausaSincro = false, 8000); }
+
+    async function enviarTeams(lote, linea) {
+        const body = {
+            "type": "message",
+            "attachments": [{
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "content": {
+                    "type": "AdaptiveCard",
+                    "body": [
+                        {"type": "TextBlock", "text": "🧪 Coating: Nuevo Lote", "weight": "Bolder", "color": "Accent", "size": "Large"},
+                        {"type": "FactSet", "facts": [
+                            {"title": "Lote:", "value": lote},
+                            {"title": "Línea:", "value": linea},
+                            {"title": "Registrado por:", "value": currentUser}
+                        ]}
+                    ],
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json", "version": "1.4"
+                }
+            }]
+        };
+        fetch(URL_TEAMS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
+    }
+
+    function guardarNube() {
+        const data = { 
+            e: document.getElementById('id-espera').innerHTML, 
+            p: document.getElementById('id-proceso').innerHTML, 
+            t: document.getElementById('id-terminado').innerHTML, 
+            h: document.getElementById('cuerpoHistorial').innerHTML 
+        };
+        fetch(URL_NUBE, { method: 'POST', mode: 'no-cors', body: JSON.stringify(data) });
+    }
+
+    async function cargarDatosNube() {
+        if(pausaSincro) return;
+        try {
+            const res = await fetch(URL_NUBE);
+            const d = await res.json();
+            if(!pausaSincro) {
+                document.getElementById('id-espera').innerHTML = d.e || "";
+                document.getElementById('id-proceso').innerHTML = d.p || "";
+                document.getElementById('id-terminado').innerHTML = d.t || "";
+                document.getElementById('cuerpoHistorial').innerHTML = d.h || "";
+            }
+        } catch(e) {}
+    }
+
+    function agregarLote() {
+        const input = document.getElementById('loteIn');
+        const select = document.getElementById('lineaSelect');
+        const lote = input.value.trim();
+        const linea = toTitleCase(select.value);
+        if(!lote) return;
+        
+        activarPausa();
+        const ahora = Date.now();
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.setAttribute('data-creado', ahora);
+        div.setAttribute('data-reloj-inicio', ahora);
+        div.setAttribute('data-inspector', currentUser); 
+
+        div.innerHTML = `
+            <button style="position:absolute;right:8px;top:8px;border:none;background:none;cursor:pointer;color:#999;font-weight:bold;" onclick="eliminarLote(this)">✕</button>
+            <h3>Lote: ${lote} <span class="badge-linea">${linea}</span></h3>
+            <p class="p-inspector" style="font-size:12px; margin:2px 0; color:#666;">Registrado por: ${currentUser}</p>
+            <div class="resumen-tiempos"><div class="linea-tiempo"><span>⏱ Espera:</span> <span class="cronometro">0m 0s</span></div></div>
+            <button class="btn-action" style="background:#859900;" onclick="tomar(this, '${lote}', '${linea}')">Tomar Lote</button>`;
+        
+        document.getElementById('id-espera').appendChild(div);
+        input.value = "";
+        enviarTeams(lote, linea);
+        guardarNube();
+    }
+
+    function tomar(btn, lote, linea) {
+        activarPausa();
+        const inspectorActual = currentUser; 
+        const card = btn.closest('.card');
+        const ahora = Date.now();
+        const tEspera = ahora - parseInt(card.getAttribute('data-creado'));
+        
+        card.setAttribute('data-t-espera', tEspera);
+        card.setAttribute('data-reloj-inicio', ahora);
+        card.setAttribute('data-inspector', inspectorActual); 
+
+        card.innerHTML = `
+            <button style="position:absolute;right:8px;top:8px;border:none;background:none;cursor:pointer;color:#999;font-weight:bold;" onclick="eliminarLote(this)">✕</button>
+            <h3>Lote: ${lote} <span class="badge-linea">${linea}</span></h3>
+            <p class="p-inspector" style="font-size:12px; margin:2px 0; color:#666;">Inspector: <b>${inspectorActual}</b></p>
+            <div class="resumen-tiempos">
+                <div class="linea-tiempo"><span>⌛ Espera:</span> <span>${formatTime(tEspera)}</span></div>
+                <div class="linea-tiempo"><span>⏱ Revisión:</span> <span class="cronometro">0m 0s</span></div>
+            </div>
+            <button class="btn-action" style="background:#cb4b16;" onclick="finalizar(this, '${lote}', '${linea}')">Finalizar</button>`;
+        
+        document.getElementById('id-proceso').appendChild(card);
+        guardarNube();
+    }
+
+    function finalizar(btn, lote, linea) {
+        activarPausa();
+        const card = btn.closest('.card');
+        const responsable = card.getAttribute('data-inspector'); 
+        const ahora = Date.now();
+        const tEspera = parseInt(card.getAttribute('data-t-espera'));
+        const tRevision = ahora - parseInt(card.getAttribute('data-reloj-inicio'));
+        
+        card.setAttribute('data-fin-timestamp', ahora);
+        card.removeAttribute('data-reloj-inicio');
+        card.style.borderLeft = "5px solid #28a745";
+        
+        card.innerHTML = `
+            <button style="position:absolute;right:8px;top:8px;border:none;background:none;cursor:pointer;color:#999;font-weight:bold;" onclick="eliminarLote(this)">✕</button>
+            <h3>Lote: ${lote} <span class="badge-linea">${linea}</span></h3>
+            <p style="font-size:11px; color:#666; margin-bottom:5px;">Resp: ${responsable}</p>
+            <div class="resumen-tiempos">
+                <div class="linea-tiempo"><span>⌛ Espera:</span> <span>${formatTime(tEspera)}</span></div>
+                <div class="linea-tiempo"><span>🔍 Revisión:</span> <span>${formatTime(tRevision)}</span></div>
+                <div class="linea-tiempo" style="font-weight:bold; color:var(--verde-qc);"><span>✅ Total:</span> <span>${formatTime(tEspera + tRevision)}</span></div>
+            </div>`;
+            
+        document.getElementById('id-terminado').appendChild(card);
+        
+        const fila = `<tr><td>${new Date().toLocaleTimeString()}</td><td>${lote}</td><td>${linea}</td><td>${responsable}</td><td>${formatTime(tEspera)}</td><td>${formatTime(tRevision)}</td><td>${formatTime(tEspera+tRevision)}</td></tr>`;
+        document.getElementById('cuerpoHistorial').insertAdjacentHTML('afterbegin', fila);
+        guardarNube();
     }
 
     function toTitleCase(str) { return str.toLowerCase().replace(/(?:^|\s)\w/g, m => m.toUpperCase()); }
