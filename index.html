@@ -194,12 +194,32 @@
             const userIn = document.getElementById('loginUser').value.trim().toLowerCase();
             const passIn = document.getElementById('loginPass').value.trim();
             let encontrado = null;
-            if(userIn === "admin" && passIn === "12345") { encontrado = { name: "admin", id: "MASTER", isAdmin: true }; }
-            Object.values(usuariosGlobal).forEach(u => { if(u.name.toLowerCase() === userIn && u.pass === passIn) { encontrado = u; } });
-            if(encontrado) { localStorage.setItem('qc_session', JSON.stringify(encontrado)); aplicarSesion(encontrado.name, encontrado.id, encontrado.isAdmin); }
-            else { document.getElementById('error-msg').style.display = 'block'; }
-        }
 
+            // 1. Caso Admin Maestro
+            if(userIn === "admin" && passIn === "12345") { 
+                encontrado = { name: "admin", nombre: "ADMIN", id: "MASTER", isAdmin: true }; 
+            }
+
+            // 2. Buscar en usuarios de Firebase
+            Object.values(usuariosGlobal).forEach(u => { 
+                if(u.name.toLowerCase() === userIn && u.pass === passIn) { 
+                    encontrado = u;
+                    // Agregamos 'nombre' para que el Tracker lo reconozca sin errores
+                    encontrado.nombre = u.name; 
+                } 
+            });
+
+            if(encontrado) { 
+                // Guardamos en la memoria del navegador
+                localStorage.setItem('qc_session', JSON.stringify(encontrado)); 
+                
+                // Aplicamos la sesión visualmente
+                aplicarSesion(encontrado.name, encontrado.id, encontrado.isAdmin); 
+            }
+            else { 
+                document.getElementById('error-msg').style.display = 'block'; 
+            }
+        }
         function aplicarSesion(nombre, id, isAdmin) {
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('portal-content').style.display = 'block';
