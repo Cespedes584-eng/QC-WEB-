@@ -270,10 +270,29 @@
         });
 
         // FUNCIONES ADMIN
-        function saveUser() { 
-            const n = document.getElementById('uName').value, i = document.getElementById('uID').value, p = document.getElementById('uPass').value, a = document.getElementById('uIsAdmin').checked; 
-            if(n && p) { db.ref('users').push({ name: n, id: i, pass: p, isAdmin: a }); clearInputs(['uName', 'uID', 'uPass']); }
-        }
+       function saveUser() { 
+    const n = document.getElementById('uName').value; 
+    const i = document.getElementById('uID').value; 
+    const p = document.getElementById('uPass').value; 
+    const a = document.getElementById('uIsAdmin').checked; 
+
+    if(n && i && p) { 
+        // Esto guarda al usuario usando su ID como nombre de carpeta
+        db.ref('users/' + i).set({ 
+            name: n, 
+            id: i, 
+            pass: p, 
+            isAdmin: a 
+        }).then(() => {
+            alert("Usuario " + n + " guardado con éxito. Ya puede iniciar sesión.");
+            clearInputs(['uName', 'uID', 'uPass']); 
+        }).catch(error => {
+            alert("Error al guardar en Firebase: " + error.message);
+        });
+    } else {
+        alert("Por favor completa: Nombre, ID y Clave");
+    }
+}
         function saveFile() { 
             const n = document.getElementById('fName').value, l = document.getElementById('fLink').value, t = document.getElementById('fType').value; 
             if(n && l) { db.ref('recursos').push({nombre:n, link:l, tipo:t}); clearInputs(['fName', 'fLink']); }
