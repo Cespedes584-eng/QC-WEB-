@@ -234,15 +234,20 @@
 
     function verificarAccesoGlobal() {
         const sesion = localStorage.getItem('qc_current_user');
-        if(!sesion) {
-            alert("Acceso denegado. Inicie sesión en el portal.");
-            window.location.href = "Dashboard.html"; 
-            return;
+        
+        // Si hay una sesión activa, cargamos el nombre del usuario
+        if(sesion) {
+            const userObj = JSON.parse(sesion);
+            currentUser = userObj.name;
+        } else {
+            // Si entras directo sin pasar por el login, te asigna 'Marlon' por defecto
+            // para que no se rompa el registro de lotes.
+            currentUser = "Marlon"; 
         }
-        const userObj = JSON.parse(sesion);
-        currentUser = userObj.name;
+        
         document.getElementById('display-user').innerText = currentUser.toUpperCase();
         
+        // Mantener las funciones de datos activas
         cargarDatosNube();
         setInterval(cargarDatosNube, 5000);
         setInterval(checkAutoLimpieza, 30000);
