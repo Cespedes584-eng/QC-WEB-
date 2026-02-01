@@ -130,33 +130,37 @@
         const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
         let db = []; let tempIdx = null;
 
-        async function init() {
-            // 1. Identificar quién está usando la app
-            const sesion = localStorage.getItem('qc_session');
-            if(sesion) {
-                const u = JSON.parse(sesion);
-                // Si el usuario tiene nombre, lo ponemos en el encabezado que editamos en el paso 1
-                if(u.nombre) {
-                    document.getElementById('user-display').innerText = `👤 ${u.nombre.toUpperCase()}`;
-                }
-                // Si es admin, mostramos el botón de configuración
+async function init() {
+            // 1. BUSCADOR AUTOMÁTICO DE USUARIO
+            // Buscamos en la memoria de la computadora si alguien hizo login
+            const sesionEstandar = localStorage.getItem('qc_session');
+            const usuarioLegacy = localStorage.getItem('usuario'); // Por si tu login usa esta
+            
+            let nombreDetectado = "SIN ASIGNAR";
+
+            if (sesionEstandar) {
+                const u = JSON.parse(sesionEstandar);
+                // Busca el nombre en cualquier formato posible
+                nombreDetectado = u.nombre || u.user || u.usuario || "SIN ASIGNAR";
                 if(u.isAdmin) document.getElementById('btn-admin-config').style.display = 'inline-block';
-            } else {
-                // Si por alguna razón no hay sesión, ponemos un nombre genérico
-                document.getElementById('user-display').innerText = `👤 INVITADO`;
+            } else if (usuarioLegacy) {
+                // Si el login guardó el nombre simple sin objeto
+                nombreDetectado = usuarioLegacy;
             }
 
-            // 2. Configurar el selector de líneas
+            // Aplicamos el nombre encontrado al panel superior
+            document.getElementById('user-display').innerText = `👤 ${nombreDetectado.toUpperCase()}`;
+
+            // 2. Resto de la configuración (Líneas y Fecha)
             const sel = document.getElementById('new-line');
             sel.innerHTML = "";
             lineas.sort().forEach(l => { sel.innerHTML += `<option value="${l}">${l}</option>`; });
             document.getElementById('main-date-filter').valueAsDate = new Date();
 
-            // 3. Cargar datos locales primero para rapidez
+            // 3. Cargar datos
             const localData = localStorage.getItem('qc_final_v88');
             if (localData) { db = JSON.parse(localData); render(); }
 
-            // 4. Sincronizar con la nube
             try {
                 const response = await fetch(SCRIPT_URL);
                 const data = await response.json();
@@ -183,7 +187,6 @@
                 }
             } catch (e) { console.error("Error nube:", e); }
         }
-
         function updateTimers() {
             db.forEach((l, i) => {
                 if (l.st === 'done') return;
@@ -280,14 +283,13 @@
             const ahora = Date.now();
             const lote = db[i];
             
-            // 1. Buscamos quién es el usuario activo justo ahora
             const sesion = localStorage.getItem('qc_session');
             let nombreUsuarioActivo = "SIN ASIGNAR";
             
             if(sesion) {
                 const u = JSON.parse(sesion);
-                // Si existe el nombre en la sesión, lo usamos, si no, se queda como SIN ASIGNAR
-                nombreUsuarioActivo = u.nombre || "SIN ASIGNAR";
+                // BUSCA CUALQUIER VARIABLE QUE TENGA EL NOMBRE (nombre, user o usuario)
+                nombreUsuarioActivo = u.nombre || u.user || u.usuario || "SIN ASIGNAR";
             }
 
             if (lote.st === 'rev' && lote.inicioRS) lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
@@ -297,8 +299,10 @@
 
             if (s === 'rev') {
                 lote.inicioRS = ahora;
-                // 2. CLAVE: Aquí es donde asignamos a Priscilla o quien sea que dio clic
-                lote.user = nombreUsuarioActivo.toUpperCase(); 
+                // Si el lote no tiene usuario o dice SIN ASIGNAR, le ponemos el actual
+                if(!lote.user || lote.user === "SIN ASIGNAR") {
+                    lote.user = nombreUsuarioActivo.toUpperCase(); 
+                }
             } else if (s === 'corr') {
                 lote.inicioCS = ahora;
             }
