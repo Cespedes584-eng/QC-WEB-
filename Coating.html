@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Coating Tracker - QC</title>
+    <style>
+        /* PALETA DE COLORES UNIFICADA */
+        :root {
+            --azul-oscuro: #24303c;
+            --azul-fondo: #ebedef;
+            --verde-qc: #4caf50;
+            --blanco: #ffffff;
+            --texto-oscuro: #333;
+            --rojo-peligro: #d32f2f;
+            --teams-azul: #464eb8;
+        }
+
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: var(--azul-fondo); 
+            color: var(--texto-oscuro); 
+            margin: 0; 
+            padding: 0; 
+        }
+        
+        /* BARRA SUPERIOR */
+        .user-bar { 
+            background: var(--azul-oscuro); 
+            padding: 10px 20px; 
+            display: flex; 
+            justify-content: space-between; 
+            border-bottom: 3px solid var(--verde-qc); 
+            align-items: center; 
+            color: white;
+        }
+        .app-title { 
+            color: white; 
+            margin: 0; 
+            font-size: 22px; 
+            letter-spacing: 1px; 
+            font-weight: bold; 
+        }
+        
+        .btn-instrucciones { background: #4a5568; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; transition: 0.3s; }
+        .btn-instrucciones:hover { background: #718096; }
+        .btn-volver { background: #c62828; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; transition: 0.3s; text-decoration: none; }
+        .btn-volver:hover { background: #b71c1c; opacity: 0.9; }
+
+        /* TABS */
+        .tabs { display: flex; justify-content: center; gap: 5px; margin: 15px 0; }
+        .tab-btn { 
+            padding: 10px 25px; 
+            cursor: pointer; 
+            background: #546e7a; 
+            border: none; 
+            color: white; 
+            font-weight: bold; 
+            border-radius: 4px; 
+            font-size: 13px; 
+            transition: 0.3s;
+        }
+        .tab-btn.active { background: var(--verde-qc); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        
+        .view { display: none; padding: 0 15px; }
+        .view.active { display: block; }
+
+        /* BARRA DE HERRAMIENTAS */
+        .top-bar { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            background: var(--blanco); 
+            padding: 15px 20px; 
+            border-radius: 8px; 
+            margin-bottom: 15px; 
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .register-zone { flex: 2; display: flex; justify-content: center; gap: 8px; padding: 0 20px; }
+
+        .input-lote { padding: 10px; border-radius: 4px; border: 1px solid #ccc; width: 140px; font-size: 14px; font-weight: bold; }
+        .select-linea { padding: 9px; border-radius: 4px; border: 1px solid #ccc; font-size: 14px; background: white; color: #333; font-weight: bold; cursor: pointer; }
+        .btn-registrar { padding: 10px 25px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; }
+        .btn-limpiar-mini { background: var(--rojo-peligro); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; }
+
+        /* TABLERO */
+        .dashboard { display: flex; gap: 12px; align-items: flex-start; }
+        .column { 
+            background: #fdfdfd; 
+            width: 33.33%; 
+            min-height: 70vh; 
+            border-radius: 8px; 
+            border: 1px solid #ced4da;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        .column h2 { 
+            text-align: center; 
+            font-size: 14px; 
+            background: var(--verde-qc); 
+            margin: 0; 
+            padding: 12px; 
+            color: white; 
+            letter-spacing: 1px;
+            font-weight: bold;
+        }
+        
+        /* TARJETAS */
+        .card { 
+            background: white; 
+            color: #333; 
+            margin: 10px; 
+            padding: 15px; 
+            border-radius: 6px; 
+            position: relative; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15); 
+            border-left: 5px solid var(--verde-qc);
+            animation: fadeIn 0.3s; 
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .card h3 { margin: 0 0 8px 0; font-size: 16px; color: #1a202c; font-weight: 800; }
+        .btn-action { width: 100%; margin-top: 10px; padding: 12px; border: none; color: white; cursor: pointer; font-weight: 900; border-radius: 4px; text-transform: uppercase; font-size: 12px; }
+        .badge-linea { background: #e2e8f0; color: #2d3748; padding: 3px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px; vertical-align: middle; border: 1px solid #cbd5e0; }
+        
+        /* TABLA HISTORIAL */
+        table { width: 100%; background: white; color: #333; border-collapse: collapse; border-radius: 8px; overflow: hidden; }
+        th { background: var(--azul-oscuro); color: white; padding: 12px; font-size: 12px; text-transform: uppercase; }
+        td { border: 1px solid #eee; padding: 10px; text-align: center; font-size: 12px; }
+        .linea-tiempo { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; border-bottom: 1px solid #f0f0f0; padding-bottom: 2px; }
+
+        /* MODAL */
+        .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); backdrop-filter: blur(3px); }
+        .modal-content { background-color: white; margin: 5% auto; padding: 30px; border-top: 10px solid var(--verde-qc); width: 45%; border-radius: 8px; color: var(--texto-oscuro); box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body onload="verificarAccesoGlobal()">
+
+<div class="user-bar">
+    <button onclick="abrirInstrucciones()" class="btn-instrucciones">📖 INSTRUCCIONES</button>
+    <h1 class="app-title">COATING TRACKER</h1>
+    <div style="display: flex; align-items: center; gap: 15px;">
+        <span style="font-size: 13px; font-weight: bold;">👤 <span id="display-user"></span></span>
+        <a href="Index.html" class="btn-volver">VOLVER</a>
+    </div>
+</div>
+
+<div class="tabs">
+    <button class="tab-btn active" onclick="cambiarTab('flujo', this)">FLUJO DE TRABAJO</button>
+    <button class="tab-btn" onclick="cambiarTab('historial', this)">HISTORIAL DEL DÍA</button>
+</div>
+
+<div id="instruccionesModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="cerrarInstrucciones()">&times;</span>
+        <h2 style="color:var(--azul-oscuro); border-bottom: 2px solid var(--verde-qc); padding-bottom: 10px;">📖 Guía de Uso Rápido</h2>
+        
+        <div style="margin-top: 15px;">
+            <h3 style="color: var(--verde-qc); font-size: 16px;">📝 Registro de un nuevo lote</h3>
+            <ol style="line-height: 1.8; font-size: 14px;">
+                <li>Localiza la <strong>barra central superior</strong> en la pestaña de flujo.</li>
+                <li><strong>Selecciona la línea</strong> correspondiente en el menú desplegable.</li>
+                <li>Escribe el número de lote en el campo <strong>"N° Lote..."</strong>.</li>
+                <li>Presiona <strong>Enter</strong> o el botón <strong>REGISTRAR</strong> para activarlo.</li>
+            </ol>
+        </div>
+
+        <div style="margin-top: 20px; padding: 15px; background-color: #f0f4f8; border-left: 5px solid var(--teams-azul); border-radius: 4px;">
+            <p style="margin: 0; font-weight: bold; color: var(--teams-azul);">
+                💬 Notificaciones de Teams: <span style="color:var(--texto-oscuro); font-weight: normal;">El sistema envía una alerta automática al canal de calidad al momento del registro.</span>
+            </p>
+        </div>
+
+        <div style="text-align:center; margin-top:25px;">
+            <button onclick="cerrarInstrucciones()" style="background:var(--azul-oscuro); color:white; border:none; padding:12px 40px; border-radius:4px; cursor:pointer; font-weight:bold; letter-spacing: 1px;">ENTENDIDO</button>
+        </div>
+    </div>
+</div>
+
+<div id="flujo" class="view active">
+    <div class="top-bar">
+        <div style="flex:1">
+            <input type="text" id="searchFlujo" placeholder="🔍 Buscar lote..." oninput="filtrarFlujo()" style="padding:10px; border-radius:4px; border:1px solid #ccc; width:180px;">
+        </div>
+        <div class="register-zone">
+            <select id="lineaSelect" class="select-linea">
+                <option value="Sofia 6f">Sofia 6F</option>
+                <option value="Sofia 5f">Sofia 5F</option>
+                <option value="Sofia ex">Sofia EX</option>
+                <option value="Via">Via</option>
+                <option value="Headway 27">Headway 27</option>
+                <option value="Headway 21">Headway 21</option>
+                <option value="Headway regular">Headway Regular</option>
+                <option value="Duo short">Duo Short</option>
+                <option value="Duo long">Duo Long</option>
+            </select>
+            <input type="text" id="loteIn" class="input-lote" placeholder="N° Lote..." onkeypress="if(event.key==='Enter') agregarLote()">
+            <button onclick="agregarLote()" class="btn-registrar">REGISTRAR</button>
+        </div>
+        <div style="flex:1; text-align:right;">
+            <button onclick="limpiarConClave()" class="btn-limpiar-mini">VACIAR TABLERO</button>
+        </div>
+    </div>
+
+    <div class="dashboard">
+        <div class="column"><h2>📥 ESPERA</h2><div id="id-espera"></div></div>
+        <div class="column"><h2>🔍 REVISIÓN</h2><div id="id-proceso"></div></div>
+        <div class="column"><h2>✅ TERMINADO</h2><div id="id-terminado"></div></div>
+    </div>
+</div>
+
+<div id="historial" class="view">
+    <div class="top-bar">
+        <input type="text" id="searchHistorial" placeholder="🔍 Buscar en historial..." oninput="filtrarHistorial()" style="padding:10px; width: 300px; border-radius:4px; border:1px solid #ccc;">
+        <button onclick="exportarCSV()" style="background:var(--verde-qc); color:white; padding:10px 25px; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">📊 EXPORTAR EXCEL</button>
+    </div>
+    <div style="padding:15px; background: white; border-radius: 8px; border: 1px solid #ddd;">
+        <table>
+            <thead><tr><th>Fecha</th><th>Lote</th><th>Línea</th><th>Inspector</th><th>T. Espera</th><th>T. Revisión</th><th>T. Total</th></tr></thead>
+            <tbody id="cuerpoHistorial"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const CLAVE_ADMIN = "1234"; 
+    const URL_NUBE = "https://script.google.com/macros/s/AKfycbyyygiMYrywmB_FdxDyyaqn9Lgfrd2vjLCSg9XG7dyS6I6ssO_EEZgywoPrkWF5-oBlUg/exec";
+    const URL_TEAMS = "https://default1687bd898f004ac48a85fff50aefa6.c5.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/0f16c956c99b4582b6b39f3b2b2f8373/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=loErLoCZovfhnCLsw7uxY6F-bLQrnoD-StMZU9sxpOs";
+
+    let pausaSincro = false;
+    let currentUser = "Invitado";
+
+    function verificarAccesoGlobal() {
+        const sesion = localStorage.getItem('qc_current_user');
+        if(!sesion) {
+            alert("Acceso denegado. Inicie sesión en el portal.");
+            window.location.href = "Dashboard.html"; 
+            return;
+        }
+        const userObj = JSON.parse(sesion);
+        currentUser = userObj.name;
+        document.getElementById('display-user').innerText = currentUser.toUpperCase();
+        
+        cargarDatosNube();
+        setInterval(cargarDatosNube, 5000);
+        setInterval(checkAutoLimpieza, 30000);
+        setInterval(actualizarCronometrosLocales, 1000);
+    }
+
+    function toTitleCase(str) { return str.toLowerCase().replace(/(?:^|\s)\w/g, m => m.toUpperCase()); }
+    
+    function formatTime(ms) {
+        if(!ms || ms < 0) return "0m 0s";
+        let s = Math.floor(ms / 1000);
+        return `${Math.floor(s / 60)}m ${s % 60}s`;
+    }
+
+    function activarPausa() { pausaSincro = true; setTimeout(() => pausaSincro = false, 8000); }
+
+    async function enviarTeams(lote, linea) {
+        const body = {
+            "type": "message",
+            "attachments": [{
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "content": {
+                    "type": "AdaptiveCard",
+                    "body": [
+                        {"type": "TextBlock", "text": "🧪 Coating: Nuevo Lote", "weight": "Bolder", "color": "Accent", "size": "Large"},
+                        {"type": "FactSet", "facts": [
+                            {"title": "Lote:", "value": lote},
+                            {"title": "Línea:", "value": linea},
+                            {"title": "Inspector:", "value": currentUser}
+                        ]}
+                    ],
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json", "version": "1.4"
+                }
+            }]
+        };
+        fetch(URL_TEAMS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
+    }
+
+    function guardarNube() {
+        const data = { 
+            e: document.getElementById('id-espera').innerHTML, 
+            p: document.getElementById('id-proceso').innerHTML, 
+            t: document.getElementById('id-terminado').innerHTML, 
+            h: document.getElementById('cuerpoHistorial').innerHTML 
+        };
+        fetch(URL_NUBE, { method: 'POST', mode: 'no-cors', body: JSON.stringify(data) });
+    }
+
+    async function cargarDatosNube() {
+        if(pausaSincro) return;
+        try {
+            const res = await fetch(URL_NUBE);
+            const d = await res.json();
+            if(!pausaSincro) {
+                document.getElementById('id-espera').innerHTML = d.e || "";
+                document.getElementById('id-proceso').innerHTML = d.p || "";
+                document.getElementById('id-terminado').innerHTML = d.t || "";
+                document.getElementById('cuerpoHistorial').innerHTML = d.h || "";
+            }
+        } catch(e) {}
+    }
+
+    function agregarLote() {
+        const input = document.getElementById('loteIn');
+        const select = document.getElementById('lineaSelect');
+        const lote = input.value.trim();
+        const linea = toTitleCase(select.value);
+        if(!lote) return;
+        
+        activarPausa();
+        const ahora = Date.now();
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.setAttribute('data-creado', ahora);
+        div.setAttribute('data-reloj-inicio', ahora);
+        div.innerHTML = `
+            <button style="position:absolute;right:8px;top:8px;border:none;background:none;cursor:pointer;color:#999;font-weight:bold;" onclick="eliminarLote(this)">✕</button>
+            <h3>Lote: ${lote} <span class="badge-linea">${linea}</span></h3>
+            <p style="font-size:12px; margin:2px 0; color:#666;">Insp: ${currentUser}</p>
+            <div class="resumen-tiempos"><div class="linea-tiempo"><span>⏱ Espera:</span> <span class="cronometro">0m 0s</span></div></div>
+            <button class="btn-action" style="background:#859900;" onclick="tomar(this, '${lote}', '${linea}')">Tomar Lote</button>`;
+        
+        document.getElementById('id-espera').appendChild(div);
+        input.value = "";
+        enviarTeams(lote, linea);
+        guardarNube();
+    }
+
+    function tomar(btn, lote, linea) {
+        activarPausa();
+        const card = btn.closest('.card');
+        const ahora = Date.now();
+        const tEspera = ahora - parseInt(card.getAttribute('data-creado'));
+        card.setAttribute('data-t-espera', tEspera);
+        card.setAttribute('data-reloj-inicio', ahora);
+        card.innerHTML = `
+            <button style="position:absolute;right:8px;top:8px;border:none;background:none;cursor:pointer;color:#999;font-weight:bold;" onclick="eliminarLote(this)">✕</button>
+            <h3>Lote: ${lote} <span class="badge-linea">${linea}</span></h3>
+            <div class="resumen-tiempos">
+                <div class="linea-tiempo"><span>⌛ Espera:</span> <span>${formatTime(tEspera)}</span></div>
+                <div class="linea-tiempo"><span>⏱ Revisión:</span> <span class="cronometro">0m 0s</span></div>
+            </div>
+            <button class="btn-action" style="background:#cb4b16;" onclick="finalizar(this, '${lote}', '${linea}')">Finalizar</button>`;
+        document.getElementById('id-proceso').appendChild(card);
+        guardarNube();
+    }
+
+    function finalizar(btn, lote, linea) {
+        activarPausa();
+        const card = btn.closest('.card');
+        const ahora = Date.now();
+        const tEspera = parseInt(card.getAttribute('data-t-espera'));
+        const tRevision = ahora - parseInt(card.getAttribute('data-reloj-inicio'));
+        card.setAttribute('data-fin-timestamp', ahora);
+        card.removeAttribute('data-reloj-inicio');
+        card.style.borderLeft = "5px solid #28a745";
+        card.innerHTML = `
+            <button style="position:absolute;right:8px;top:8px;border:none;background:none;cursor:pointer;color:#999;font-weight:bold;" onclick="eliminarLote(this)">✕</button>
+            <h3>Lote: ${lote} <span class="badge-linea">${linea}</span></h3>
+            <div class="resumen-tiempos">
+                <div class="linea-tiempo"><span>⌛ Espera:</span> <span>${formatTime(tEspera)}</span></div>
+                <div class="linea-tiempo"><span>🔍 Revisión:</span> <span>${formatTime(tRevision)}</span></div>
+                <div class="linea-tiempo" style="font-weight:bold; color:var(--verde-qc);"><span>✅ Total:</span> <span>${formatTime(tEspera + tRevision)}</span></div>
+            </div>`;
+        document.getElementById('id-terminado').appendChild(card);
+        const fila = `<tr><td>${new Date().toLocaleTimeString()}</td><td>${lote}</td><td>${linea}</td><td>${currentUser}</td><td>${formatTime(tEspera)}</td><td>${formatTime(tRevision)}</td><td>${formatTime(tEspera+tRevision)}</td></tr>`;
+        document.getElementById('cuerpoHistorial').insertAdjacentHTML('afterbegin', fila);
+        guardarNube();
+    }
+
+    function actualizarCronometrosLocales() {
+        document.querySelectorAll('.card').forEach(c => {
+            const inicio = c.getAttribute('data-reloj-inicio');
+            if(inicio && !c.getAttribute('data-fin-timestamp')) {
+                const crono = c.querySelector('.cronometro');
+                if(crono) crono.innerText = formatTime(Date.now() - parseInt(inicio));
+            }
+        });
+    }
+
+    function checkAutoLimpieza() {
+        const ahora = Date.now();
+        let cambios = false;
+        document.querySelectorAll('#id-terminado .card').forEach(card => {
+            const fin = parseInt(card.getAttribute('data-fin-timestamp'));
+            if (fin && (ahora - fin > 3600000)) { card.remove(); cambios = true; }
+        });
+        if (cambios) guardarNube();
+    }
+
+    function eliminarLote(btn) { if(prompt("Clave Admin:") === CLAVE_ADMIN) { btn.closest('.card').remove(); guardarNube(); } }
+    function limpiarConClave() { if(prompt("Clave Admin:") === CLAVE_ADMIN) { document.querySelectorAll('.card').forEach(c => c.remove()); guardarNube(); } }
+    function abrirInstrucciones() { document.getElementById("instruccionesModal").style.display = "block"; }
+    function cerrarInstrucciones() { document.getElementById("instruccionesModal").style.display = "none"; }
+    function cambiarTab(id, btn) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+    function filtrarFlujo() {
+        const q = document.getElementById('searchFlujo').value.toLowerCase();
+        document.querySelectorAll('#flujo .card').forEach(c => c.style.display = c.innerText.toLowerCase().includes(q) ? "block" : "none");
+    }
+    function filtrarHistorial() {
+        const q = document.getElementById('searchHistorial').value.toLowerCase();
+        document.querySelectorAll('#cuerpoHistorial tr').forEach(row => row.style.display = row.innerText.toLowerCase().includes(q) ? "" : "none");
+    }
+    function exportarCSV() {
+        let csv = "\uFEFF";
+        document.querySelectorAll("table tr").forEach(f => {
+            csv += Array.from(f.querySelectorAll("th, td")).map(c => `"${c.innerText}"`).join(",") + "\r\n";
+        });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+        link.download = "Coating_Report_" + new Date().toLocaleDateString() + ".csv";
+        link.click();
+    }
+</script>
+</body>
+</html>

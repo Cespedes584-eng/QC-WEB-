@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QC Document Review</title>
+    <style>
+        :root { --dark: #24303c; --green: #468e5d; --blue: #3498db; --bg: #ebedef; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); overflow-y: auto; color: #333; min-height: 100vh; }
+        .header-top { background: var(--dark); color: white; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--green); position: sticky; top: 0; z-index: 1000; }
+        .nav-btns { display: flex; gap: 10px; align-items: center; }
+        .btn-nav { background: #455a64; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.85em; display: flex; align-items: center; gap: 6px; }
+        .btn-excel { background: var(--green); }
+        .clock-display { font-family: monospace; background: #000; padding: 6px 12px; border-radius: 4px; border: 1px solid #444; }
+        .stats-bar { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; background: white; padding: 15px 30px; border-bottom: 1px solid #ccc; }
+        .stat-card { border-left: 5px solid var(--green); padding-left: 20px; text-align: center; }
+        .stat-value { font-size: 2em; font-weight: 800; color: var(--dark); }
+        .workspace { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; padding: 15px; box-sizing: border-box; align-items: start; }
+        .col { background: #e2e4e6; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; min-height: 200px; }
+        .col-header { background: #34495e; color: white; padding: 12px; border-radius: 6px; margin-bottom: 15px; font-weight: bold; flex-shrink: 0; position: sticky; top: 80px; z-index: 10; }
+        .list { flex-grow: 1; display: flex; flex-direction: column; gap: 12px; }
+        .card { background: white; border-radius: 8px; padding: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border: 1px solid #ced4da; flex-shrink: 0; }
+        .timer-big { font-family: monospace; font-size: 1.5em; font-weight: bold; color: var(--blue); text-align: center; display: block; margin: 10px 0; background: #f0f7ff; border-radius: 4px; padding: 5px; }
+        .status-final { font-size: 1.2em; font-weight: 900; color: var(--green); text-align: center; display: block; margin: 15px 0; letter-spacing: 2px; text-transform: uppercase; }
+        .timer-grid-3 { background: #f8f9fa; border-radius: 4px; padding: 8px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; border: 1px solid #eee; margin-bottom: 10px; }
+        .t-item { text-align: center; font-family: monospace; font-size: 0.75em; color: #555; border-right: 1px solid #ddd; }
+        .t-item:last-child { border-right: none; }
+        .t-lbl { display: block; font-size: 0.65em; font-weight: bold; color: #999; text-transform: uppercase; }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; align-items: center; justify-content: center; }
+        .modal-content { background: white; padding: 30px; border-radius: 12px; width: 350px; text-align: center; }
+        .modal-input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.95rem; text-align: center; box-sizing: border-box; }
+        #admin-panel { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 1500; padding: 25px; box-sizing: border-box; flex-direction: column; overflow-y: auto; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 2px solid #ddd; }
+        .tab { padding: 12px 25px; cursor: pointer; background: #f0f0f0; border-radius: 8px 8px 0 0; font-weight: bold; }
+        .tab.active { background: var(--green); color: white; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+        th { background: var(--dark); color: white; padding: 12px; position: sticky; top: 0; }
+        td { padding: 10px; border-bottom: 1px solid #eee; text-align: center; }
+        .pencil { cursor: pointer; color: var(--blue); margin-left: 5px; }
+        .fab { position: fixed; bottom: 30px; right: 30px; width: 65px; height: 65px; background: var(--green); color: white; border-radius: 50%; font-size: 35px; border: none; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 999; }
+        .btn { padding: 12px; border: none; border-radius: 6px; font-weight: 800; cursor: pointer; text-transform: uppercase; width: 100%; margin-top: 8px; font-size: 0.85em; }
+        .search-bar { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 6px; border: 1px solid #ccc; box-sizing: border-box; }
+    </style>
+</head>
+<body onload="init()">
+
+    <div class="header-top">
+        <div class="nav-btns">
+            <button class="btn-nav" onclick="window.location.href='Index.html'">🏠 VOLVER</button>
+            <span style="font-weight:900;">QC BR REVIEW TRACKER</span>
+        </div>
+        <div class="nav-btns">
+            <div class="btn-nav" style="background:#34495e">👤 MARLON (584)</div>
+            <button class="btn-nav btn-excel" onclick="exportExcel()">📊 REPORTE EXCEL</button>
+            <button id="btn-admin-config" class="btn-nav" style="background:var(--blue); display: none;" onclick="toggleAdmin(true)">⚙️ PANEL Y RENDIMIENTO</button>
+            <div id="reloj" class="clock-display">00:00:00</div>
+        </div>
+    </div>
+
+    <div class="stats-bar">
+        <div class="stat-card"><span>BRS HOY</span><div class="stat-value" id="top-brs">0</div></div>
+        <div class="stat-card"><span>PÁGINAS TOTALES</span><div class="stat-value" id="top-pags">0</div></div>
+        <div class="stat-card" style="border-left-color: var(--blue);"><span>HISTORIAL</span><br><input type="date" id="main-date-filter" onchange="render()" style="border:none; font-weight:bold; font-size:1.1em; cursor:pointer;"></div>
+    </div>
+
+    <div class="workspace">
+        <div class="col"><div class="col-header">ESPERA <span id="c-wait">0</span></div><div id="list-wait" class="list"></div></div>
+        <div class="col"><div class="col-header" style="background:var(--green)">PROCESANDO <span id="c-run">0</span></div><div id="list-run" class="list"></div></div>
+        <div class="col"><div class="col-header" style="background:#5d6d7e">FINALIZADOS <span id="c-done">0</span></div><div id="list-done" class="list"></div></div>
+    </div>
+
+    <button class="fab" onclick="showModal('modal-new')">+</button>
+
+    <div id="modal-new" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Nuevo Registro</h3>
+            <input type="text" id="new-id" placeholder="Número de Lote" class="modal-input">
+            <select id="new-line" class="modal-input"></select>
+            <button class="btn" style="background:var(--green); color:white" onclick="addBR()">REGISTRAR LOTE</button>
+            <button class="btn" style="background:#eee" onclick="hideModal('modal-new')">CERRAR</button>
+        </div>
+    </div>
+
+    <div id="modal-finish" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Finalizar Revisión</h3>
+            <input type="number" id="finish-pg" placeholder="Total de Páginas" class="modal-input">
+            <button class="btn" style="background:var(--green); color:white" onclick="confirmFinish()">COMPLETAR</button>
+            <button class="btn" style="background:#eee" onclick="hideModal('modal-finish')">CANCELAR</button>
+        </div>
+    </div>
+
+    <div id="admin-panel">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h2 style="margin:0;">Gestión y Rendimiento</h2>
+            <button onclick="toggleAdmin(false)" style="background:#e74c3c; color:white; border:none; padding:10px 20px; border-radius:6px; font-weight:bold; cursor:pointer;">CERRAR</button>
+        </div>
+        
+        <div class="tabs">
+            <div id="tab-perf" class="tab active" onclick="switchTab('perf')">📈 RENDIMIENTO</div>
+            <div id="tab-edit" class="tab" onclick="switchTab('edit')">🛠️ EDITAR LOTES</div>
+        </div>
+        
+        <div id="view-perf">
+            <div style="display:flex; gap:10px; align-items:center; margin-bottom:15px;">
+                <input type="text" id="perf-search" oninput="renderPerf()" placeholder="🔍 Filtrar por Línea, Inspector o Lote..." class="search-bar" style="margin-bottom:0;">
+                <button onclick="exportExcel()" class="btn btn-excel" style="width:200px; margin-top:0;">📥 DESCARGAR EXCEL</button>
+            </div>
+            <div style="overflow-y:auto; height:60vh; border:1px solid #ddd;">
+                <table>
+                    <thead><tr><th>Fecha</th><th>Hora Fin</th><th>Lote</th><th>Línea</th><th>Inspector</th><th>Págs</th><th>Tiempo Rev</th></tr></thead>
+                    <tbody id="perf-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="view-edit" style="display:none;">
+            <input type="text" id="adm-search" oninput="renderAdmin()" placeholder="🔍 Buscar por Lote..." class="search-bar">
+            <div style="overflow-y:auto; height:60vh; border:1px solid #ddd;">
+                <table>
+                    <thead><tr><th>Fecha</th><th>Lote</th><th>Línea</th><th>Inspector</th><th>Págs</th><th>Acción</th></tr></thead>
+                    <tbody id="adm-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+   <script>
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbymrLCk5xdsQixB9ZE-veFeeFWEU0aahtKmcz9pUMSl1pO9txoivC8t7MCzzbi0c2kNFA/exec";
+        const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
+        let db = []; let tempIdx = null;
+
+        async function init() {
+            const sesion = localStorage.getItem('qc_session');
+            if(sesion) {
+                const u = JSON.parse(sesion);
+                if(u.isAdmin) document.getElementById('btn-admin-config').style.display = 'inline-block';
+            }
+            const sel = document.getElementById('new-line');
+            sel.innerHTML = "";
+            lineas.sort().forEach(l => { sel.innerHTML += `<option value="${l}">${l}</option>`; });
+            document.getElementById('main-date-filter').valueAsDate = new Date();
+
+            const localData = localStorage.getItem('qc_final_v88');
+            if (localData) { db = JSON.parse(localData); render(); }
+
+            try {
+                const response = await fetch(SCRIPT_URL);
+                const data = await response.json();
+                if(data && Array.isArray(data)) {
+                    db = data.map(item => ({
+                        id: item.id,
+                        line: item.line || item.linea,
+                        user: item.user || "SIN ASIGNAR",
+                        st: item.st,
+                        inicioWS: item.inicioWS || null,
+                        inicioRS: item.inicioRS || null,
+                        inicioCS: item.inicioCS || null,
+                        tR_acumulado: item.tR_acumulado || 0,
+                        tC_acumulado: item.tC_acumulado || 0,
+                        tW: item.tw || 0,
+                        tR: item.tr || 0,
+                        tC: item.tc || 0,
+                        date: formatearFecha(item.date),
+                        pg: item.pg || 0,
+                        hFin: item.hfin || ""
+                    }));
+                    localStorage.setItem('qc_final_v88', JSON.stringify(db));
+                    render();
+                }
+            } catch (e) { 
+                console.error("Error nube:", e); 
+            }
+        } 
+
+        function updateTimers() {
+            db.forEach((l, i) => {
+                if (l.st === 'done') return;
+                
+                const mainTimer = document.getElementById(`live-${i}`);
+                if (mainTimer) {
+                    const displayTime = (l.st === 'wait') ? l.tW : (l.st === 'rev' ? l.tR : l.tC);
+                    mainTimer.innerText = fmt(displayTime);
+                }
+
+                const grid = document.getElementById(`grid-${i}`);
+                if (grid) {
+                    grid.innerHTML = `
+                        <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
+                        <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
+                        <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
+                    `;
+                }
+            });
+        }
+
+       function tick() {
+            const ahora = Date.now();
+            db.forEach(l => {
+                if (l.st === 'done') return; 
+                if (l.st === 'wait' && l.inicioWS) l.tW = ahora - l.inicioWS;
+                if (l.st === 'rev' && l.inicioRS) l.tR = (ahora - l.inicioRS) + (l.tR_acumulado || 0);
+                if (l.st === 'corr' && l.inicioCS) l.tC = (ahora - l.inicioCS) + (l.tC_acumulado || 0);
+            });
+            updateTimers(); 
+            document.getElementById('reloj').innerText = new Date().toLocaleTimeString();
+        }
+
+        function formatearFecha(f) {
+            if(!f) return new Date().toISOString().split('T')[0];
+            const d = new Date(f);
+            return isNaN(d) ? f : d.toISOString().split('T')[0];
+        }
+
+        function fmt(ms) {
+            if (isNaN(ms) || ms === null || ms < 0) return "00:00";
+            const totalSegundos = Math.floor(ms / 1000);
+            const horas = Math.floor(totalSegundos / 3600);
+            const minutos = Math.floor((totalSegundos % 3600) / 60);
+            const segundos = totalSegundos % 60;
+            if (horas > 0) return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
+            return `${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
+        }
+
+       function render() {
+            const cont = { wait: document.getElementById('list-wait'), run: document.getElementById('list-run'), done: document.getElementById('list-done') };
+            const count = { wait: 0, run: 0, done: 0 };
+            Object.values(cont).forEach(c => c.innerHTML = "");
+            
+            const selDate = document.getElementById('main-date-filter').value;
+            let topB = 0, topP = 0;
+
+            [...db].reverse().forEach((l) => {
+                const originalIdx = db.indexOf(l);
+                if (l.date !== selDate) return; 
+
+                const isFinalizado = (l.st === 'done');
+                if(isFinalizado) { topB++; topP += parseInt(l.pg || 0); }
+                
+                const card = `
+                <div class="card">
+                    <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
+                    <div style="font-size:0.75em; color:#666; margin-bottom:8px;">${l.line} | ${l.user}</div>
+                    ${isFinalizado ? '<span class="status-final">FINALIZADO</span>' : `<span class="timer-big" id="live-${originalIdx}">00:00</span>`}
+                    <div class="timer-grid-3" id="grid-${originalIdx}">
+                        <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
+                        <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
+                        <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
+                    </div>
+                    ${l.st === 'wait' ? `<button class="btn" style="background:var(--green); color:white" onclick="changeSt(${originalIdx},'rev')">INICIAR</button>` : 
+                      l.st === 'rev' ? `<button class="btn" style="background:#f39c12; color:white; margin-bottom:5px;" onclick="changeSt(${originalIdx},'corr')">CORRECCIÓN</button><button class="btn" style="background:var(--dark); color:white" onclick="openFin(${originalIdx})">FINALIZAR</button>` : 
+                      l.st === 'corr' ? `<button class="btn" style="background:var(--green); color:white" onclick="changeSt(${originalIdx},'rev')">REANUDAR</button>` : 
+                      `<div style="text-align:center; font-weight:bold; color:var(--green); padding-top:5px;">PÁGINAS: ${l.pg}</div>`}
+                </div>`;
+                
+                if (l.st === 'wait') { cont.wait.innerHTML += card; count.wait++; }
+                else if (l.st === 'done') { cont.done.innerHTML += card; count.done++; }
+                else { cont.run.innerHTML += card; count.run++; }
+            });
+
+            document.getElementById('top-brs').innerText = topB; 
+            document.getElementById('top-pags').innerText = topP;
+            document.getElementById('c-wait').innerText = count.wait; 
+            document.getElementById('c-run').innerText = count.run; 
+            document.getElementById('c-done').innerText = count.done;
+        }
+
+        function changeSt(i, s) { 
+            const ahora = Date.now();
+            const lote = db[i];
+            if (lote.st === 'rev' && lote.inicioRS) lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
+            if (lote.st === 'corr' && lote.inicioCS) lote.tC_acumulado = (ahora - lote.inicioCS) + (lote.tC_acumulado || 0);
+            lote.st = s;
+            if (s === 'rev') {
+                lote.inicioRS = ahora;
+                if (lote.user === "SIN ASIGNAR" || !lote.user) lote.user = "MARLON"; 
+            } else if (s === 'corr') {
+                lote.inicioCS = ahora;
+            }
+            save();
+        }
+
+        function openFin(i) { tempIdx = i; showModal('modal-finish'); }
+
+        function confirmFinish() {
+            const p = document.getElementById('finish-pg').value;
+            if(p) { 
+                db[tempIdx].pg = p; db[tempIdx].st = 'done'; 
+                db[tempIdx].hFin = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                save(); hideModal('modal-finish'); document.getElementById('finish-pg').value = ""; 
+            }
+        }
+
+        function addBR() {
+            const id = document.getElementById('new-id').value; 
+            if(!id) return;
+            const ahora = Date.now();
+            db.push({ 
+                id: id, line: document.getElementById('new-line').value, user: "SIN ASIGNAR", st: 'wait', 
+                inicioWS: ahora, inicioRS: null, inicioCS: null, tW: 0, tR: 0, tC: 0,
+                tR_acumulado: 0, tC_acumulado: 0, date: new Date().toISOString().split('T')[0], pg: 0, hFin: "" 
+            });
+            document.getElementById('new-id').value = ""; hideModal('modal-new'); save(); 
+        }
+
+        async function save() { 
+            render(); 
+            localStorage.setItem('qc_final_v88', JSON.stringify(db)); 
+            try { await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(db) }); } catch (e) { console.error("Error nube", e); }
+        }
+
+        function renderAdmin() {
+            const b = document.getElementById('adm-body'); const s = document.getElementById('adm-search').value.toLowerCase(); b.innerHTML = "";
+            [...db].reverse().forEach((l) => {
+                if(l.id.toString().toLowerCase().includes(s)) {
+                    const originalIdx = db.indexOf(l);
+                    b.innerHTML += `<tr><td>${l.date} <span class="pencil" onclick="edit(${originalIdx},'date')">✏️</span></td><td>${l.id} <span class="pencil" onclick="edit(${originalIdx},'id')">✏️</span></td><td>${l.line} <span class="pencil" onclick="editLine(${originalIdx})">✏️</span></td><td>${l.user} <span class="pencil" onclick="edit(${originalIdx},'user')">✏️</span></td><td>${l.pg} <span class="pencil" onclick="edit(${originalIdx},'pg')">✏️</span></td><td><button onclick="del(${originalIdx})" style="background:none; border:none; cursor:pointer;">🗑️</button></td></tr>`;
+                }
+            });
+        }
+
+      function renderPerf() {
+    const b = document.getElementById('perf-body'); 
+    const s = document.getElementById('perf-search').value.toLowerCase(); 
+    b.innerHTML = "";
+
+    [...db].reverse().filter(l => l.st === 'done' && 
+        (l.user.toLowerCase().includes(s) || l.line.toLowerCase().includes(s) || l.id.toString().toLowerCase().includes(s))
+    ).forEach(l => {
+        
+        // --- LIMPIEZA DE HORA ---
+        let horaLimpia = l.hFin || "--:--";
+        if (horaLimpia.includes('T')) {
+            // Si viene como 1899-12-30T22:39:04.000Z, saca solo "22:39"
+            horaLimpia = horaLimpia.split('T')[1].substring(0, 5);
+        }
+
+        b.innerHTML += `
+            <tr>
+                <td>${l.date}</td>
+                <td>${horaLimpia}</td>
+                <td>${l.id}</td>
+                <td>${l.line}</td>
+                <td>${l.user}</td>
+                <td>${l.pg}</td>
+                <td>${fmt(l.tR)}</td>
+            </tr>`;
+    });
+}
+
+        function exportExcel() {
+    let csv = "\uFEFFFecha;Hora_Fin;Lote;Linea;Inspector;Paginas;T_Espera;T_Revision;T_Correccion\n";
+    
+    db.filter(l => l.st === 'done').forEach(l => {
+        // --- LIMPIEZA NÍTIDA ---
+        let h = l.hFin || "";
+        if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
+
+        csv += `${l.date};${h};${l.id};${l.line};${l.user};${l.pg};${fmt(l.tW)};${fmt(l.tR)};${fmt(l.tC)}\n`; 
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a"); 
+    link.href = URL.createObjectURL(blob);
+    link.download = `REPORTE_QC_${new Date().toISOString().split('T')[0]}.csv`; 
+    link.click();
+}
+
+        function edit(i, f) { const n = prompt("Nuevo:", db[i][f]); if(n !== null) { db[i][f] = f==='pg'?parseInt(n):n; save(); renderAdmin(); } }
+        function editLine(i) {
+            let list = "Línea:\n"; lineas.forEach((l, x) => list += `${x}: ${l}\n`);
+            const choice = prompt(list); if(choice !== null && lineas[choice]) { db[i].line = lineas[choice]; save(); renderAdmin(); }
+        }
+        function del(i) { if(confirm("¿Borrar?")) { db.splice(i,1); save(); renderAdmin(); } }
+        function showModal(id) { document.getElementById(id).style.display = 'flex'; }
+        function hideModal(id) { document.getElementById(id).style.display = 'none'; }
+        function toggleAdmin(v) { document.getElementById('admin-panel').style.display = v?'flex':'none'; if(v) renderPerf(); }
+        function switchTab(t) {
+            document.getElementById('view-edit').style.display = t==='edit'?'block':'none';
+            document.getElementById('view-perf').style.display = t==='perf'?'block':'none';
+            document.getElementById('tab-edit').className = t==='edit'?'tab active':'tab';
+            document.getElementById('tab-perf').className = t==='perf'?'tab active':'tab';
+            if(t==='perf') renderPerf(); else renderAdmin();
+        }
+        setInterval(tick, 1000);
+    </script>
+</body>
+</html>
