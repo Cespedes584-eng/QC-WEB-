@@ -50,7 +50,7 @@
             <span style="font-weight:900;">QC BR REVIEW TRACKER</span>
         </div>
         <div class="nav-btns">
-            <div class="btn-nav" style="background:#34495e">👤 MARLON (584)</div>
+           <div id="user-display" class="btn-nav" style="background:#34495e">👤 CARGANDO...</div>
             <button class="btn-nav btn-excel" onclick="exportExcel()">📊 REPORTE EXCEL</button>
             <button id="btn-admin-config" class="btn-nav" style="background:var(--blue); display: none;" onclick="toggleAdmin(true)">⚙️ PANEL Y RENDIMIENTO</button>
             <div id="reloj" class="clock-display">00:00:00</div>
@@ -131,19 +131,32 @@
         let db = []; let tempIdx = null;
 
         async function init() {
+            // 1. Identificar quién está usando la app
             const sesion = localStorage.getItem('qc_session');
             if(sesion) {
                 const u = JSON.parse(sesion);
+                // Si el usuario tiene nombre, lo ponemos en el encabezado que editamos en el paso 1
+                if(u.nombre) {
+                    document.getElementById('user-display').innerText = `👤 ${u.nombre.toUpperCase()}`;
+                }
+                // Si es admin, mostramos el botón de configuración
                 if(u.isAdmin) document.getElementById('btn-admin-config').style.display = 'inline-block';
+            } else {
+                // Si por alguna razón no hay sesión, ponemos un nombre genérico
+                document.getElementById('user-display').innerText = `👤 INVITADO`;
             }
+
+            // 2. Configurar el selector de líneas
             const sel = document.getElementById('new-line');
             sel.innerHTML = "";
             lineas.sort().forEach(l => { sel.innerHTML += `<option value="${l}">${l}</option>`; });
             document.getElementById('main-date-filter').valueAsDate = new Date();
 
+            // 3. Cargar datos locales primero para rapidez
             const localData = localStorage.getItem('qc_final_v88');
             if (localData) { db = JSON.parse(localData); render(); }
 
+            // 4. Sincronizar con la nube
             try {
                 const response = await fetch(SCRIPT_URL);
                 const data = await response.json();
@@ -168,10 +181,8 @@
                     localStorage.setItem('qc_final_v88', JSON.stringify(db));
                     render();
                 }
-            } catch (e) { 
-                console.error("Error nube:", e); 
-            }
-        } 
+            } catch (e) { console.error("Error nube:", e); }
+        }
 
         function updateTimers() {
             db.forEach((l, i) => {
@@ -268,12 +279,26 @@
         function changeSt(i, s) { 
             const ahora = Date.now();
             const lote = db[i];
+            
+            // 1. Buscamos quién es el usuario activo justo ahora
+            const sesion = localStorage.getItem('qc_session');
+            let nombreUsuarioActivo = "SIN ASIGNAR";
+            
+            if(sesion) {
+                const u = JSON.parse(sesion);
+                // Si existe el nombre en la sesión, lo usamos, si no, se queda como SIN ASIGNAR
+                nombreUsuarioActivo = u.nombre || "SIN ASIGNAR";
+            }
+
             if (lote.st === 'rev' && lote.inicioRS) lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
             if (lote.st === 'corr' && lote.inicioCS) lote.tC_acumulado = (ahora - lote.inicioCS) + (lote.tC_acumulado || 0);
+            
             lote.st = s;
+
             if (s === 'rev') {
                 lote.inicioRS = ahora;
-                if (lote.user === "SIN ASIGNAR" || !lote.user) lote.user = "MARLON"; 
+                // 2. CLAVE: Aquí es donde asignamos a Priscilla o quien sea que dio clic
+                lote.user = nombreUsuarioActivo.toUpperCase(); 
             } else if (s === 'corr') {
                 lote.inicioCS = ahora;
             }
