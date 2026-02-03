@@ -126,292 +126,343 @@
     </div>
 
    <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbymrLCk5xdsQixB9ZE-veFeeFWEU0aahtKmcz9pUMSl1pO9txoivC8t7MCzzbi0c2kNFA/exec";
-        const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
-        let db = []; let tempIdx = null;
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbymrLCk5xdsQixB9ZE-veFeeFWEU0aahtKmcz9pUMSl1pO9txoivC8t7MCzzbi0c2kNFA/exec";
+    const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
+    let db = []; 
+    let tempIdx = null;
 
-async function init() {
-            // 1. BUSCADOR AUTOMÁTICO DE USUARIO
-            // Buscamos en la memoria de la computadora si alguien hizo login
-            const sesionEstandar = localStorage.getItem('qc_session');
-            const usuarioLegacy = localStorage.getItem('usuario'); // Por si tu login usa esta
-            
-            let nombreDetectado = "SIN ASIGNAR";
+    async function init() {
+        // 1. USUARIO
+        const sesionEstandar = localStorage.getItem('qc_session');
+        const usuarioLegacy = localStorage.getItem('usuario');
+        let nombreDetectado = "SIN ASIGNAR";
 
-            if (sesionEstandar) {
-                const u = JSON.parse(sesionEstandar);
-                // Busca el nombre en cualquier formato posible
-                nombreDetectado = u.nombre || u.user || u.usuario || "SIN ASIGNAR";
-                if(u.isAdmin) document.getElementById('btn-admin-config').style.display = 'inline-block';
-            } else if (usuarioLegacy) {
-                // Si el login guardó el nombre simple sin objeto
-                nombreDetectado = usuarioLegacy;
-            }
-
-            // Aplicamos el nombre encontrado al panel superior
-            document.getElementById('user-display').innerText = `👤 ${nombreDetectado.toUpperCase()}`;
-
-            // 2. Resto de la configuración (Líneas y Fecha)
-            const sel = document.getElementById('new-line');
-            sel.innerHTML = "";
-            lineas.sort().forEach(l => { sel.innerHTML += `<option value="${l}">${l}</option>`; });
-            document.getElementById('main-date-filter').valueAsDate = new Date();
-
-            // 3. Cargar datos
-            const localData = localStorage.getItem('qc_final_v88');
-            if (localData) { db = JSON.parse(localData); render(); }
-
-            try {
-                const response = await fetch(SCRIPT_URL);
-                const data = await response.json();
-                if(data && Array.isArray(data)) {
-                    db = data.map(item => ({
-                        id: item.id,
-                        line: item.line || item.linea,
-                        user: item.user || "SIN ASIGNAR",
-                        st: item.st,
-                        inicioWS: item.inicioWS || null,
-                        inicioRS: item.inicioRS || null,
-                        inicioCS: item.inicioCS || null,
-                        tR_acumulado: item.tR_acumulado || 0,
-                        tC_acumulado: item.tC_acumulado || 0,
-                        tW: item.tw || 0,
-                        tR: item.tr || 0,
-                        tC: item.tc || 0,
-                        date: formatearFecha(item.date),
-                        pg: item.pg || 0,
-                        hFin: item.hfin || ""
-                    }));
-                    localStorage.setItem('qc_final_v88', JSON.stringify(db));
-                    render();
-                }
-            } catch (e) { console.error("Error nube:", e); }
+        if (sesionEstandar) {
+            const u = JSON.parse(sesionEstandar);
+            nombreDetectado = u.nombre || u.user || u.usuario || "SIN ASIGNAR";
+            if(u.isAdmin) document.getElementById('btn-admin-config').style.display = 'inline-block';
+        } else if (usuarioLegacy) {
+            nombreDetectado = usuarioLegacy;
         }
-        function updateTimers() {
-            db.forEach((l, i) => {
-                if (l.st === 'done') return;
-                
-                const mainTimer = document.getElementById(`live-${i}`);
-                if (mainTimer) {
-                    const displayTime = (l.st === 'wait') ? l.tW : (l.st === 'rev' ? l.tR : l.tC);
-                    mainTimer.innerText = fmt(displayTime);
-                }
+        document.getElementById('user-display').innerText = `👤 ${nombreDetectado.toUpperCase()}`;
 
-                const grid = document.getElementById(`grid-${i}`);
-                if (grid) {
-                    grid.innerHTML = `
-                        <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
-                        <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
-                        <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
-                    `;
-                }
-            });
-        }
-
-       function tick() {
-            const ahora = Date.now();
-            db.forEach(l => {
-                if (l.st === 'done') return; 
-                if (l.st === 'wait' && l.inicioWS) l.tW = ahora - l.inicioWS;
-                if (l.st === 'rev' && l.inicioRS) l.tR = (ahora - l.inicioRS) + (l.tR_acumulado || 0);
-                if (l.st === 'corr' && l.inicioCS) l.tC = (ahora - l.inicioCS) + (l.tC_acumulado || 0);
-            });
-            updateTimers(); 
-            document.getElementById('reloj').innerText = new Date().toLocaleTimeString();
-        }
-
-        function formatearFecha(f) {
-            if(!f) return new Date().toISOString().split('T')[0];
-            const d = new Date(f);
-            return isNaN(d) ? f : d.toISOString().split('T')[0];
-        }
-
-        function fmt(ms) {
-            if (isNaN(ms) || ms === null || ms < 0) return "00:00";
-            const totalSegundos = Math.floor(ms / 1000);
-            const horas = Math.floor(totalSegundos / 3600);
-            const minutos = Math.floor((totalSegundos % 3600) / 60);
-            const segundos = totalSegundos % 60;
-            if (horas > 0) return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
-            return `${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
-        }
-
-       function render() {
-            const cont = { wait: document.getElementById('list-wait'), run: document.getElementById('list-run'), done: document.getElementById('list-done') };
-            const count = { wait: 0, run: 0, done: 0 };
-            Object.values(cont).forEach(c => c.innerHTML = "");
-            
-            const selDate = document.getElementById('main-date-filter').value;
-            let topB = 0, topP = 0;
-
-            [...db].reverse().forEach((l) => {
-                const originalIdx = db.indexOf(l);
-                if (l.date !== selDate) return; 
-
-                const isFinalizado = (l.st === 'done');
-                if(isFinalizado) { topB++; topP += parseInt(l.pg || 0); }
-                
-                const card = `
-                <div class="card">
-                    <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
-                    <div style="font-size:0.75em; color:#666; margin-bottom:8px;">${l.line} | ${l.user}</div>
-                    ${isFinalizado ? '<span class="status-final">FINALIZADO</span>' : `<span class="timer-big" id="live-${originalIdx}">00:00</span>`}
-                    <div class="timer-grid-3" id="grid-${originalIdx}">
-                        <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
-                        <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
-                        <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
-                    </div>
-                    ${l.st === 'wait' ? `<button class="btn" style="background:var(--green); color:white" onclick="changeSt(${originalIdx},'rev')">INICIAR</button>` : 
-                      l.st === 'rev' ? `<button class="btn" style="background:#f39c12; color:white; margin-bottom:5px;" onclick="changeSt(${originalIdx},'corr')">CORRECCIÓN</button><button class="btn" style="background:var(--dark); color:white" onclick="openFin(${originalIdx})">FINALIZAR</button>` : 
-                      l.st === 'corr' ? `<button class="btn" style="background:var(--green); color:white" onclick="changeSt(${originalIdx},'rev')">REANUDAR</button>` : 
-                      `<div style="text-align:center; font-weight:bold; color:var(--green); padding-top:5px;">PÁGINAS: ${l.pg}</div>`}
-                </div>`;
-                
-                if (l.st === 'wait') { cont.wait.innerHTML += card; count.wait++; }
-                else if (l.st === 'done') { cont.done.innerHTML += card; count.done++; }
-                else { cont.run.innerHTML += card; count.run++; }
-            });
-
-            document.getElementById('top-brs').innerText = topB; 
-            document.getElementById('top-pags').innerText = topP;
-            document.getElementById('c-wait').innerText = count.wait; 
-            document.getElementById('c-run').innerText = count.run; 
-            document.getElementById('c-done').innerText = count.done;
-        }
-
-        function changeSt(i, s) { 
-            const ahora = Date.now();
-            const lote = db[i];
-            
-            const sesion = localStorage.getItem('qc_session');
-            let nombreUsuarioActivo = "SIN ASIGNAR";
-            
-            if(sesion) {
-                const u = JSON.parse(sesion);
-                // BUSCA CUALQUIER VARIABLE QUE TENGA EL NOMBRE (nombre, user o usuario)
-                nombreUsuarioActivo = u.nombre || u.user || u.usuario || "SIN ASIGNAR";
-            }
-
-            if (lote.st === 'rev' && lote.inicioRS) lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
-            if (lote.st === 'corr' && lote.inicioCS) lote.tC_acumulado = (ahora - lote.inicioCS) + (lote.tC_acumulado || 0);
-            
-            lote.st = s;
-
-            if (s === 'rev') {
-                lote.inicioRS = ahora;
-                // Si el lote no tiene usuario o dice SIN ASIGNAR, le ponemos el actual
-                if(!lote.user || lote.user === "SIN ASIGNAR") {
-                    lote.user = nombreUsuarioActivo.toUpperCase(); 
-                }
-            } else if (s === 'corr') {
-                lote.inicioCS = ahora;
-            }
-            save();
-        }
-
-        function openFin(i) { tempIdx = i; showModal('modal-finish'); }
-
-        function confirmFinish() {
-            const p = document.getElementById('finish-pg').value;
-            if(p) { 
-                db[tempIdx].pg = p; db[tempIdx].st = 'done'; 
-                db[tempIdx].hFin = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                save(); hideModal('modal-finish'); document.getElementById('finish-pg').value = ""; 
-            }
-        }
-
-        function addBR() {
-            const id = document.getElementById('new-id').value; 
-            if(!id) return;
-            const ahora = Date.now();
-            db.push({ 
-                id: id, line: document.getElementById('new-line').value, user: "SIN ASIGNAR", st: 'wait', 
-                inicioWS: ahora, inicioRS: null, inicioCS: null, tW: 0, tR: 0, tC: 0,
-                tR_acumulado: 0, tC_acumulado: 0, date: new Date().toISOString().split('T')[0], pg: 0, hFin: "" 
-            });
-            document.getElementById('new-id').value = ""; hideModal('modal-new'); save(); 
-        }
-
-        async function save() { 
-            render(); 
-            localStorage.setItem('qc_final_v88', JSON.stringify(db)); 
-            try { await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(db) }); } catch (e) { console.error("Error nube", e); }
-        }
-
-        function renderAdmin() {
-            const b = document.getElementById('adm-body'); const s = document.getElementById('adm-search').value.toLowerCase(); b.innerHTML = "";
-            [...db].reverse().forEach((l) => {
-                if(l.id.toString().toLowerCase().includes(s)) {
-                    const originalIdx = db.indexOf(l);
-                    b.innerHTML += `<tr><td>${l.date} <span class="pencil" onclick="edit(${originalIdx},'date')">✏️</span></td><td>${l.id} <span class="pencil" onclick="edit(${originalIdx},'id')">✏️</span></td><td>${l.line} <span class="pencil" onclick="editLine(${originalIdx})">✏️</span></td><td>${l.user} <span class="pencil" onclick="edit(${originalIdx},'user')">✏️</span></td><td>${l.pg} <span class="pencil" onclick="edit(${originalIdx},'pg')">✏️</span></td><td><button onclick="del(${originalIdx})" style="background:none; border:none; cursor:pointer;">🗑️</button></td></tr>`;
-                }
-            });
-        }
-
-      function renderPerf() {
-    const b = document.getElementById('perf-body'); 
-    const s = document.getElementById('perf-search').value.toLowerCase(); 
-    b.innerHTML = "";
-
-    [...db].reverse().filter(l => l.st === 'done' && 
-        (l.user.toLowerCase().includes(s) || l.line.toLowerCase().includes(s) || l.id.toString().toLowerCase().includes(s))
-    ).forEach(l => {
+        // 2. LÍNEAS Y FECHA
+        const sel = document.getElementById('new-line');
+        sel.innerHTML = "";
+        lineas.sort().forEach(l => { sel.innerHTML += `<option value="${l}">${l}</option>`; });
         
-        // --- LIMPIEZA DE HORA ---
-        let horaLimpia = l.hFin || "--:--";
-        if (horaLimpia.includes('T')) {
-            // Si viene como 1899-12-30T22:39:04.000Z, saca solo "22:39"
-            horaLimpia = horaLimpia.split('T')[1].substring(0, 5);
-        }
+        // Esto garantiza que el filtro siempre arranque con la fecha del reloj de la PC del inspector
+document.getElementById('main-date-filter').value = formatearFecha();
 
-        b.innerHTML += `
-            <tr>
-                <td>${l.date}</td>
-                <td>${horaLimpia}</td>
-                <td>${l.id}</td>
-                <td>${l.line}</td>
-                <td>${l.user}</td>
-                <td>${l.pg}</td>
-                <td>${fmt(l.tR)}</td>
-            </tr>`;
-    });
+        // 3. CARGAR DATOS
+        const localData = localStorage.getItem('qc_final_v88');
+        if (localData) { db = JSON.parse(localData); render(); }
+        await refreshData();
+    }
+
+async function refreshData() {
+    try {
+        const response = await fetch(SCRIPT_URL);
+        const data = await response.json();
+        
+        if(data && Array.isArray(data)) {
+            const cleanData = data.filter(item => item && (item.id || item.line || item.linea));
+            
+            // MAPEO DE DATOS DESDE LA NUBE
+            let cloudData = cleanData.map(item => ({
+                id: item.id || "S/N",
+                line: item.line || item.linea || "S/L",
+                user: item.user || "SIN ASIGNAR",
+                st: item.st || "wait",
+                inicioWS: item.inicioWS || null,
+                inicioRS: item.inicioRS || null,
+                inicioCS: item.inicioCS || null,
+                tR_acumulado: Number(item.tR_acumulado) || 0,
+                tC_acumulado: Number(item.tC_acumulado) || 0,
+                tW: Number(item.tw) || Number(item.tW) || 0,
+                tR: Number(item.tr) || Number(item.tR) || 0,
+                tC: Number(item.tc) || Number(item.tC) || 0,
+                date: item.date ? (typeof item.date === 'string' ? item.date.split('T')[0] : formatearFecha(item.date)) : formatearFecha(),
+                pg: item.pg || 0,
+                hFin: item.hfin || item.hFin || ""
+            }));
+
+            // --- FILTRO ANTIDUPLICADOS ---
+            // Unimos lo local con lo de la nube, pero priorizamos lo de la nube
+            const combinados = [...cloudData, ...db];
+            const mapaUnico = new Map();
+            
+            combinados.forEach(item => {
+                // Creamos una llave única combinando ID del lote y Fecha
+                const llave = `${item.id}-${item.date}`;
+                if (!mapaUnico.has(llave)) {
+                    mapaUnico.set(llave, item);
+                } else {
+                    // Si ya existe, preferimos el que tenga estado 'done' o el que tenga más tiempo registrado
+                    const existente = mapaUnico.get(llave);
+                    if (item.st === 'done' && existente.st !== 'done') {
+                        mapaUnico.set(llave, item);
+                    }
+                }
+            });
+
+            db = Array.from(mapaUnico.values());
+            // -----------------------------
+
+            localStorage.setItem('qc_final_v88', JSON.stringify(db));
+            
+            const panelAdmin = document.getElementById('admin-panel');
+            if (panelAdmin && panelAdmin.style.display !== 'flex') {
+                render();
+            }
+        }
+    } catch (e) { 
+        console.error("Error al refrescar:", e);
+        render();
+    }
 }
 
-        function exportExcel() {
-    let csv = "\uFEFFFecha;Hora_Fin;Lote;Linea;Inspector;Paginas;T_Espera;T_Revision;T_Correccion\n";
+    function tick() {
+        const ahora = Date.now();
+        db.forEach(l => {
+            if (l.st === 'done') return; 
+            if (l.st === 'wait' && l.inicioWS) l.tW = ahora - l.inicioWS;
+            if (l.st === 'rev' && l.inicioRS) l.tR = (ahora - l.inicioRS) + (l.tR_acumulado || 0);
+            if (l.st === 'corr' && l.inicioCS) l.tC = (ahora - l.inicioCS) + (l.tC_acumulado || 0);
+        });
+        updateTimers(); 
+        document.getElementById('reloj').innerText = new Date().toLocaleTimeString();
+    }
+
+    function updateTimers() {
+        db.forEach((l, i) => {
+            if (l.st === 'done') return;
+            const mainTimer = document.getElementById(`live-${i}`);
+            if (mainTimer) {
+                const displayTime = (l.st === 'wait') ? l.tW : (l.st === 'rev' ? l.tR : l.tC);
+                mainTimer.innerText = fmt(displayTime);
+            }
+            const grid = document.getElementById(`grid-${i}`);
+            if (grid) {
+                grid.innerHTML = `
+                    <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
+                    <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
+                    <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
+                `;
+            }
+        });
+    }
+
+    function formatearFecha(f) {
+    // Si recibe una fecha (f), la usa; si no, usa la hora de la computadora ahora mismo
+    const d = f ? new Date(f) : new Date();
+    if (isNaN(d)) return f;
     
-    db.filter(l => l.st === 'done').forEach(l => {
-        // --- LIMPIEZA NÍTIDA ---
-        let h = l.hFin || "";
-        if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
-
-        csv += `${l.date};${h};${l.id};${l.line};${l.user};${l.pg};${fmt(l.tW)};${fmt(l.tR)};${fmt(l.tC)}\n`; 
-    });
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a"); 
-    link.href = URL.createObjectURL(blob);
-    link.download = `REPORTE_QC_${new Date().toISOString().split('T')[0]}.csv`; 
-    link.click();
+    // USAMOS MÉTODOS LOCALES: Esto evita que se pase al día siguiente antes de tiempo
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
 }
 
-        function edit(i, f) { const n = prompt("Nuevo:", db[i][f]); if(n !== null) { db[i][f] = f==='pg'?parseInt(n):n; save(); renderAdmin(); } }
-        function editLine(i) {
-            let list = "Línea:\n"; lineas.forEach((l, x) => list += `${x}: ${l}\n`);
-            const choice = prompt(list); if(choice !== null && lineas[choice]) { db[i].line = lineas[choice]; save(); renderAdmin(); }
+    function fmt(ms) {
+        if (isNaN(ms) || ms === null || ms < 0) return "00:00";
+        const totalSegundos = Math.floor(ms / 1000);
+        const horas = Math.floor(totalSegundos / 3600);
+        const minutos = Math.floor((totalSegundos % 3600) / 60);
+        const segundos = totalSegundos % 60;
+        if (horas > 0) return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
+        return `${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
+    }
+
+    function render() {
+        const cont = { wait: document.getElementById('list-wait'), run: document.getElementById('list-run'), done: document.getElementById('list-done') };
+        const count = { wait: 0, run: 0, done: 0 };
+        Object.values(cont).forEach(c => c.innerHTML = "");
+        
+        const selDate = document.getElementById('main-date-filter').value;
+        let topB = 0, topP = 0;
+
+        [...db].reverse().forEach((l) => {
+            const originalIdx = db.indexOf(l);
+            if (l.date !== selDate) return; 
+
+            const isFinalizado = (l.st === 'done');
+            if(isFinalizado) { topB++; topP += parseInt(l.pg || 0); }
+            
+            const card = `
+            <div class="card">
+                <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
+                <div style="font-size:0.75em; color:#666; margin-bottom:8px;">${l.line} | ${l.user}</div>
+                ${isFinalizado ? '<span class="status-final">FINALIZADO</span>' : `<span class="timer-big" id="live-${originalIdx}">00:00</span>`}
+                <div class="timer-grid-3" id="grid-${originalIdx}">
+                    <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
+                    <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
+                    <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
+                </div>
+                ${l.st === 'wait' ? `<button class="btn" style="background:var(--green); color:white" onclick="changeSt(${originalIdx},'rev')">INICIAR</button>` : 
+                  l.st === 'rev' ? `<button class="btn" style="background:#f39c12; color:white; margin-bottom:5px;" onclick="changeSt(${originalIdx},'corr')">CORRECCIÓN</button><button class="btn" style="background:var(--dark); color:white" onclick="openFin(${originalIdx})">FINALIZAR</button>` : 
+                  l.st === 'corr' ? `<button class="btn" style="background:var(--green); color:white" onclick="changeSt(${originalIdx},'rev')">REANUDAR</button>` : 
+                  `<div style="text-align:center; font-weight:bold; color:var(--green); padding-top:5px;">PÁGINAS: ${l.pg}</div>`}
+            </div>`;
+            
+            if (l.st === 'wait') { cont.wait.innerHTML += card; count.wait++; }
+            else if (l.st === 'done') { cont.done.innerHTML += card; count.done++; }
+            else { cont.run.innerHTML += card; count.run++; }
+        });
+
+        document.getElementById('top-brs').innerText = topB; 
+        document.getElementById('top-pags').innerText = topP;
+        document.getElementById('c-wait').innerText = count.wait; 
+        document.getElementById('c-run').innerText = count.run; 
+        document.getElementById('c-done').innerText = count.done;
+    }
+
+    function changeSt(i, s) { 
+        const ahora = Date.now();
+        const lote = db[i];
+        const sesion = localStorage.getItem('qc_session');
+        let userActivo = "SIN ASIGNAR";
+        
+        if(sesion) {
+            const u = JSON.parse(sesion);
+            userActivo = u.nombre || u.user || "SIN ASIGNAR";
         }
-        function del(i) { if(confirm("¿Borrar?")) { db.splice(i,1); save(); renderAdmin(); } }
-        function showModal(id) { document.getElementById(id).style.display = 'flex'; }
-        function hideModal(id) { document.getElementById(id).style.display = 'none'; }
-        function toggleAdmin(v) { document.getElementById('admin-panel').style.display = v?'flex':'none'; if(v) renderPerf(); }
-        function switchTab(t) {
-            document.getElementById('view-edit').style.display = t==='edit'?'block':'none';
-            document.getElementById('view-perf').style.display = t==='perf'?'block':'none';
-            document.getElementById('tab-edit').className = t==='edit'?'tab active':'tab';
-            document.getElementById('tab-perf').className = t==='perf'?'tab active':'tab';
-            if(t==='perf') renderPerf(); else renderAdmin();
+
+        if (lote.st === 'rev' && lote.inicioRS) lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
+        if (lote.st === 'corr' && lote.inicioCS) lote.tC_acumulado = (ahora - lote.inicioCS) + (lote.tC_acumulado || 0);
+        
+        lote.st = s;
+
+        if (s === 'rev') {
+            lote.inicioRS = ahora;
+            if(!lote.user || lote.user === "SIN ASIGNAR") lote.user = userActivo.toUpperCase(); 
+        } else if (s === 'corr') {
+            lote.inicioCS = ahora;
         }
-        setInterval(tick, 1000);
-    </script>
+        save();
+    }
+
+    function openFin(i) { tempIdx = i; showModal('modal-finish'); }
+
+    function confirmFinish() {
+    const p = document.getElementById('finish-pg').value;
+    if(p) { 
+        db[tempIdx].pg = p; 
+        db[tempIdx].st = 'done'; 
+        // Solo guarda la hora, la fecha ya está fija desde que se creó el lote
+        db[tempIdx].hFin = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false});
+        save(); 
+        hideModal('modal-finish'); 
+        document.getElementById('finish-pg').value = ""; 
+    }
+}
+
+    function addBR() {
+    const id = document.getElementById('new-id').value; 
+    if(!id) return;
+
+    // CAPTURAMOS LA FECHA EXACTA QUE EL USUARIO VE EN EL CALENDARIO
+    const fechaSeleccionada = document.getElementById('main-date-filter').value;
+
+    const ahora = Date.now();
+    db.push({ 
+        id: id, 
+        line: document.getElementById('new-line').value, 
+        user: "SIN ASIGNAR", 
+        st: 'wait', 
+        inicioWS: ahora, 
+        inicioRS: null, 
+        inicioCS: null, 
+        tW: 0, tR: 0, tC: 0,
+        tR_acumulado: 0, tC_acumulado: 0, 
+        date: fechaSeleccionada, // <--- AHORA USA LA FECHA DEL FILTRO
+        pg: 0, 
+        hFin: "" 
+    });
+    document.getElementById('new-id').value = ""; 
+    hideModal('modal-new'); 
+    save(); 
+}
+
+    async function save() { 
+    // 1. Guardar y mostrar localmente de inmediato (seguridad para el usuario)
+    localStorage.setItem('qc_final_v88', JSON.stringify(db)); 
+    render(); 
+
+    // 2. Intentar subir a la nube
+    try { 
+        const response = await fetch(SCRIPT_URL, { 
+            method: 'POST', 
+            mode: 'no-cors', 
+            body: JSON.stringify(db) 
+        });
+        console.log("Sincronizado con éxito");
+    } catch (e) { 
+        console.error("Error de conexión, se intentará luego", e); 
+        // No borramos nada, el próximo refreshData o save lo intentará de nuevo
+    }
+}
+
+    function renderAdmin() {
+        const b = document.getElementById('adm-body'); 
+        const s = document.getElementById('adm-search').value.toLowerCase(); 
+        b.innerHTML = "";
+        [...db].reverse().forEach((l) => {
+            if(l.id.toString().toLowerCase().includes(s)) {
+                const originalIdx = db.indexOf(l);
+                b.innerHTML += `<tr><td>${l.date} <span class="pencil" onclick="edit(${originalIdx},'date')">✏️</span></td><td>${l.id} <span class="pencil" onclick="edit(${originalIdx},'id')">✏️</span></td><td>${l.line} <span class="pencil" onclick="editLine(${originalIdx})">✏️</span></td><td>${l.user} <span class="pencil" onclick="edit(${originalIdx},'user')">✏️</span></td><td>${l.pg} <span class="pencil" onclick="edit(${originalIdx},'pg')">✏️</span></td><td><button onclick="del(${originalIdx})" style="background:none; border:none; cursor:pointer;">🗑️</button></td></tr>`;
+            }
+        });
+    }
+
+    function renderPerf() {
+        const b = document.getElementById('perf-body'); 
+        const s = document.getElementById('perf-search').value.toLowerCase(); 
+        b.innerHTML = "";
+        [...db].reverse().filter(l => l.st === 'done' && 
+            (l.user.toLowerCase().includes(s) || l.line.toLowerCase().includes(s) || l.id.toString().toLowerCase().includes(s))
+        ).forEach(l => {
+            let h = l.hFin || "--:--";
+            if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
+            b.innerHTML += `<tr><td>${l.date}</td><td>${h}</td><td>${l.id}</td><td>${l.line}</td><td>${l.user}</td><td>${l.pg}</td><td>${fmt(l.tR)}</td></tr>`;
+        });
+    }
+
+    function exportExcel() {
+        let csv = "\uFEFFFecha;Hora_Fin;Lote;Linea;Inspector;Paginas;T_Espera;T_Revision;T_Correccion\n";
+        db.filter(l => l.st === 'done').forEach(l => {
+            let h = l.hFin || "";
+            if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
+            csv += `${l.date};${h};${l.id};${l.line};${l.user};${l.pg};${fmt(l.tW)};${fmt(l.tR)};${fmt(l.tC)}\n`; 
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a"); 
+        link.href = URL.createObjectURL(blob);
+        link.download = `REPORTE_QC_${formatearFecha()}.csv`; 
+        link.click();
+    }
+
+    function edit(i, f) { const n = prompt("Nuevo:", db[i][f]); if(n !== null) { db[i][f] = f==='pg'?parseInt(n):n; save(); renderAdmin(); } }
+    function editLine(i) {
+        let list = "Línea:\n"; lineas.forEach((l, x) => list += `${x}: ${l}\n`);
+        const choice = prompt(list); if(choice !== null && lineas[choice]) { db[i].line = lineas[choice]; save(); renderAdmin(); }
+    }
+    function del(i) { if(confirm("¿Borrar?")) { db.splice(i,1); save(); renderAdmin(); } }
+    function showModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function hideModal(id) { document.getElementById(id).style.display = 'none'; }
+    function toggleAdmin(v) { document.getElementById('admin-panel').style.display = v?'flex':'none'; if(v) renderPerf(); }
+    function switchTab(t) {
+        document.getElementById('view-edit').style.display = t==='edit'?'block':'none';
+        document.getElementById('view-perf').style.display = t==='perf'?'block':'none';
+        document.getElementById('tab-edit').className = t==='edit'?'tab active':'tab';
+        document.getElementById('tab-perf').className = t==='perf'?'tab active':'tab';
+        if(t==='perf') renderPerf(); else renderAdmin();
+    }
+
+    setInterval(tick, 1000); 
+    setInterval(refreshData, 60000); 
+</script>
 </body>
 </html>
