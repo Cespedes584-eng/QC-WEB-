@@ -156,18 +156,19 @@
         await refreshData();
     }
 
-    async function refreshData() {
+async function refreshData() {
         try {
             const response = await fetch(SCRIPT_URL);
             const data = await response.json();
             
             if(data && Array.isArray(data)) {
+                // 1. Limpiamos y formateamos los datos que vienen de la nube
                 const cleanData = data.filter(item => item && (item.id || item.line || item.linea));
                 
                 let cloudData = cleanData.map(item => ({
                     id: item.id || "S/N",
                     line: item.line || item.linea || "S/L",
-                    user: item.user || "SIN ASIGNAR",
+                    user: item.user || item.usuario || item.inspector || "SIN ASIGNAR",
                     st: item.st || "wait",
                     inicioWS: item.inicioWS || null,
                     inicioRS: item.inicioRS || null,
@@ -182,36 +183,43 @@
                     hFin: item.hfin || item.hFin || ""
                 }));
 
-                const combinados = [...db, ...cloudData];
                 const mapaUnico = new Map();
+
+                // 2. Primero metemos los datos de la Nube al mapa
+                cloudData.forEach(item => {
+                    mapaUnico.set(`${item.id}-${item.date}`, item);
+                });
                 
-                combinados.forEach(item => {
-                    const llave = `${item.id}-${item.date}`;
-                    if (!mapaUnico.has(llave)) {
-                        mapaUnico.set(llave, item);
-                    } else {
-                        const existente = mapaUnico.get(llave);
-                        if (existente.user !== "SIN ASIGNAR" && item.user === "SIN ASIGNAR") {
-                            // Mantener local
-                        } else if (item.st === 'done') {
-                            mapaUnico.set(llave, item);
-                        } else {
-                            mapaUnico.set(llave, item);
+                // 3. Cruzamos con los datos Locales para no perder el Inspector
+                db.forEach(localItem => {
+                    const llave = `${localItem.id}-${localItem.date}`;
+                    if (mapaUnico.has(llave)) {
+                        const nubeItem = mapaUnico.get(llave);
+                        
+                        // Si localmente YA TIENE inspector pero la nube aún dice "SIN ASIGNAR"
+                        // mantenemos el dato local para que no se borre el nombre en pantalla
+                        if (localItem.user !== "SIN ASIGNAR" && nubeItem.user === "SIN ASIGNAR") {
+                            mapaUnico.set(llave, localItem);
                         }
+                    } else {
+                        // Si es un lote nuevo que aún no sube a la nube
+                        mapaUnico.set(llave, localItem);
                     }
                 });
-                db = Array.from(mapaUnico.values());
 
-                localStorage.setItem('qc_final_v88', JSON.stringify(db));
-                
-                const panelAdmin = document.getElementById('admin-panel');
-                if (panelAdmin && panelAdmin.style.display !== 'flex') {
-                    render();
-                }
+                // 4. Actualizamos la base de datos global y el almacenamiento
+db = Array.from(mapaUnico.values()).sort((a, b) => {
+    // Ordenar primero por fecha (lo más reciente arriba)
+    if (b.date !== a.date) return b.date.localeCompare(a.date);
+    // Si son del mismo día, ordenar por número de lote
+    return a.id.localeCompare(b.id, undefined, {numeric: true, sensitivity: 'base'});
+});
+localStorage.setItem('qc_final_v88', JSON.stringify(db));
+render();
             }
         } catch (e) { 
-            console.error("Error al refrescar:", e);
-            render();
+            console.error("Error al refrescar datos:", e);
+            render(); 
         }
     }
 
@@ -283,7 +291,9 @@
             const card = `
             <div class="card">
                 <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
-                <div style="font-size:0.75em; color:#666; margin-bottom:8px;">${l.line} | ${l.user}</div>
+                <div style="font-size:0.75em; color:#666; margin-bottom:8px;">
+    ${l.line} | <b style="color:var(--blue);" id="user-card-${originalIdx}">${l.user}</b>
+</div>
                 ${isFinalizado ? '<span class="status-final">FINALIZADO</span>' : `<span class="timer-big" id="live-${originalIdx}">00:00</span>`}
                 <div class="timer-grid-3" id="grid-${originalIdx}">
                     <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
@@ -311,47 +321,36 @@
 function changeSt(i, s) { 
     const ahora = Date.now();
     const lote = db[i];
-
-    // --- MEJORA DE CAPTURA DE USUARIO ---
+    
+    // 1. CAPTURA DE NOMBRE: Si pasa de 'espera' a 'revisión'
     if (lote.st === 'wait' && s === 'rev') {
-        let userActivo = "SIN ASIGNAR";
-        
-        // Intento 1: Buscar en qc_session
-        const sesion = localStorage.getItem('qc_session');
-        if(sesion) {
-            const u = JSON.parse(sesion);
-            userActivo = u.nombre || u.user || u.usuario || "SIN ASIGNAR";
-        }
-        
-        // Intento 2: Si sigue sin asignar, buscar en el 'usuario' legacy
-        if (userActivo === "SIN ASIGNAR") {
-            userActivo = localStorage.getItem('usuario') || "SIN ASIGNAR";
-        }
-
-        // Intento 3: Si todo falla, leerlo directamente de la pantalla (el botón de perfil)
-        if (userActivo === "SIN ASIGNAR") {
-            const btnUser = document.getElementById('user-display').innerText;
-            userActivo = btnUser.replace('👤 ', '').trim();
-        }
-
-        lote.user = userActivo.toUpperCase();
+        const display = document.getElementById('user-display').innerText;
+        // Limpiamos el emoji y espacios para quedarnos solo con el nombre
+        lote.user = display.replace('👤 ', '').trim().toUpperCase();
     }
-    // ------------------------------------
 
+    // 2. CÁLCULO DE TIEMPOS: Acumular lo que ya pasó antes de cambiar el estado
     if (lote.st === 'rev' && lote.inicioRS) {
+        // Sumamos el tiempo que estuvo en revisión ahora a lo que ya traía acumulado
         lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
     }
     if (lote.st === 'corr' && lote.inicioCS) {
+        // Sumamos el tiempo que estuvo en corrección ahora a lo que ya traía acumulado
         lote.tC_acumulado = (ahora - lote.inicioCS) + (lote.tC_acumulado || 0);
     }
     
+    // 3. CAMBIO DE ESTADO Y NUEVAS MARCAS DE TIEMPO
     lote.st = s;
-    if (s === 'rev') lote.inicioRS = ahora;
-    if (s === 'corr') lote.inicioCS = ahora;
     
+    if (s === 'rev') {
+        lote.inicioRS = ahora; // Marca cuando empezó esta sesión de revisión
+    } else if (s === 'corr') {
+        lote.inicioCS = ahora; // Marca cuando empezó esta sesión de corrección
+    }
+    
+    // 4. GUARDADO INSTANTÁNEO: Sube el nombre y el estado a la nube de inmediato
     save();
 }
-
     async function save() { 
         localStorage.setItem('qc_final_v88', JSON.stringify(db)); 
         render(); 
@@ -468,7 +467,7 @@ function changeSt(i, s) {
     }
 
     setInterval(tick, 1000); 
-    setInterval(refreshData, 60000); 
+    setInterval(refreshData, 30000); 
 </script>
 </body>
 </html>
