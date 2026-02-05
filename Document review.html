@@ -308,34 +308,49 @@
         document.getElementById('c-done').innerText = count.done;
     }
 
-    function changeSt(i, s) { 
-        const ahora = Date.now();
-        const lote = db[i];
-        const sesion = localStorage.getItem('qc_session');
+function changeSt(i, s) { 
+    const ahora = Date.now();
+    const lote = db[i];
+
+    // --- MEJORA DE CAPTURA DE USUARIO ---
+    if (lote.st === 'wait' && s === 'rev') {
         let userActivo = "SIN ASIGNAR";
         
+        // Intento 1: Buscar en qc_session
+        const sesion = localStorage.getItem('qc_session');
         if(sesion) {
             const u = JSON.parse(sesion);
-            userActivo = u.nombre || u.user || "SIN ASIGNAR";
-        }
-
-        if (lote.st === 'wait' && s === 'rev') {
-            lote.user = userActivo.toUpperCase();
-        }
-
-        if (lote.st === 'rev' && lote.inicioRS) {
-            lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
-        }
-        if (lote.st === 'corr' && lote.inicioCS) {
-            lote.tC_acumulado = (ahora - lote.inicioCS) + (lote.tC_acumulado || 0);
+            userActivo = u.nombre || u.user || u.usuario || "SIN ASIGNAR";
         }
         
-        lote.st = s;
-        if (s === 'rev') lote.inicioRS = ahora;
-        if (s === 'corr') lote.inicioCS = ahora;
-        
-        save();
+        // Intento 2: Si sigue sin asignar, buscar en el 'usuario' legacy
+        if (userActivo === "SIN ASIGNAR") {
+            userActivo = localStorage.getItem('usuario') || "SIN ASIGNAR";
+        }
+
+        // Intento 3: Si todo falla, leerlo directamente de la pantalla (el botón de perfil)
+        if (userActivo === "SIN ASIGNAR") {
+            const btnUser = document.getElementById('user-display').innerText;
+            userActivo = btnUser.replace('👤 ', '').trim();
+        }
+
+        lote.user = userActivo.toUpperCase();
     }
+    // ------------------------------------
+
+    if (lote.st === 'rev' && lote.inicioRS) {
+        lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
+    }
+    if (lote.st === 'corr' && lote.inicioCS) {
+        lote.tC_acumulado = (ahora - lote.inicioCS) + (lote.tC_acumulado || 0);
+    }
+    
+    lote.st = s;
+    if (s === 'rev') lote.inicioRS = ahora;
+    if (s === 'corr') lote.inicioCS = ahora;
+    
+    save();
+}
 
     async function save() { 
         localStorage.setItem('qc_final_v88', JSON.stringify(db)); 
