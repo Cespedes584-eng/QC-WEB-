@@ -132,7 +132,6 @@
     let tempIdx = null;
 
     async function init() {
-        // 1. USUARIO
         const sesionEstandar = localStorage.getItem('qc_session');
         const usuarioLegacy = localStorage.getItem('usuario');
         let nombreDetectado = "SIN ASIGNAR";
@@ -146,81 +145,75 @@
         }
         document.getElementById('user-display').innerText = `👤 ${nombreDetectado.toUpperCase()}`;
 
-        // 2. LÍNEAS Y FECHA
         const sel = document.getElementById('new-line');
         sel.innerHTML = "";
         lineas.sort().forEach(l => { sel.innerHTML += `<option value="${l}">${l}</option>`; });
         
-        // Esto garantiza que el filtro siempre arranque con la fecha del reloj de la PC del inspector
-document.getElementById('main-date-filter').value = formatearFecha();
+        document.getElementById('main-date-filter').value = formatearFecha();
 
-        // 3. CARGAR DATOS
         const localData = localStorage.getItem('qc_final_v88');
         if (localData) { db = JSON.parse(localData); render(); }
         await refreshData();
     }
 
-async function refreshData() {
-    try {
-        const response = await fetch(SCRIPT_URL);
-        const data = await response.json();
-        
-        if(data && Array.isArray(data)) {
-            const cleanData = data.filter(item => item && (item.id || item.line || item.linea));
+    async function refreshData() {
+        try {
+            const response = await fetch(SCRIPT_URL);
+            const data = await response.json();
             
-            // MAPEO DE DATOS DESDE LA NUBE
-            let cloudData = cleanData.map(item => ({
-                id: item.id || "S/N",
-                line: item.line || item.linea || "S/L",
-                user: item.user || "SIN ASIGNAR",
-                st: item.st || "wait",
-                inicioWS: item.inicioWS || null,
-                inicioRS: item.inicioRS || null,
-                inicioCS: item.inicioCS || null,
-                tR_acumulado: Number(item.tR_acumulado) || 0,
-                tC_acumulado: Number(item.tC_acumulado) || 0,
-                tW: Number(item.tw) || Number(item.tW) || 0,
-                tR: Number(item.tr) || Number(item.tR) || 0,
-                tC: Number(item.tc) || Number(item.tC) || 0,
-                date: item.date ? (typeof item.date === 'string' ? item.date.split('T')[0] : formatearFecha(item.date)) : formatearFecha(),
-                pg: item.pg || 0,
-                hFin: item.hfin || item.hFin || ""
-            }));
+            if(data && Array.isArray(data)) {
+                const cleanData = data.filter(item => item && (item.id || item.line || item.linea));
+                
+                let cloudData = cleanData.map(item => ({
+                    id: item.id || "S/N",
+                    line: item.line || item.linea || "S/L",
+                    user: item.user || "SIN ASIGNAR",
+                    st: item.st || "wait",
+                    inicioWS: item.inicioWS || null,
+                    inicioRS: item.inicioRS || null,
+                    inicioCS: item.inicioCS || null,
+                    tR_acumulado: Number(item.tR_acumulado) || 0,
+                    tC_acumulado: Number(item.tC_acumulado) || 0,
+                    tW: Number(item.tw) || Number(item.tW) || 0,
+                    tR: Number(item.tr) || Number(item.tR) || 0,
+                    tC: Number(item.tc) || Number(item.tC) || 0,
+                    date: item.date ? (typeof item.date === 'string' ? item.date.split('T')[0] : formatearFecha(item.date)) : formatearFecha(),
+                    pg: item.pg || 0,
+                    hFin: item.hfin || item.hFin || ""
+                }));
 
-            // --- FILTRO ANTIDUPLICADOS ---
-            // Unimos lo local con lo de la nube, pero priorizamos lo de la nube
-            const combinados = [...cloudData, ...db];
-            const mapaUnico = new Map();
-            
-            combinados.forEach(item => {
-                // Creamos una llave única combinando ID del lote y Fecha
-                const llave = `${item.id}-${item.date}`;
-                if (!mapaUnico.has(llave)) {
-                    mapaUnico.set(llave, item);
-                } else {
-                    // Si ya existe, preferimos el que tenga estado 'done' o el que tenga más tiempo registrado
-                    const existente = mapaUnico.get(llave);
-                    if (item.st === 'done' && existente.st !== 'done') {
+                const combinados = [...db, ...cloudData];
+                const mapaUnico = new Map();
+                
+                combinados.forEach(item => {
+                    const llave = `${item.id}-${item.date}`;
+                    if (!mapaUnico.has(llave)) {
                         mapaUnico.set(llave, item);
+                    } else {
+                        const existente = mapaUnico.get(llave);
+                        if (existente.user !== "SIN ASIGNAR" && item.user === "SIN ASIGNAR") {
+                            // Mantener local
+                        } else if (item.st === 'done') {
+                            mapaUnico.set(llave, item);
+                        } else {
+                            mapaUnico.set(llave, item);
+                        }
                     }
+                });
+                db = Array.from(mapaUnico.values());
+
+                localStorage.setItem('qc_final_v88', JSON.stringify(db));
+                
+                const panelAdmin = document.getElementById('admin-panel');
+                if (panelAdmin && panelAdmin.style.display !== 'flex') {
+                    render();
                 }
-            });
-
-            db = Array.from(mapaUnico.values());
-            // -----------------------------
-
-            localStorage.setItem('qc_final_v88', JSON.stringify(db));
-            
-            const panelAdmin = document.getElementById('admin-panel');
-            if (panelAdmin && panelAdmin.style.display !== 'flex') {
-                render();
             }
+        } catch (e) { 
+            console.error("Error al refrescar:", e);
+            render();
         }
-    } catch (e) { 
-        console.error("Error al refrescar:", e);
-        render();
     }
-}
 
     function tick() {
         const ahora = Date.now();
@@ -254,17 +247,13 @@ async function refreshData() {
     }
 
     function formatearFecha(f) {
-    // Si recibe una fecha (f), la usa; si no, usa la hora de la computadora ahora mismo
-    const d = f ? new Date(f) : new Date();
-    if (isNaN(d)) return f;
-    
-    // USAMOS MÉTODOS LOCALES: Esto evita que se pase al día siguiente antes de tiempo
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    
-    return `${year}-${month}-${day}`;
-}
+        const d = f ? new Date(f) : new Date();
+        if (isNaN(d)) return f;
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
 
     function fmt(ms) {
         if (isNaN(ms) || ms === null || ms < 0) return "00:00";
@@ -330,80 +319,37 @@ async function refreshData() {
             userActivo = u.nombre || u.user || "SIN ASIGNAR";
         }
 
-        if (lote.st === 'rev' && lote.inicioRS) lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
-        if (lote.st === 'corr' && lote.inicioCS) lote.tC_acumulado = (ahora - lote.inicioCS) + (lote.tC_acumulado || 0);
+        if (lote.st === 'wait' && s === 'rev') {
+            lote.user = userActivo.toUpperCase();
+        }
+
+        if (lote.st === 'rev' && lote.inicioRS) {
+            lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
+        }
+        if (lote.st === 'corr' && lote.inicioCS) {
+            lote.tC_acumulado = (ahora - lote.inicioCS) + (lote.tC_acumulado || 0);
+        }
         
         lote.st = s;
-
-        if (s === 'rev') {
-            lote.inicioRS = ahora;
-            if(!lote.user || lote.user === "SIN ASIGNAR") lote.user = userActivo.toUpperCase(); 
-        } else if (s === 'corr') {
-            lote.inicioCS = ahora;
-        }
+        if (s === 'rev') lote.inicioRS = ahora;
+        if (s === 'corr') lote.inicioCS = ahora;
+        
         save();
     }
 
-    function openFin(i) { tempIdx = i; showModal('modal-finish'); }
-
-    function confirmFinish() {
-    const p = document.getElementById('finish-pg').value;
-    if(p) { 
-        db[tempIdx].pg = p; 
-        db[tempIdx].st = 'done'; 
-        // Solo guarda la hora, la fecha ya está fija desde que se creó el lote
-        db[tempIdx].hFin = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false});
-        save(); 
-        hideModal('modal-finish'); 
-        document.getElementById('finish-pg').value = ""; 
-    }
-}
-
-    function addBR() {
-    const id = document.getElementById('new-id').value; 
-    if(!id) return;
-
-    // CAPTURAMOS LA FECHA EXACTA QUE EL USUARIO VE EN EL CALENDARIO
-    const fechaSeleccionada = document.getElementById('main-date-filter').value;
-
-    const ahora = Date.now();
-    db.push({ 
-        id: id, 
-        line: document.getElementById('new-line').value, 
-        user: "SIN ASIGNAR", 
-        st: 'wait', 
-        inicioWS: ahora, 
-        inicioRS: null, 
-        inicioCS: null, 
-        tW: 0, tR: 0, tC: 0,
-        tR_acumulado: 0, tC_acumulado: 0, 
-        date: fechaSeleccionada, // <--- AHORA USA LA FECHA DEL FILTRO
-        pg: 0, 
-        hFin: "" 
-    });
-    document.getElementById('new-id').value = ""; 
-    hideModal('modal-new'); 
-    save(); 
-}
-
     async function save() { 
-    // 1. Guardar y mostrar localmente de inmediato (seguridad para el usuario)
-    localStorage.setItem('qc_final_v88', JSON.stringify(db)); 
-    render(); 
-
-    // 2. Intentar subir a la nube
-    try { 
-        const response = await fetch(SCRIPT_URL, { 
-            method: 'POST', 
-            mode: 'no-cors', 
-            body: JSON.stringify(db) 
-        });
-        console.log("Sincronizado con éxito");
-    } catch (e) { 
-        console.error("Error de conexión, se intentará luego", e); 
-        // No borramos nada, el próximo refreshData o save lo intentará de nuevo
+        localStorage.setItem('qc_final_v88', JSON.stringify(db)); 
+        render(); 
+        try { 
+            await fetch(SCRIPT_URL, { 
+                method: 'POST', 
+                mode: 'no-cors', 
+                body: JSON.stringify(db) 
+            });
+        } catch (e) { 
+            console.error("Error de conexión", e); 
+        }
     }
-}
 
     function renderAdmin() {
         const b = document.getElementById('adm-body'); 
@@ -459,6 +405,51 @@ async function refreshData() {
         document.getElementById('tab-edit').className = t==='edit'?'tab active':'tab';
         document.getElementById('tab-perf').className = t==='perf'?'tab active':'tab';
         if(t==='perf') renderPerf(); else renderAdmin();
+    }
+
+    function addBR() {
+        const id = document.getElementById('new-id').value.trim();
+        const line = document.getElementById('new-line').value;
+        const date = document.getElementById('main-date-filter').value;
+
+        if (!id) return alert("Ingrese número de lote");
+
+        const nuevoLote = {
+            id: id, line: line, user: "SIN ASIGNAR", st: 'wait',
+            date: date, inicioWS: Date.now(), tW: 0, tR: 0, tC: 0,
+            tR_acumulado: 0, tC_acumulado: 0, pg: 0, hFin: ""
+        };
+
+        db.push(nuevoLote);
+        document.getElementById('new-id').value = "";
+        hideModal('modal-new');
+        save();
+    }
+
+    function openFin(i) {
+        tempIdx = i;
+        showModal('modal-finish');
+        document.getElementById('finish-pg').focus();
+    }
+
+    function confirmFinish() {
+        const p = document.getElementById('finish-pg').value;
+        if (!p || p <= 0) return alert("Ingrese total de páginas");
+
+        const lote = db[tempIdx];
+        lote.pg = p;
+        lote.st = 'done';
+        lote.hFin = new Date().toISOString();
+        
+        const ahora = Date.now();
+        if (lote.inicioRS) {
+            lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
+        }
+        lote.tR = lote.tR_acumulado;
+
+        hideModal('modal-finish');
+        document.getElementById('finish-pg').value = "";
+        save();
     }
 
     setInterval(tick, 1000); 
