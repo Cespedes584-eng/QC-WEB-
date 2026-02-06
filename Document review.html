@@ -386,24 +386,33 @@ function changeSt(i, s) {
             (l.user.toLowerCase().includes(s) || l.line.toLowerCase().includes(s) || l.id.toString().toLowerCase().includes(s))
         ).forEach(l => {
             let h = l.hFin || "--:--";
-            if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
+if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
             b.innerHTML += `<tr><td>${l.date}</td><td>${h}</td><td>${l.id}</td><td>${l.line}</td><td>${l.user}</td><td>${l.pg}</td><td>${fmt(l.tR)}</td></tr>`;
         });
     }
 
-    function exportExcel() {
-        let csv = "\uFEFFFecha;Hora_Fin;Lote;Linea;Inspector;Paginas;T_Espera;T_Revision;T_Correccion\n";
-        db.filter(l => l.st === 'done').forEach(l => {
-            let h = l.hFin || "";
-            if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
-            csv += `${l.date};${h};${l.id};${l.line};${l.user};${l.pg};${fmt(l.tW)};${fmt(l.tR)};${fmt(l.tC)}\n`; 
-        });
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a"); 
-        link.href = URL.createObjectURL(blob);
-        link.download = `REPORTE_QC_${formatearFecha()}.csv`; 
-        link.click();
-    }
+function exportExcel() {
+    // Encabezados
+    let csv = "\uFEFFFecha;Hora_Fin;Lote;Linea;Inspector;Paginas;T_Espera;T_Revision;T_Correccion\n";
+    
+    // Filtrar solo finalizados
+    db.filter(l => l.st === 'done').forEach(l => {
+        // Si hFin ya tiene el formato "23:11", lo usamos directo. 
+        // Si es un formato viejo de ISO, lo limpiamos.
+        let horaLimpia = l.hFin || "";
+        if (horaLimpia.includes('T')) {
+            horaLimpia = horaLimpia.split('T')[1].substring(0, 5);
+        }
+
+        csv += `${l.date};${horaLimpia};${l.id};${l.line};${l.user};${l.pg};${fmt(l.tW)};${fmt(l.tR)};${fmt(l.tC)}\n`; 
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a"); 
+    link.href = URL.createObjectURL(blob);
+    link.download = `REPORTE_QC_${formatearFecha()}.csv`; 
+    link.click();
+}
 
     function edit(i, f) { const n = prompt("Nuevo:", db[i][f]); if(n !== null) { db[i][f] = f==='pg'?parseInt(n):n; save(); renderAdmin(); } }
     function editLine(i) {
@@ -454,7 +463,7 @@ function changeSt(i, s) {
         const lote = db[tempIdx];
         lote.pg = p;
         lote.st = 'done';
-        lote.hFin = new Date().toISOString();
+        lote.hFin = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
         
         const ahora = Date.now();
         if (lote.inicioRS) {
