@@ -190,22 +190,23 @@ async function refreshData() {
                     mapaUnico.set(`${item.id}-${item.date}`, item);
                 });
                 
-                // 3. Cruzamos con los datos Locales para no perder el Inspector
-                db.forEach(localItem => {
-                    const llave = `${localItem.id}-${localItem.date}`;
-                    if (mapaUnico.has(llave)) {
-                        const nubeItem = mapaUnico.get(llave);
-                        
-                        // Si localmente YA TIENE inspector pero la nube aún dice "SIN ASIGNAR"
-                        // mantenemos el dato local para que no se borre el nombre en pantalla
-                        if (localItem.user !== "SIN ASIGNAR" && nubeItem.user === "SIN ASIGNAR") {
-                            mapaUnico.set(llave, localItem);
-                        }
-                    } else {
-                        // Si es un lote nuevo que aún no sube a la nube
-                        mapaUnico.set(llave, localItem);
-                    }
-                });
+                // 3. Cruzamos con los datos Locales pero PRIORIZAMOS la nube
+db.forEach(localItem => {
+    const llave = `${localItem.id}-${localItem.date}`;
+    if (!mapaUnico.has(llave)) {
+        // Si el lote solo existe en mi PC y no en la nube, lo agrego al mapa
+        mapaUnico.set(llave, localItem);
+    } else {
+        // Si el lote existe en AMBOS lados:
+        const nubeItem = mapaUnico.get(llave);
+        // Solo mantenemos lo local si nosotros YA empezamos el lote (tenemos nombre)
+        // y la nube todavía dice que no tiene dueño.
+        if (localItem.user !== "SIN ASIGNAR" && nubeItem.user === "SIN ASIGNAR") {
+            mapaUnico.set(llave, localItem);
+        }
+        // En cualquier otro caso, el mapa se queda con lo que trajo de la NUBE.
+    }
+});
 
                 // 4. Actualizamos la base de datos global y el almacenamiento
 db = Array.from(mapaUnico.values()).sort((a, b) => {
