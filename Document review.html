@@ -258,13 +258,16 @@
             const isFinalizado = (l.st === 'done');
             if(isFinalizado) { topB++; topP += parseInt(l.pg || 0); }
             
-            const card = `
+const card = `
             <div class="card">
                 <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
                 <div style="font-size:0.75em; color:#666; margin-bottom:8px;">
                     ${l.line} | <b style="color:var(--blue);" id="user-card-${originalIdx}">${l.user}</b>
                 </div>
-                ${isFinalizado ? '<span class="status-final">FINALIZADO</span>' : `<span class="timer-big" id="live-${originalIdx}">00:00</span>`}
+                ${isFinalizado 
+                    ? `<span class="status-final">FINALIZADO <small style="font-size:0.6em; vertical-align:middle; opacity:0.8;">(${l.hFin || '--:--'})</small></span>` 
+                    : `<span class="timer-big" id="live-${originalIdx}">00:00</span>`
+                }
                 <div class="timer-grid-3" id="grid-${originalIdx}">
                     <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
                     <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
