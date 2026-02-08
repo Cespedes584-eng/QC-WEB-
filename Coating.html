@@ -147,15 +147,28 @@
     let currentUser = "Invitado";
 
     function verificarAccesoGlobal() {
-        const sesion = localStorage.getItem('qc_current_user');
-        if(sesion) currentUser = JSON.parse(sesion).name;
-        document.getElementById('display-user').innerText = currentUser.toUpperCase();
-        
-        cargarDatosNube();
-        setInterval(cargarDatosNube, 5000);
-        setInterval(checkAutoLimpieza, 60000);
-        setInterval(actualizarCronometrosLocales, 1000);
+    // Busca en todas las posibles ubicaciones de sesión
+    const sesion1 = localStorage.getItem('qc_current_user');
+    const sesion2 = localStorage.getItem('usuario');
+    const sesion3 = localStorage.getItem('qc_session');
+
+    if (sesion1) {
+        currentUser = JSON.parse(sesion1).name || JSON.parse(sesion1).nombre;
+    } else if (sesion3) {
+        currentUser = JSON.parse(sesion3).nombre || JSON.parse(sesion3).user;
+    } else if (sesion2) {
+        currentUser = sesion2;
+    } else {
+        currentUser = "Invitado";
     }
+
+    document.getElementById('display-user').innerText = currentUser.toUpperCase();
+    
+    cargarDatosNube();
+    setInterval(cargarDatosNube, 5000);
+    setInterval(checkAutoLimpieza, 60000);
+    setInterval(actualizarCronometrosLocales, 1000);
+}
 
     function toTitleCase(str) { return str.toLowerCase().replace(/(?:^|\s)\w/g, m => m.toUpperCase()); }
     
@@ -241,40 +254,50 @@
         guardarNube();
     }
 
-    function tomar(btn, lote, linea) {
-        activarPausa();
-        const card = btn.closest('.card');
-        const ahora = Date.now();
-        const tEspera = ahora - parseInt(card.getAttribute('data-creado'));
-        
-        card.setAttribute('data-t-espera', tEspera);
-        card.setAttribute('data-reloj-inicio', ahora);
-        card.setAttribute('data-inspector-fijo', currentUser); 
+   function tomar(btn, lote, linea) {
+    activarPausa();
+    const card = btn.closest('.card');
+    const ahora = Date.now();
+    
+    // CAPTURA DE NOMBRE (Lógica tipo Review)
+    // Leemos el nombre que aparece en la barra superior en ese instante
+    const displayNombre = document.getElementById('display-user').innerText;
+    const nombreReal = displayNombre.trim().toUpperCase(); 
 
-        card.innerHTML = `
-            <button style="position:absolute;right:8px;top:8px;border:none;background:none;cursor:pointer;color:#999;font-weight:bold;" onclick="eliminarLote(this)">✕</button>
-            <h3>Lote: ${lote} <span class="badge-linea">${linea}</span></h3>
-            <p style="font-size:12px; margin:2px 0; color:#333;">Inspector: <b>${currentUser}</b></p>
-            <div class="resumen-tiempos">
-                <div class="linea-tiempo"><span>⌛ Espera:</span> <span>${formatTime(tEspera)}</span></div>
-                <div class="linea-tiempo"><span>⏱ Revisión:</span> <span class="cronometro">0m 0s</span></div>
-            </div>
-            <button class="btn-action" style="background:#cb4b16;" onclick="finalizar(this, '${lote}', '${linea}')">Finalizar</button>`;
-        
-        document.getElementById('id-proceso').appendChild(card);
-        guardarNube();
-    }
+    const tEspera = ahora - parseInt(card.getAttribute('data-creado'));
+    
+    card.setAttribute('data-t-espera', tEspera);
+    card.setAttribute('data-reloj-inicio', ahora);
+    card.setAttribute('data-inspector-fijo', nombreReal); // Sellamos con el nombre del encabezado
 
-    function finalizar(btn, lote, linea) {
+    card.innerHTML = `
+        <button style="position:absolute;right:8px;top:8px;border:none;background:none;cursor:pointer;color:#999;font-weight:bold;" onclick="eliminarLote(this)">✕</button>
+        <h3>Lote: ${lote} <span class="badge-linea">${linea}</span></h3>
+        <p style="font-size:12px; margin:2px 0; color:#333;">Inspector: <b style="color:#007bff;">${nombreReal}</b></p>
+        <div class="resumen-tiempos">
+            <div class="linea-tiempo"><span>⌛ Espera:</span> <span>${formatTime(tEspera)}</span></div>
+            <div class="linea-tiempo"><span>⏱ Revisión:</span> <span class="cronometro">0m 0s</span></div>
+        </div>
+        <button class="btn-action" style="background:#cb4b16;" onclick="finalizar(this, '${lote}', '${linea}')">Finalizar</button>`;
+    
+    document.getElementById('id-proceso').appendChild(card);
+    guardarNube();
+}
+
+function finalizar(btn, lote, linea) {
         activarPausa();
         const card = btn.closest('.card');
         const ahora = Date.now();
         const tEspera = parseInt(card.getAttribute('data-t-espera'));
         const tRevision = ahora - parseInt(card.getAttribute('data-reloj-inicio'));
+        
+        // REFUERZO: Prioriza el nombre guardado en la tarjeta al "Tomar"
         const responsable = card.getAttribute('data-inspector-fijo') || currentUser;
         
         const tiempoFinal = new Date();
         const horaFin = tiempoFinal.getHours() + ":" + tiempoFinal.getMinutes().toString().padStart(2, '0');
+        
+        // ... (continúa el resto de tu código de finalizar)
 
         card.setAttribute('data-fin-timestamp', ahora);
         card.removeAttribute('data-reloj-inicio');
