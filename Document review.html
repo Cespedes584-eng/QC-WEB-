@@ -157,72 +157,44 @@
     }
 
 async function refreshData() {
-        try {
-            const response = await fetch(SCRIPT_URL);
-            const data = await response.json();
-            
-            if(data && Array.isArray(data)) {
-                // 1. Limpiamos y formateamos los datos que vienen de la nube
-                const cleanData = data.filter(item => item && (item.id || item.line || item.linea));
-                
-                let cloudData = cleanData.map(item => ({
-                    id: item.id || "S/N",
-                    line: item.line || item.linea || "S/L",
-                    user: item.user || item.usuario || item.inspector || "SIN ASIGNAR",
-                    st: item.st || "wait",
-                    inicioWS: item.inicioWS || null,
-                    inicioRS: item.inicioRS || null,
-                    inicioCS: item.inicioCS || null,
-                    tR_acumulado: Number(item.tR_acumulado) || 0,
-                    tC_acumulado: Number(item.tC_acumulado) || 0,
-                    tW: Number(item.tw) || Number(item.tW) || 0,
-                    tR: Number(item.tr) || Number(item.tR) || 0,
-                    tC: Number(item.tc) || Number(item.tC) || 0,
-                    date: item.date ? (typeof item.date === 'string' ? item.date.split('T')[0] : formatearFecha(item.date)) : formatearFecha(),
-                    pg: item.pg || 0,
-                    hFin: item.hfin || item.hFin || ""
-                }));
+    try {
+        const response = await fetch(SCRIPT_URL);
+        const data = await response.json();
+        
+        if(data && Array.isArray(data)) {
+            // 1. Filtrar solo datos válidos de la nube
+            const cloudData = data.filter(item => item && (item.id || item.line)).map(item => ({
+                id: item.id || "S/N",
+                line: item.line || item.linea || "S/L",
+                user: item.user || item.usuario || "SIN ASIGNAR",
+                st: item.st || "wait",
+                inicioWS: item.inicioWS || null,
+                inicioRS: item.inicioRS || null,
+                inicioCS: item.inicioCS || null,
+                tR_acumulado: Number(item.tR_acumulado) || 0,
+                tC_acumulado: Number(item.tC_acumulado) || 0,
+                tW: Number(item.tw || item.tW) || 0,
+                tR: Number(item.tr || item.tR) || 0,
+                tC: Number(item.tc || item.tC) || 0,
+                date: item.date ? (typeof item.date === 'string' ? item.date.split('T')[0] : formatearFecha(item.date)) : formatearFecha(),
+                pg: Number(item.pg) || 0,
+                hFin: item.hfin || item.hFin || ""
+            }));
 
-                const mapaUnico = new Map();
+            // 2. REEMPLAZO TOTAL: No mezclamos, usamos lo de la nube.
+            // Esto asegura que todos vean exactamente lo mismo.
+            db = cloudData.sort((a, b) => {
+                if (b.date !== a.date) return b.date.localeCompare(a.date);
+                return a.id.localeCompare(b.id, undefined, {numeric: true});
+            });
 
-                // 2. Primero metemos los datos de la Nube al mapa
-                cloudData.forEach(item => {
-                    mapaUnico.set(`${item.id}-${item.date}`, item);
-                });
-                
-                // 3. Cruzamos con los datos Locales pero PRIORIZAMOS la nube
-db.forEach(localItem => {
-    const llave = `${localItem.id}-${localItem.date}`;
-    if (!mapaUnico.has(llave)) {
-        // Si el lote solo existe en mi PC y no en la nube, lo agrego al mapa
-        mapaUnico.set(llave, localItem);
-    } else {
-        // Si el lote existe en AMBOS lados:
-        const nubeItem = mapaUnico.get(llave);
-        // Solo mantenemos lo local si nosotros YA empezamos el lote (tenemos nombre)
-        // y la nube todavía dice que no tiene dueño.
-        if (localItem.user !== "SIN ASIGNAR" && nubeItem.user === "SIN ASIGNAR") {
-            mapaUnico.set(llave, localItem);
+            localStorage.setItem('qc_final_v88', JSON.stringify(db));
+            render();
         }
-        // En cualquier otro caso, el mapa se queda con lo que trajo de la NUBE.
+    } catch (e) { 
+        console.error("Error al sincronizar:", e);
     }
-});
-
-                // 4. Actualizamos la base de datos global y el almacenamiento
-db = Array.from(mapaUnico.values()).sort((a, b) => {
-    // Ordenar primero por fecha (lo más reciente arriba)
-    if (b.date !== a.date) return b.date.localeCompare(a.date);
-    // Si son del mismo día, ordenar por número de lote
-    return a.id.localeCompare(b.id, undefined, {numeric: true, sensitivity: 'base'});
-});
-localStorage.setItem('qc_final_v88', JSON.stringify(db));
-render();
-            }
-        } catch (e) { 
-            console.error("Error al refrescar datos:", e);
-            render(); 
-        }
-    }
+}
 
     function tick() {
         const ahora = Date.now();
