@@ -126,7 +126,7 @@
     </div>
 
 <script>
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzyP0fYlAlmqFSCePfv7_ugERu2Hij-lPOwawioXQL1H5V2i5meN7TRD-EW93muKmBO0Q/exec";
+    const SCRIPT_URL ="https://script.google.com/macros/s/AKfycbz1rIk8kPJR_Te_sfD_Q18qz2KM0TnT4Vu1duQAiSaTOW2ydmOxx_IPFjA27BmNAKXb0g/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
     let db = []; 
     let tempIdx = null;
@@ -415,9 +415,13 @@ async function confirmFinish() {
     lote.pg = p;
     lote.st = 'done';
     
-    // ESTA LÍNEA ASEGURA LA HORA DE COSTA RICA (Formato 24h)
-    const ahoraLocal = new Date();
-    lote.hFin = ahoraLocal.toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit', hour12: false });
+    // 1. Forzamos el formato de texto HH:mm para evitar que Google Sheets lo recalcule
+    const ahora = new Date();
+    const horas = String(ahora.getHours()).padStart(2, '0');
+    const minutos = String(ahora.getMinutes()).padStart(2, '0');
+    
+    // Guardamos como string puro "22:05"
+    lote.hFin = `${horas}:${minutos}`;
     
     const ahoraMs = Date.now();
     if (lote.inicioRS) {
@@ -428,7 +432,7 @@ async function confirmFinish() {
     hideModal('modal-finish');
     document.getElementById('finish-pg').value = "";
     
-    // Guardamos y sincronizamos de inmediato
+    // 2. Enviamos a la base de datos
     await save();
     await refreshData();
 }
