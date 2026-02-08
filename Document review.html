@@ -125,7 +125,7 @@
         </div>
     </div>
 
-   <script>
+ <script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbymrLCk5xdsQixB9ZE-veFeeFWEU0aahtKmcz9pUMSl1pO9txoivC8t7MCzzbi0c2kNFA/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
     let db = []; 
@@ -156,45 +156,42 @@
         await refreshData();
     }
 
-async function refreshData() {
-    try {
-        const response = await fetch(SCRIPT_URL);
-        const data = await response.json();
-        
-        if(data && Array.isArray(data)) {
-            // 1. Filtrar solo datos válidos de la nube
-            const cloudData = data.filter(item => item && (item.id || item.line)).map(item => ({
-                id: item.id || "S/N",
-                line: item.line || item.linea || "S/L",
-                user: item.user || item.usuario || "SIN ASIGNAR",
-                st: item.st || "wait",
-                inicioWS: item.inicioWS || null,
-                inicioRS: item.inicioRS || null,
-                inicioCS: item.inicioCS || null,
-                tR_acumulado: Number(item.tR_acumulado) || 0,
-                tC_acumulado: Number(item.tC_acumulado) || 0,
-                tW: Number(item.tw || item.tW) || 0,
-                tR: Number(item.tr || item.tR) || 0,
-                tC: Number(item.tc || item.tC) || 0,
-                date: item.date ? (typeof item.date === 'string' ? item.date.split('T')[0] : formatearFecha(item.date)) : formatearFecha(),
-                pg: Number(item.pg) || 0,
-                hFin: item.hfin || item.hFin || ""
-            }));
+    async function refreshData() {
+        try {
+            const response = await fetch(SCRIPT_URL);
+            const data = await response.json();
+            
+            if(data && Array.isArray(data)) {
+                const cloudData = data.filter(item => item && (item.id || item.line)).map(item => ({
+                    id: item.id || "S/N",
+                    line: item.line || item.linea || "S/L",
+                    user: item.user || item.usuario || "SIN ASIGNAR",
+                    st: item.st || "wait",
+                    inicioWS: item.inicioWS || null,
+                    inicioRS: item.inicioRS || null,
+                    inicioCS: item.inicioCS || null,
+                    tR_acumulado: Number(item.tR_acumulado) || 0,
+                    tC_acumulado: Number(item.tC_acumulado) || 0,
+                    tW: Number(item.tw || item.tW) || 0,
+                    tR: Number(item.tr || item.tR) || 0,
+                    tC: Number(item.tc || item.tC) || 0,
+                    date: item.date ? (typeof item.date === 'string' ? item.date.split('T')[0] : formatearFecha(item.date)) : formatearFecha(),
+                    pg: Number(item.pg) || 0,
+                    hFin: item.hfin || item.hFin || ""
+                }));
 
-            // 2. REEMPLAZO TOTAL: No mezclamos, usamos lo de la nube.
-            // Esto asegura que todos vean exactamente lo mismo.
-            db = cloudData.sort((a, b) => {
-                if (b.date !== a.date) return b.date.localeCompare(a.date);
-                return a.id.localeCompare(b.id, undefined, {numeric: true});
-            });
+                db = cloudData.sort((a, b) => {
+                    if (b.date !== a.date) return b.date.localeCompare(a.date);
+                    return a.id.localeCompare(b.id, undefined, {numeric: true});
+                });
 
-            localStorage.setItem('qc_final_v88', JSON.stringify(db));
-            render();
+                localStorage.setItem('qc_final_v88', JSON.stringify(db));
+                render();
+            }
+        } catch (e) { 
+            console.error("Error al sincronizar:", e);
         }
-    } catch (e) { 
-        console.error("Error al sincronizar:", e);
     }
-}
 
     function tick() {
         const ahora = Date.now();
@@ -265,8 +262,8 @@ async function refreshData() {
             <div class="card">
                 <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
                 <div style="font-size:0.75em; color:#666; margin-bottom:8px;">
-    ${l.line} | <b style="color:var(--blue);" id="user-card-${originalIdx}">${l.user}</b>
-</div>
+                    ${l.line} | <b style="color:var(--blue);" id="user-card-${originalIdx}">${l.user}</b>
+                </div>
                 ${isFinalizado ? '<span class="status-final">FINALIZADO</span>' : `<span class="timer-big" id="live-${originalIdx}">00:00</span>`}
                 <div class="timer-grid-3" id="grid-${originalIdx}">
                     <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
@@ -291,39 +288,30 @@ async function refreshData() {
         document.getElementById('c-done').innerText = count.done;
     }
 
-function changeSt(i, s) { 
-    const ahora = Date.now();
-    const lote = db[i];
-    
-    // 1. CAPTURA DE NOMBRE: Si pasa de 'espera' a 'revisión'
-    if (lote.st === 'wait' && s === 'rev') {
-        const display = document.getElementById('user-display').innerText;
-        // Limpiamos el emoji y espacios para quedarnos solo con el nombre
-        lote.user = display.replace('👤 ', '').trim().toUpperCase();
+    async function changeSt(i, s) { 
+        const ahora = Date.now();
+        const lote = db[i];
+        
+        if (lote.st === 'wait' && s === 'rev') {
+            const display = document.getElementById('user-display').innerText;
+            lote.user = display.replace('👤 ', '').trim().toUpperCase();
+        }
+
+        if (lote.st === 'rev' && lote.inicioRS) {
+            lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
+        }
+        if (lote.st === 'corr' && lote.inicioCS) {
+            lote.tC_acumulado = (ahora - lote.inicioCS) + (lote.tC_acumulado || 0);
+        }
+        
+        lote.st = s;
+        if (s === 'rev') lote.inicioRS = ahora;
+        else if (s === 'corr') lote.inicioCS = ahora;
+        
+        await save();
+        await refreshData(); 
     }
 
-    // 2. CÁLCULO DE TIEMPOS: Acumular lo que ya pasó antes de cambiar el estado
-    if (lote.st === 'rev' && lote.inicioRS) {
-        // Sumamos el tiempo que estuvo en revisión ahora a lo que ya traía acumulado
-        lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
-    }
-    if (lote.st === 'corr' && lote.inicioCS) {
-        // Sumamos el tiempo que estuvo en corrección ahora a lo que ya traía acumulado
-        lote.tC_acumulado = (ahora - lote.inicioCS) + (lote.tC_acumulado || 0);
-    }
-    
-    // 3. CAMBIO DE ESTADO Y NUEVAS MARCAS DE TIEMPO
-    lote.st = s;
-    
-    if (s === 'rev') {
-        lote.inicioRS = ahora; // Marca cuando empezó esta sesión de revisión
-    } else if (s === 'corr') {
-        lote.inicioCS = ahora; // Marca cuando empezó esta sesión de corrección
-    }
-    
-    // 4. GUARDADO INSTANTÁNEO: Sube el nombre y el estado a la nube de inmediato
-    save();
-}
     async function save() { 
         localStorage.setItem('qc_final_v88', JSON.stringify(db)); 
         render(); 
@@ -358,33 +346,24 @@ function changeSt(i, s) {
             (l.user.toLowerCase().includes(s) || l.line.toLowerCase().includes(s) || l.id.toString().toLowerCase().includes(s))
         ).forEach(l => {
             let h = l.hFin || "--:--";
-if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
+            if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
             b.innerHTML += `<tr><td>${l.date}</td><td>${h}</td><td>${l.id}</td><td>${l.line}</td><td>${l.user}</td><td>${l.pg}</td><td>${fmt(l.tR)}</td></tr>`;
         });
     }
 
-function exportExcel() {
-    // Encabezados
-    let csv = "\uFEFFFecha;Hora_Fin;Lote;Linea;Inspector;Paginas;T_Espera;T_Revision;T_Correccion\n";
-    
-    // Filtrar solo finalizados
-    db.filter(l => l.st === 'done').forEach(l => {
-        // Si hFin ya tiene el formato "23:11", lo usamos directo. 
-        // Si es un formato viejo de ISO, lo limpiamos.
-        let horaLimpia = l.hFin || "";
-        if (horaLimpia.includes('T')) {
-            horaLimpia = horaLimpia.split('T')[1].substring(0, 5);
-        }
-
-        csv += `${l.date};${horaLimpia};${l.id};${l.line};${l.user};${l.pg};${fmt(l.tW)};${fmt(l.tR)};${fmt(l.tC)}\n`; 
-    });
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a"); 
-    link.href = URL.createObjectURL(blob);
-    link.download = `REPORTE_QC_${formatearFecha()}.csv`; 
-    link.click();
-}
+    function exportExcel() {
+        let csv = "\uFEFFFecha;Hora_Fin;Lote;Linea;Inspector;Paginas;T_Espera;T_Revision;T_Correccion\n";
+        db.filter(l => l.st === 'done').forEach(l => {
+            let horaLimpia = l.hFin || "";
+            if (horaLimpia.includes('T')) horaLimpia = horaLimpia.split('T')[1].substring(0, 5);
+            csv += `${l.date};${horaLimpia};${l.id};${l.line};${l.user};${l.pg};${fmt(l.tW)};${fmt(l.tR)};${fmt(l.tC)}\n`; 
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a"); 
+        link.href = URL.createObjectURL(blob);
+        link.download = `REPORTE_QC_${formatearFecha()}.csv`; 
+        link.click();
+    }
 
     function edit(i, f) { const n = prompt("Nuevo:", db[i][f]); if(n !== null) { db[i][f] = f==='pg'?parseInt(n):n; save(); renderAdmin(); } }
     function editLine(i) {
@@ -403,11 +382,10 @@ function exportExcel() {
         if(t==='perf') renderPerf(); else renderAdmin();
     }
 
-    function addBR() {
+    async function addBR() {
         const id = document.getElementById('new-id').value.trim();
         const line = document.getElementById('new-line').value;
         const date = document.getElementById('main-date-filter').value;
-
         if (!id) return alert("Ingrese número de lote");
 
         const nuevoLote = {
@@ -419,7 +397,8 @@ function exportExcel() {
         db.push(nuevoLote);
         document.getElementById('new-id').value = "";
         hideModal('modal-new');
-        save();
+        await save();
+        await refreshData();
     }
 
     function openFin(i) {
@@ -428,7 +407,7 @@ function exportExcel() {
         document.getElementById('finish-pg').focus();
     }
 
-    function confirmFinish() {
+    async function confirmFinish() {
         const p = document.getElementById('finish-pg').value;
         if (!p || p <= 0) return alert("Ingrese total de páginas");
 
@@ -445,11 +424,12 @@ function exportExcel() {
 
         hideModal('modal-finish');
         document.getElementById('finish-pg').value = "";
-        save();
+        await save();
+        await refreshData();
     }
 
     setInterval(tick, 1000); 
-    setInterval(refreshData, 30000); 
+    setInterval(refreshData, 30000);  
 </script>
 </body>
 </html>
