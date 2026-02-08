@@ -259,26 +259,30 @@
             if(isFinalizado) { topB++; topP += parseInt(l.pg || 0); }
             
 const card = `
-            <div class="card">
+            <div class="card" style="position: relative;">
+                ${isFinalizado ? (() => {
+                    let h = l.hFin || '--:--';
+                    if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
+                    else if (h.length > 8) h = h.substring(0, 5);
+                    return `<div style="position: absolute; top: 10px; right: 15px; background: #f0f4f1; color: #468e5d; padding: 4px 8px; border-radius: 6px; font-size: 0.85em; font-weight: bold; border: 1px solid #d1e2d4;">🕒 ${h}</div>`;
+                })() : ''}
+
                 <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
                 <div style="font-size:0.75em; color:#666; margin-bottom:8px;">
                     ${l.line} | <b style="color:var(--blue);" id="user-card-${originalIdx}">${l.user}</b>
                 </div>
+
                 ${isFinalizado 
-                    ? (() => {
-                        // Limpieza de hora para mostrar solo HH:mm
-                        let h = l.hFin || '--:--';
-                        if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
-                        else if (h.length > 8) h = h.substring(0, 5);
-                        return `<span class="status-final">FINALIZADO <small style="font-size:0.6em; vertical-align:middle; opacity:0.8;">(${h})</small></span>`;
-                      })()
+                    ? `<span class="status-final" style="margin: 10px 0; display: block;">FINALIZADO</span>` 
                     : `<span class="timer-big" id="live-${originalIdx}">00:00</span>`
                 }
+
                 <div class="timer-grid-3" id="grid-${originalIdx}">
                     <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
                     <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
                     <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
                 </div>
+
                 ${l.st === 'wait' ? `<button class="btn" style="background:var(--green); color:white" onclick="changeSt(${originalIdx},'rev')">INICIAR</button>` : 
                   l.st === 'rev' ? `<button class="btn" style="background:#f39c12; color:white; margin-bottom:5px;" onclick="changeSt(${originalIdx},'corr')">CORRECCIÓN</button><button class="btn" style="background:var(--dark); color:white" onclick="openFin(${originalIdx})">FINALIZAR</button>` : 
                   l.st === 'corr' ? `<button class="btn" style="background:var(--green); color:white" onclick="changeSt(${originalIdx},'rev')">REANUDAR</button>` : 
