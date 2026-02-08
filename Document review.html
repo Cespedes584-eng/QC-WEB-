@@ -125,8 +125,8 @@
         </div>
     </div>
 
- <script>
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbymrLCk5xdsQixB9ZE-veFeeFWEU0aahtKmcz9pUMSl1pO9txoivC8t7MCzzbi0c2kNFA/exec";
+<script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzyP0fYlAlmqFSCePfv7_ugERu2Hij-lPOwawioXQL1H5V2i5meN7TRD-EW93muKmBO0Q/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
     let db = []; 
     let tempIdx = null;
@@ -182,7 +182,7 @@
 
                 db = cloudData.sort((a, b) => {
                     if (b.date !== a.date) return b.date.localeCompare(a.date);
-                    return a.id.localeCompare(b.id, undefined, {numeric: true});
+                    return a.id.toString().localeCompare(b.id.toString(), undefined, {numeric: true});
                 });
 
                 localStorage.setItem('qc_final_v88', JSON.stringify(db));
@@ -429,7 +429,7 @@
     }
 
     setInterval(tick, 1000); 
-    setInterval(refreshData, 30000);  
+    setInterval(refreshData, 30000); 
 </script>
 </body>
 </html>
