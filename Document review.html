@@ -407,27 +407,31 @@
         document.getElementById('finish-pg').focus();
     }
 
-    async function confirmFinish() {
-        const p = document.getElementById('finish-pg').value;
-        if (!p || p <= 0) return alert("Ingrese total de páginas");
+async function confirmFinish() {
+    const p = document.getElementById('finish-pg').value;
+    if (!p || p <= 0) return alert("Ingrese total de páginas");
 
-        const lote = db[tempIdx];
-        lote.pg = p;
-        lote.st = 'done';
-        lote.hFin = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-        
-        const ahora = Date.now();
-        if (lote.inicioRS) {
-            lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
-        }
-        lote.tR = lote.tR_acumulado;
-
-        hideModal('modal-finish');
-        document.getElementById('finish-pg').value = "";
-        await save();
-        await refreshData();
+    const lote = db[tempIdx];
+    lote.pg = p;
+    lote.st = 'done';
+    
+    // ESTA LÍNEA ASEGURA LA HORA DE COSTA RICA (Formato 24h)
+    const ahoraLocal = new Date();
+    lote.hFin = ahoraLocal.toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit', hour12: false });
+    
+    const ahoraMs = Date.now();
+    if (lote.inicioRS) {
+        lote.tR_acumulado = (ahoraMs - lote.inicioRS) + (lote.tR_acumulado || 0);
     }
+    lote.tR = lote.tR_acumulado;
 
+    hideModal('modal-finish');
+    document.getElementById('finish-pg').value = "";
+    
+    // Guardamos y sincronizamos de inmediato
+    await save();
+    await refreshData();
+}
     setInterval(tick, 1000); 
     setInterval(refreshData, 30000); 
 </script>
