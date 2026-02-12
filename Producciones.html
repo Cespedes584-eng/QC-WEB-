@@ -186,209 +186,378 @@
     <div id="modal-rechazos" class="modal"><div class="modal-content"><h3>Defectos Detectados</h3><input type="number" id="rech-qty" value="1" onchange="generarDefectos()"><div id="contenedor-defectos"></div><button class="btn-main" style="background:var(--alert-red); width:100%;" onclick="finalizarLote(false)">GUARDAR RECHAZO</button></div></div>
 
     <script>
-        const SHEETS_URL = "https://script.google.com/macros/s/AKfycby3cw3zlJ8wORZ3OADRbGQoZW9nqmOtJVPoQPdNlTRTCJbj8M1h3jeP_KHpQC5UhsaC/exec";
-        const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
-        const defectosLista = ["Visual", "Derrame", "Medida", "Empaque"];
-        let estados = []; let dbHistorial = []; let indexSel = null; let adminEditTemp = { idx: null, valor: null };
 
-        function inicializarSistema() {
-            const sesion = localStorage.getItem('qc_session');
-            if(sesion) {
-                const data = JSON.parse(sesion);
-                document.getElementById('user-display').innerText = `👤 ${data.name.toUpperCase()} (ID: ${data.id})`;
-                document.getElementById('r-inspector').value = data.name.toUpperCase();
-                
-                // Lógica para mostrar botón Admin solo si es isAdmin
-                if(data.isAdmin) {
-                    document.getElementById('btn-admin-access').style.display = 'inline-block';
-                }
+    // Variable para que no se crucen los datos mientras escribes
+    let pausaSincro = false;
+
+    const SHEETS_URL = "https://script.google.com/macros/s/AKfycbw_s-tC7AxsQpSMeM2Rv2C4BCTTBE0r6xAy_CL2DxdZqNHwBT6VTM2n-JuHgiCglVTd/exec";
+    const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
+    const defectosLista = ["Visual", "Derrame", "Medida", "Empaque"];
+    let estados = []; let dbHistorial = []; let indexSel = null; let adminEditTemp = { idx: null, valor: null };
+
+    function inicializarSistema() {
+        const sesion = localStorage.getItem('qc_session');
+        if(sesion) {
+            const data = JSON.parse(sesion);
+            document.getElementById('user-display').innerText = `👤 ${data.name.toUpperCase()} (ID: ${data.id})`;
+            document.getElementById('r-inspector').value = data.name.toUpperCase();
+            if(data.isAdmin) {
+                document.getElementById('btn-admin-access').style.display = 'inline-block';
             }
-            const local = localStorage.getItem('qc_v13_respaldo');
-            estados = local ? JSON.parse(local) : lineasArr.map(nom => ({ 
-                activo: false, lote: '', inspector: '', inicio: null, horaInicioReal: '', tiempo: '00:00', 
-                productoActivo: nom.split(" / ")[0].trim(), productoOriginal: nom, proceso: 'Final', ansi: 'Normal' 
-            }));
-            const selL = document.getElementById('r-linea');
-            lineasArr.forEach((n, i) => { selL.innerHTML += `<option value="${i}">${n}</option>`; });
-            cargarHistorialNube(); render(); setInterval(tick, 1000);
         }
+        const local = localStorage.getItem('qc_v13_respaldo');
+        estados = local ? JSON.parse(local) : lineasArr.map(nom => ({ 
+            activo: false, lote: '', inspector: '', inicio: null, horaInicioReal: '', tiempo: '00:00', 
+            productoActivo: nom.split(" / ")[0].trim(), productoOriginal: nom, proceso: 'Final', ansi: 'Normal' 
+        }));
+        const selL = document.getElementById('r-linea');
+        lineasArr.forEach((n, i) => { selL.innerHTML += `<option value="${i}">${n}</option>`; });
+        cargarHistorialNube(); 
+        render(); 
+        setInterval(tick, 1000);
+        sincronizarConNube(); 
+        setInterval(sincronizarConNube, 7000); 
+    }
 
-        async function cargarHistorialNube() {
-            try { const res = await fetch(SHEETS_URL); const datos = await res.json(); dbHistorial = datos.historial || []; } catch(e) { console.error("Error conexión"); }
+    async function cargarHistorialNube() {
+        try { const res = await fetch(SHEETS_URL); const datos = await res.json(); dbHistorial = datos.historial || []; } catch(e) { console.error("Error conexión"); }
+    }
+
+    function formatearTexto(valor) {
+        if (!valor) return "";
+        let str = String(valor);
+        if (str.includes("T")) {
+            let partes = str.split("T");
+            return partes[1] ? partes[1].substring(0, 8) : partes[0];
         }
+        return str;
+    }
 
-        function formatearTexto(valor) {
-            if (!valor) return "";
-            let str = String(valor);
-            if (str.includes("T")) {
-                let partes = str.split("T");
-                return partes[1] ? partes[1].substring(0, 8) : partes[0];
-            }
-            return str;
-        }
-
-        function render() {
-            const p = document.getElementById('pizarra');
-            p.innerHTML = estados.map((s, i) => `
-                <div class="card ${s.activo ? 'inspeccionando' : ''}">
-                    <div class="card-header">${s.productoActivo}</div>
-                    <div class="card-body">
-                        ${s.activo ? `<div>👤 ${s.inspector}</div><div class="lote-destacado">${s.lote}</div><div class="badge-info"><span>${s.proceso}</span> • <span>${s.ansi}</span></div><div class="timer-display" id="t-${i}">${s.tiempo}</div>` : '<div style="opacity:0.3; font-weight:bold;">DISPONIBLE</div>'}
-                    </div>
-                    ${s.activo ? `<button class="btn-card btn-terminar" onclick="prepararFin(${i})">TERMINAR</button>` : `<button class="btn-card btn-historial" onclick="abrirHistorialIndividual(${i})">HISTORIAL</button>`}
-                </div>`).join('');
-            localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
-        }
-
-        function abrirHistorialIndividual(idx) {
-            const nom = lineasArr[idx];
-            document.getElementById('hist-linea-titulo').innerText = "Historial: " + nom;
-            document.getElementById('busqueda-lote-historial').value = "";
-            const filtrados = dbHistorial.filter(r => r.linea === nom).reverse();
-            document.getElementById('hist-linea-body').innerHTML = filtrados.map(r => `
-                <tr>
-                    <td>${formatearTexto(r.fecha)}</td>
-                    <td>${formatearTexto(r.hora)}</td>
-                    <td><b>${r.lote}</b></td>
-                    <td>${r.inspector}</td>
-                    <td style="color:${r.resultado==='ACEPTADO'?'green':'red'}; font-weight:bold;">${r.resultado}</td>
-                    <td>${r.tiempo}</td>
-                    <td>${r.detalle}</td>
-                </tr>`).join('');
-            document.getElementById('btn-descarga-individual').onclick = () => exportarExcel(filtrados, `Historial_${nom.replace(/ /g, "_")}`);
-            abrirModal('modal-historial-linea');
-        }
-
-        function filtrarLoteHistorialIndividual() {
-            const query = document.getElementById('busqueda-lote-historial').value.toLowerCase();
-            const filas = document.querySelectorAll('#hist-linea-body tr');
-            filas.forEach(f => { f.style.display = f.cells[2].innerText.toLowerCase().includes(query) ? "" : "none"; });
-        }
-
-        function abrirAdmin() { abrirModal('modal-admin'); cargarHistorialNube().then(() => { generarReporteYield(); generarGestionLotes(); }); }
+    function render() {
+        const p = document.getElementById('pizarra');
+        p.innerHTML = estados.map((s, i) => `
+            <div class="card ${s.activo ? 'inspeccionando' : ''}">
+                <div class="card-header">${s.productoActivo}</div>
+                <div class="card-body">
+                    ${s.activo ? `<div>👤 ${s.inspector}</div><div class="lote-destacado">${s.lote}</div><div class="badge-info"><span>${s.proceso}</span> • <span>${s.ansi}</span></div><div class="timer-display" id="t-${i}">${s.tiempo}</div>` : '<div style="opacity:0.3; font-weight:bold;">DISPONIBLE</div>'}
+                </div>
+                ${s.activo ? `<button class="btn-card btn-terminar" onclick="prepararFin(${i})">TERMINAR</button>` : `<button class="btn-card btn-historial" onclick="abrirHistorialIndividual(${i})">HISTORIAL</button>`}
+            </div>`).join('');
         
-        function generarGestionLotes() {
-            const ultimos = [...dbHistorial].reverse();
-            document.getElementById('gestion-table-body').innerHTML = ultimos.map((r, i) => {
-                const realIdx = dbHistorial.length - 1 - i;
-                return `<tr>
-                    <td><b>${r.lote}</b></td>
-                    <td><select onchange="adminModificar(${realIdx}, 'linea', this.value)">${lineasArr.map(l => `<option ${r.linea===l?'selected':''}>${l}</option>`).join('')}</select></td>
-                    <td><select onchange="adminModificar(${realIdx}, 'resultado', this.value)"><option ${r.resultado==='ACEPTADO'?'selected':''}>ACEPTADO</option><option ${r.resultado==='RECHAZADO'?'selected':''}>RECHAZADO</option></select></td>
-                    <td>${r.detalle}</td>
-                    <td>✅</td>
-                </tr>`;
-            }).join('');
-        }
+        localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
+        if (!pausaSincro) guardarEstadoPizarraEnNube();
+    }
 
-        function adminModificar(idx, campo, valor) {
-            if (campo === 'resultado' && valor === 'RECHAZADO') {
-                adminEditTemp = { idx, valor };
-                document.getElementById('rech-qty-admin').value = 1;
-                generarDefectosAdmin();
-                abrirModal('modal-defecto-admin');
-            } else {
-                dbHistorial[idx][campo] = valor;
-                if (campo === 'resultado' && valor === 'ACEPTADO') dbHistorial[idx].detalle = "OK";
-                ejecutarSync(dbHistorial[idx]);
+    function abrirHistorialIndividual(idx) {
+        const nom = lineasArr[idx];
+        document.getElementById('hist-linea-titulo').innerText = "Historial: " + nom;
+        document.getElementById('busqueda-lote-historial').value = "";
+        const filtrados = dbHistorial.filter(r => r.linea === nom).reverse();
+        document.getElementById('hist-linea-body').innerHTML = filtrados.map(r => `
+            <tr>
+                <td>${formatearTexto(r.fecha)}</td>
+                <td>${formatearTexto(r.hora)}</td>
+                <td><b>${r.lote}</b></td>
+                <td>${r.inspector}</td>
+                <td style="color:${r.resultado==='ACEPTADO'?'green':'red'}; font-weight:bold;">${r.resultado}</td>
+                <td>${r.tiempo}</td>
+                <td>${r.detalle}</td>
+            </tr>`).join('');
+        document.getElementById('btn-descarga-individual').onclick = () => exportarExcel(filtrados, `Historial_${nom.replace(/ /g, "_")}`);
+        abrirModal('modal-historial-linea');
+    }
+
+    function filtrarLoteHistorialIndividual() {
+        const query = document.getElementById('busqueda-lote-historial').value.toLowerCase();
+        const filas = document.querySelectorAll('#hist-linea-body tr');
+        filas.forEach(f => { f.style.display = f.cells[2].innerText.toLowerCase().includes(query) ? "" : "none"; });
+    }
+
+    function abrirAdmin() { abrirModal('modal-admin'); cargarHistorialNube().then(() => { generarReporteYield(); generarGestionLotes(); }); }
+    
+   function generarGestionLotes() {
+    const ultimos = [...dbHistorial].reverse();
+    document.getElementById('gestion-table-body').innerHTML = ultimos.map((r, i) => {
+        const realIdx = dbHistorial.length - 1 - i;
+        // Esta es la parte pesada: crear los selectores de edición para cada fila
+        return `<tr>
+            <td><b>${r.lote}</b></td>
+            <td>
+                <select onchange="adminModificar(${realIdx}, 'linea', this.value)">
+                    ${lineasArr.map(l => `<option ${r.linea===l?'selected':''}>${l}</option>`).join('')}
+                </select>
+            </td>
+            <td>
+                <select onchange="adminModificar(${realIdx}, 'resultado', this.value)" 
+                        style="color:${r.resultado==='ACEPTADO'?'green':'red'}; font-weight:bold;">
+                    <option value="ACEPTADO" ${r.resultado==='ACEPTADO'?'selected':''}>ACEPTADO</option>
+                    <option value="RECHAZADO" ${r.resultado==='RECHAZADO'?'selected':''}>RECHAZADO</option>
+                </select>
+            </td>
+            <td><input type="text" value="${r.detalle}" onchange="adminModificar(${realIdx}, 'detalle', this.value)" style="width:90%"></td>
+            <td><button onclick="borrarRegistro(${realIdx})" style="background:none; border:none; cursor:pointer;">🗑️</button></td>
+        </tr>`;
+    }).join('');
+}
+
+    function adminModificar(idx, campo, valor) {
+        if (campo === 'resultado' && valor === 'RECHAZADO') {
+            adminEditTemp = { idx, valor };
+            document.getElementById('rech-qty-admin').value = 1;
+            generarDefectosAdmin();
+            abrirModal('modal-defecto-admin');
+        } else {
+            dbHistorial[idx][campo] = valor;
+            if (campo === 'resultado' && valor === 'ACEPTADO') dbHistorial[idx].detalle = "OK";
+            ejecutarSync(dbHistorial[idx]);
+        }
+    }
+
+    function confirmarCambioRechazo() {
+        const r = dbHistorial[adminEditTemp.idx];
+        const defectos = Array.from(document.querySelectorAll('.m-rechazo-admin')).map(sel => sel.value).join(", ");
+        r.resultado = 'RECHAZADO';
+        r.detalle = defectos;
+        ejecutarSync(r);
+        cerrarModal('modal-defecto-admin');
+    }
+
+    function ejecutarSync(registro) {
+        fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'edit', ...registro }) });
+        generarReporteYield(); generarGestionLotes();
+    }
+function borrarRegistro(idx) {
+    if (!confirm("¿Estás seguro de que deseas eliminar este registro? Esta acción no se puede deshacer en la base de datos.")) return;
+
+    const registroABorrar = dbHistorial[idx];
+    
+    // Enviamos la instrucción de borrado a Google Sheets
+    fetch(SHEETS_URL, { 
+        method: 'POST', 
+        mode: 'no-cors', 
+        body: JSON.stringify({ 
+            action: 'delete', 
+            lote: registroABorrar.lote,
+            fecha: registroABorrar.fecha,
+            hora: registroABorrar.hora 
+        }) 
+    });
+
+    // Lo eliminamos visualmente de inmediato
+    dbHistorial.splice(idx, 1);
+    generarGestionLotes();
+    generarReporteYield();
+    alert("Registro eliminado localmente. La nube se actualizará en breve.");
+}
+
+    function iniciarLote() {
+        const inputLote = document.getElementById('r-lote');
+        const lVal = inputLote.value.trim();
+        if(!lVal) return alert("Ingrese Lote");
+        const idx = document.getElementById('r-linea').value;
+        const s = estados[idx];
+        const ahora = new Date();
+        s.activo = true; 
+        s.lote = lVal; 
+        s.inicio = ahora.getTime(); 
+        s.horaInicioReal = ahora.toLocaleTimeString();
+        s.inspector = document.getElementById('r-inspector').value;
+        s.proceso = document.getElementById('r-proceso').value;
+        s.ansi = document.getElementById('r-ansi').value;
+        s.productoActivo = (document.getElementById('contenedor-hibrida').style.display === 'block') ? document.getElementById('r-producto-especifico').value : lineasArr[idx];
+        inputLote.value = "";
+        cerrarModal('modal-reg'); render();
+        guardarEstadoPizarraEnNube();
+    }
+
+async function finalizarLote(ok) {
+    const s = estados[indexSel]; 
+    const ahora = new Date();
+    const diffMs = Date.now() - s.inicio;
+    const min = Math.floor(diffMs / 60000).toString().padStart(2, '0');
+    const seg = Math.floor((diffMs % 60000) / 1000).toString().padStart(2, '0');
+    const tiempoFinal = `${min}:${seg}`;
+    
+    let det = ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ");
+    if (!ok && det === "") det = "Defecto no especificado";
+
+    const registro = { 
+        action: 'add', 
+        fecha: ahora.toLocaleDateString(), 
+        hora: s.horaInicioReal, 
+        linea: s.productoOriginal, 
+        producto: s.productoActivo, 
+        inspector: s.inspector, 
+        lote: s.lote, 
+        proceso: s.proceso, 
+        ansi: s.ansi, 
+        tiempo: tiempoFinal, 
+        resultado: ok ? "ACEPTADO" : "RECHAZADO", 
+        detalle: det 
+    };
+
+    try {
+        fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) });
+        dbHistorial.push(registro);
+        s.activo = false; 
+        s.tiempo = '00:00'; 
+        s.horaInicioReal = '';
+        cerrarModal('modal-fin'); 
+        cerrarModal('modal-rechazos'); 
+        render();
+        guardarEstadoPizarraEnNube();
+    } catch(e) {
+        alert("Error al guardar: Revisa tu conexión.");
+    }
+}
+    function verificarHibrida() {
+        const idx = document.getElementById('r-linea').value;
+        const nom = lineasArr[idx];
+        const cont = document.getElementById('contenedor-hibrida');
+        if (nom.includes(" / ")) {
+            document.getElementById('r-producto-especifico').innerHTML = nom.split(" / ").map(p => `<option value="${p.trim()}">${p.trim()}</option>`).join('');
+            cont.style.display = 'block';
+        } else { cont.style.display = 'none'; }
+    }
+
+    function tick() {
+        estados.forEach((s, i) => {
+            if(s.activo) {
+                const d = Math.floor((Date.now()-s.inicio)/1000);
+                s.tiempo = `${Math.floor(d/60).toString().padStart(2,'0')}:${(d%60).toString().padStart(2,'0')}`;
+                const el = document.getElementById(`t-${i}`); if(el) el.innerText = s.tiempo;
+            }
+        });
+        document.getElementById('reloj').innerText = new Date().toLocaleTimeString();
+    }
+
+    function mostrarTab(t) { document.getElementById('sec-yield').style.display = t === 'yield' ? 'block' : 'none'; document.getElementById('sec-gestion').style.display = t === 'gestion' ? 'block' : 'none'; }
+    function filtrarYield() { const q = document.getElementById('busqueda-inspector').value.toLowerCase(); const filas = document.querySelectorAll('#yield-table-body tr'); filas.forEach(f => { f.style.display = f.cells[0].innerText.toLowerCase().includes(q) ? "" : "none"; }); }
+    function filtrarLotesAdmin() { const q = document.getElementById('input-busqueda').value.toLowerCase(); const filas = document.querySelectorAll('#gestion-table-body tr'); filas.forEach(f => { f.style.display = f.cells[0].innerText.toLowerCase().includes(q) ? "" : "none"; }); }
+    function calcularStatsYield() {
+    const stats = {};
+    dbHistorial.forEach(r => {
+        const ins = r.inspector || "N/A";
+        // Si el inspector no existe en nuestro objeto, lo creamos con valores iniciales
+        if(!stats[ins]) {
+            stats[ins] = { 
+                ok: 0, 
+                fail: 0, 
+                total: 0,
+                // Añadimos rastreo por proceso para un análisis más profundo
+                procesos: { Shaft: 0, Final: 0, HubBonding: 0 }
+            };
+        }
+        
+        stats[ins].total++;
+        
+        if(r.resultado === 'ACEPTADO') {
+            stats[ins].ok++;
+        } else {
+            stats[ins].fail++;
+            // Registramos en qué proceso falló (si el dato existe)
+            if(r.proceso && stats[ins].procesos[r.proceso.replace(" ", "")] !== undefined) {
+                stats[ins].procesos[r.proceso.replace(" ", "")]++;
             }
         }
+    });
+    return stats;
+}
+   function generarReporteYield() {
+    const stats = calcularStatsYield();
+    const tbody = document.getElementById('yield-table-body');
+    
+    tbody.innerHTML = Object.keys(stats).map(k => {
+        const d = stats[k];
+        const yieldPorcentaje = d.total > 0 ? ((d.ok / d.total) * 100).toFixed(1) : 0;
+        
+        // Determinamos el color según el rendimiento
+        const colorYield = yieldPorcentaje >= 95 ? 'var(--primary-green)' : (yieldPorcentaje < 85 ? 'var(--alert-red)' : '#f39c12');
 
-        function confirmarCambioRechazo() {
-            const r = dbHistorial[adminEditTemp.idx];
-            const defectos = Array.from(document.querySelectorAll('.m-rechazo-admin')).map(sel => sel.value).join(", ");
-            r.resultado = 'RECHAZADO';
-            r.detalle = defectos;
-            ejecutarSync(r);
-            cerrarModal('modal-defecto-admin');
-        }
+        return `
+            <tr>
+                <td style="text-align:left; padding-left:20px;"><b>${k}</b></td>
+                <td><span style="color:green">●</span> ${d.ok}</td>
+                <td><span style="color:red">●</span> ${d.fail}</td>
+                <td>${d.total}</td>
+                <td style="font-weight:bold; color:${colorYield}; font-size:1.1em;">${yieldPorcentaje}%</td>
+            </tr>`;
+    }).join('');
+}
+    
+    function abrirModal(id) { 
+        document.getElementById(id).style.display = 'block'; 
+        pausaSincro = true; 
+    }
 
-        function ejecutarSync(registro) {
-            fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'edit', ...registro }) });
-            generarReporteYield(); generarGestionLotes();
-        }
+    function cerrarModal(id) { 
+        document.getElementById(id).style.display = 'none'; 
+        pausaSincro = false; 
+    }
 
-        function iniciarLote() {
-            const inputLote = document.getElementById('r-lote');
-            const lVal = inputLote.value.trim();
-            if(!lVal) return alert("Ingrese Lote");
-            const idx = document.getElementById('r-linea').value;
-            const s = estados[idx];
-            const ahora = new Date();
-            s.activo = true; 
-            s.lote = lVal; 
-            s.inicio = ahora.getTime(); 
-            s.horaInicioReal = ahora.toLocaleTimeString();
-            s.inspector = document.getElementById('r-inspector').value;
-            s.proceso = document.getElementById('r-proceso').value;
-            s.ansi = document.getElementById('r-ansi').value;
-            s.productoActivo = (document.getElementById('contenedor-hibrida').style.display === 'block') ? document.getElementById('r-producto-especifico').value : lineasArr[idx];
-            inputLote.value = "";
-            cerrarModal('modal-reg'); render();
-        }
+    function prepararFin(i) { indexSel = i; abrirModal('modal-fin'); }
+    function abrirRechazos() { cerrarModal('modal-fin'); abrirModal('modal-rechazos'); generarDefectos(); }
+    function generarDefectos() { const q = parseInt(document.getElementById('rech-qty').value) || 1; const c = document.getElementById('contenedor-defectos'); c.innerHTML = ""; for(let i=0; i<q; i++) c.innerHTML += `<select class="m-rechazo">${defectosLista.map(d => `<option>${d}</option>`).join('')}</select>`; }
+    function generarDefectosAdmin() { const q = parseInt(document.getElementById('rech-qty-admin').value) || 1; const c = document.getElementById('contenedor-defectos-admin'); c.innerHTML = ""; for(let i=0; i<q; i++) c.innerHTML += `<select class="m-rechazo-admin">${defectosLista.map(d => `<option>${d}</option>`).join('')}</select>`; }
+    function exportarExcelGeneral() { exportarExcel([...dbHistorial].reverse(), 'Reporte_General_QC'); }
+    function exportarExcelYield() { const stats = calcularStatsYield(); let csv = "\uFEFFsep=;\nInspector;Aceptados;Rechazados;Total;Yield %\n"; Object.keys(stats).forEach(k => { const d = stats[k]; csv += `"${k}";"${d.ok}";"${d.fail}";"${d.total}";"${((d.ok/d.total)*100).toFixed(2)}%"\n`; }); descargarArchivo(csv, 'Yield_QC'); }
+    function exportarExcelGestion() { exportarExcel([...dbHistorial].reverse(), 'Gestion_QC'); }
+    function exportarExcel(datos, nombre) {
+        if(!datos.length) return alert("Sin datos");
+        let csv = "\uFEFFsep=;\nFecha;Hora;Linea;Producto;Inspector;Lote;Resultado;Detalle;Tiempo\n";
+        datos.forEach(r => { csv += `"${r.fecha}";"${r.hora}";"${r.linea}";"${r.producto || r.linea}";"${r.inspector}";"${r.lote}";"${r.resultado}";"${r.detalle}";"${r.tiempo}"\n`; });
+        descargarArchivo(csv, nombre);
+    }
+    function descargarArchivo(c, n) { const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement("a"); l.href = URL.createObjectURL(b); l.download = `${n}.csv`; l.click(); }
 
-        async function finalizarLote(ok) {
-            const s = estados[indexSel]; 
-            const ahora = new Date();
-            const diffMs = Date.now() - s.inicio;
-            const min = Math.floor(diffMs / 60000).toString().padStart(2, '0');
-            const seg = Math.floor((diffMs % 60000) / 1000).toString().padStart(2, '0');
-            const tiempoFinal = `${min}:${seg}`;
-            let det = ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ");
-            const registro = { 
-                action: 'add', fecha: ahora.toLocaleDateString(), hora: s.horaInicioReal, 
-                linea: s.productoOriginal, producto: s.productoActivo, inspector: s.inspector, 
-                lote: s.lote, proceso: s.proceso, ansi: s.ansi, tiempo: tiempoFinal, 
-                resultado: ok ? "ACEPTADO" : "RECHAZADO", detalle: det 
-            };
-            fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) });
-            dbHistorial.push(registro);
-            s.activo = false; s.tiempo = '00:00'; s.horaInicioReal = '';
-            cerrarModal('modal-fin'); cerrarModal('modal-rechazos'); render();
-        }
+    // --- FUNCIONES DE SINCRONIZACIÓN NUBE ---
 
-        function verificarHibrida() {
-            const idx = document.getElementById('r-linea').value;
-            const nom = lineasArr[idx];
-            const cont = document.getElementById('contenedor-hibrida');
-            if (nom.includes(" / ")) {
-                document.getElementById('r-producto-especifico').innerHTML = nom.split(" / ").map(p => `<option value="${p.trim()}">${p.trim()}</option>`).join('');
-                cont.style.display = 'block';
-            } else { cont.style.display = 'none'; }
-        }
+    async function sincronizarConNube() {
+        if (pausaSincro) return; 
+        try {
+            const res = await fetch(SHEETS_URL + "?get=pizarra");
+            const datosNube = await res.json();
+            if (JSON.stringify(estados) !== JSON.stringify(datosNube)) {
+                estados = datosNube;
+                dibujarPizarraSinGuardar();
+            }
+        } catch(e) { console.error("Error de sincronización"); }
+    }
 
-        function tick() {
-            estados.forEach((s, i) => {
-                if(s.activo) {
-                    const d = Math.floor((Date.now()-s.inicio)/1000);
-                    s.tiempo = `${Math.floor(d/60).toString().padStart(2,'0')}:${(d%60).toString().padStart(2,'0')}`;
-                    const el = document.getElementById(`t-${i}`); if(el) el.innerText = s.tiempo;
-                }
-            });
-            document.getElementById('reloj').innerText = new Date().toLocaleTimeString();
-        }
+    function guardarEstadoPizarraEnNube() {
+    // Si la sincronización está pausada (porque tienes un modal abierto), no enviamos nada
+    if (pausaSincro) return;
 
-        function mostrarTab(t) { document.getElementById('sec-yield').style.display = t === 'yield' ? 'block' : 'none'; document.getElementById('sec-gestion').style.display = t === 'gestion' ? 'block' : 'none'; }
-        function filtrarYield() { const q = document.getElementById('busqueda-inspector').value.toLowerCase(); const filas = document.querySelectorAll('#yield-table-body tr'); filas.forEach(f => { f.style.display = f.cells[0].innerText.toLowerCase().includes(q) ? "" : "none"; }); }
-        function filtrarLotesAdmin() { const q = document.getElementById('input-busqueda').value.toLowerCase(); const filas = document.querySelectorAll('#gestion-table-body tr'); filas.forEach(f => { f.style.display = f.cells[0].innerText.toLowerCase().includes(q) ? "" : "none"; }); }
-        function calcularStatsYield() { const stats = {}; dbHistorial.forEach(r => { const ins = r.inspector || "N/A"; if(!stats[ins]) stats[ins] = { ok: 0, fail: 0, total: 0 }; stats[ins].total++; if(r.resultado === 'ACEPTADO') stats[ins].ok++; else stats[ins].fail++; }); return stats; }
-        function generarReporteYield() { const stats = calcularStatsYield(); document.getElementById('yield-table-body').innerHTML = Object.keys(stats).map(k => { const d = stats[k]; return `<tr><td><b>${k}</b></td><td>${d.ok}</td><td>${d.fail}</td><td>${d.total}</td><td style="font-weight:bold; color:var(--primary-green);">${((d.ok/d.total)*100).toFixed(1)}%</td></tr>`; }).join(''); }
-        function abrirModal(id) { document.getElementById(id).style.display = 'block'; }
-        function cerrarModal(id) { document.getElementById(id).style.display = 'none'; }
-        function prepararFin(i) { indexSel = i; abrirModal('modal-fin'); }
-        function abrirRechazos() { cerrarModal('modal-fin'); abrirModal('modal-rechazos'); generarDefectos(); }
-        function generarDefectos() { const q = parseInt(document.getElementById('rech-qty').value) || 1; const c = document.getElementById('contenedor-defectos'); c.innerHTML = ""; for(let i=0; i<q; i++) c.innerHTML += `<select class="m-rechazo">${defectosLista.map(d => `<option>${d}</option>`).join('')}</select>`; }
-        function generarDefectosAdmin() { const q = parseInt(document.getElementById('rech-qty-admin').value) || 1; const c = document.getElementById('contenedor-defectos-admin'); c.innerHTML = ""; for(let i=0; i<q; i++) c.innerHTML += `<select class="m-rechazo-admin">${defectosLista.map(d => `<option>${d}</option>`).join('')}</select>`; }
-        function exportarExcelGeneral() { exportarExcel([...dbHistorial].reverse(), 'Reporte_General_QC'); }
-        function exportarExcelYield() { const stats = calcularStatsYield(); let csv = "\uFEFFsep=;\nInspector;Aceptados;Rechazados;Total;Yield %\n"; Object.keys(stats).forEach(k => { const d = stats[k]; csv += `"${k}";"${d.ok}";"${d.fail}";"${d.total}";"${((d.ok/d.total)*100).toFixed(2)}%"\n`; }); descargarArchivo(csv, 'Yield_QC'); }
-        function exportarExcelGestion() { exportarExcel([...dbHistorial].reverse(), 'Gestion_QC'); }
-        function exportarExcel(datos, nombre) {
-            if(!datos.length) return alert("Sin datos");
-            let csv = "\uFEFFsep=;\nFecha;Hora;Linea;Producto;Inspector;Lote;Resultado;Detalle;Tiempo\n";
-            datos.forEach(r => { csv += `"${r.fecha}";"${r.hora}";"${r.linea}";"${r.producto || r.linea}";"${r.inspector}";"${r.lote}";"${r.resultado}";"${r.detalle}";"${r.tiempo}"\n`; });
-            descargarArchivo(csv, nombre);
-        }
-        function descargarArchivo(c, n) { const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement("a"); l.href = URL.createObjectURL(b); l.download = `${n}.csv`; l.click(); }
-    </script>
+    const dataToSend = { 
+        action: 'save_pizarra', 
+        estados: estados,
+        // Agregamos metadatos para que el historial sea rastreable
+        timestamp: new Date().getTime(),
+        lastUpdateBy: document.getElementById('r-inspector').value || "Sistema",
+        version: "13.8.5" 
+    };
+
+    fetch(SHEETS_URL, {
+        method: 'POST',
+        mode: 'no-cors', // Importante para Google Apps Script
+        body: JSON.stringify(dataToSend)
+    }).catch(err => {
+        console.error("Error crítico de sincronización:", err);
+        // Opcional: podrías mostrar una alerta visual si falla el internet
+    });
+}
+
+    function dibujarPizarraSinGuardar() {
+        const p = document.getElementById('pizarra');
+        p.innerHTML = estados.map((s, i) => `
+            <div class="card ${s.activo ? 'inspeccionando' : ''}">
+                <div class="card-header">${s.productoActivo}</div>
+                <div class="card-body">
+                    ${s.activo ? `<div>👤 ${s.inspector}</div><div class="lote-destacado">${s.lote}</div><div class="badge-info"><span>${s.proceso}</span> • <span>${s.ansi}</span></div><div class="timer-display" id="t-${i}">${s.tiempo}</div>` : '<div style="opacity:0.3; font-weight:bold;">DISPONIBLE</div>'}
+                </div>
+                ${s.activo ? `<button class="btn-card btn-terminar" onclick="prepararFin(${i})">TERMINAR</button>` : `<button class="btn-card btn-historial" onclick="abrirHistorialIndividual(${i})">HISTORIAL</button>`}
+            </div>`).join('');
+    }
+</script>    
 </body>
 </html>
