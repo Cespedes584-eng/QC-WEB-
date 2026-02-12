@@ -114,16 +114,26 @@
                 <button class="btn-main" onclick="mostrarTab('gestion')">⚙️ Gestión de Datos</button>
             </div>
             
-            <div id="sec-yield">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:10px;">
-                    <input type="text" id="busqueda-inspector" class="search-bar" placeholder="🔍 Buscar Inspector..." onkeyup="filtrarYield()" style="margin-bottom:0; flex-grow:1;">
-                    <button class="btn-excel-header" onclick="exportarExcelYield()">📥 EXCEL RENDIMIENTO</button>
-                </div>
-                <table class="airport-table">
-                    <thead><tr><th>Inspector</th><th>Aceptados</th><th>Rechazados</th><th>Total</th><th>Yield %</th></tr></thead>
-                    <tbody id="yield-table-body"></tbody>
-                </table>
-            </div>
+           <div id="sec-yield">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:10px;">
+        <input type="text" id="busqueda-inspector" class="search-bar" placeholder="🔍 Buscar Inspector..." onkeyup="filtrarYield()" style="margin-bottom:0; flex-grow:1;">
+        <button class="btn-excel-header" onclick="exportarExcelYield()">📥 EXCEL RENDIMIENTO</button>
+    </div>
+
+    <div style="display:flex; gap:8px; margin-bottom:15px; flex-wrap: wrap; background: #f8f9fa; padding: 10px; border-radius: 6px; border: 1px solid #eee;">
+        <button class="btn-main" style="background:#607d8b; font-size:0.75em; padding: 5px 10px;" onclick="filtrarPorFecha('hoy')">HOY</button>
+        <button class="btn-main" style="background:#607d8b; font-size:0.75em; padding: 5px 10px;" onclick="filtrarPorFecha('ayer')">AYER</button>
+        <button class="btn-main" style="background:#607d8b; font-size:0.75em; padding: 5px 10px;" onclick="filtrarPorFecha('semana')">SEMANA</button>
+        <button class="btn-main" style="background:#607d8b; font-size:0.75em; padding: 5px 10px;" onclick="filtrarPorFecha('mes')">MES</button>
+        <button class="btn-main" style="background:#455a64; font-size:0.75em; padding: 5px 10px;" onclick="filtrarPorFecha('todos')">TODO</button>
+        <span id="rango-actual" style="margin-left:auto; font-weight:bold; color:var(--primary-green); font-size:0.85em; align-self:center;">📍 Viendo: Todo</span>
+    </div>
+
+    <table class="airport-table">
+        <thead><tr><th>Inspector</th><th>Aceptados</th><th>Rechazados</th><th>Total</th><th>Yield %</th></tr></thead>
+        <tbody id="yield-table-body"></tbody>
+    </table>
+</div>
 
             <div id="sec-gestion" style="display:none;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; gap:10px;">
@@ -463,101 +473,217 @@ async function finalizarLote(ok) {
     });
     return stats;
 }
+// --- PEGAR ESTO ANTES DE generarReporteYield ---
+let filtroFechaActual = 'todos';
+
+function filtrarPorFecha(rango) {
+    filtroFechaActual = rango;
+    const etiquetas = { 
+        'hoy': 'Hoy', 
+        'ayer': 'Ayer', 
+        'semana': 'Esta Semana', 
+        'mes': 'Este Mes', 
+        'todos': 'Todo el Historial' 
+    };
+    document.getElementById('rango-actual').innerText = "📍 Viendo: " + etiquetas[rango];
+    generarReporteYield();
+}
+// ----------------------------------------------
    function generarReporteYield() {
-    const stats = calcularStatsYield();
-    const tbody = document.getElementById('yield-table-body');
+    const ahora = new Date();
+    const hoyStr = ahora.toLocaleDateString();
     
+    // Función auxiliar para entender fechas en formato DD/MM/YYYY
+    const parseFecha = (str) => {
+        const p = str.split('/');
+        return new Date(p[2], p[1] - 1, p[0]);
+    };
+
+    // 1. Filtrar el historial según el botón presionado
+    const filtrados = dbHistorial.filter(r => {
+        if (filtroFechaActual === 'todos') return true;
+        
+        const fechaReg = r.fecha; // Ya viene como string DD/MM/YYYY
+        
+        if (filtroFechaActual === 'hoy') return fechaReg === hoyStr;
+        
+        if (filtroFechaActual === 'ayer') {
+            const ayer = new Date(); ayer.setDate(ayer.getDate() - 1);
+            return fechaReg === ayer.toLocaleDateString();
+        }
+        
+        if (filtroFechaActual === 'semana') {
+            const fechaDoc = parseFecha(fechaReg);
+            const diffDias = (ahora - fechaDoc) / (1000 * 60 * 60 * 24);
+            return diffDias <= 7;
+        }
+        
+        if (filtroFechaActual === 'mes') {
+            return fechaReg.split('/')[1] === hoyStr.split('/')[1] && 
+                   fechaReg.split('/')[2] === hoyStr.split('/')[2];
+        }
+        return true;
+    });
+
+    // 2. Calcular estadísticas sobre los datos ya filtrados
+    const stats = {};
+    filtrados.forEach(r => {
+        const ins = r.inspector || "N/A";
+        if(!stats[ins]) stats[ins] = { ok: 0, fail: 0, total: 0 };
+        stats[ins].total++;
+        if(r.resultado === 'ACEPTADO') stats[ins].ok++; else stats[ins].fail++;
+    });
+
+    // 3. Dibujar la tabla
+    const tbody = document.getElementById('yield-table-body');
     tbody.innerHTML = Object.keys(stats).map(k => {
         const d = stats[k];
-        const yieldPorcentaje = d.total > 0 ? ((d.ok / d.total) * 100).toFixed(1) : 0;
-        
-        // Determinamos el color según el rendimiento
-        const colorYield = yieldPorcentaje >= 95 ? 'var(--primary-green)' : (yieldPorcentaje < 85 ? 'var(--alert-red)' : '#f39c12');
-
-        return `
-            <tr>
-                <td style="text-align:left; padding-left:20px;"><b>${k}</b></td>
-                <td><span style="color:green">●</span> ${d.ok}</td>
-                <td><span style="color:red">●</span> ${d.fail}</td>
-                <td>${d.total}</td>
-                <td style="font-weight:bold; color:${colorYield}; font-size:1.1em;">${yieldPorcentaje}%</td>
-            </tr>`;
+        const yieldPor = d.total > 0 ? ((d.ok / d.total) * 100).toFixed(1) : 0;
+        const color = yieldPor >= 95 ? 'green' : (yieldPor < 85 ? 'red' : '#f39c12');
+        return `<tr>
+            <td style="text-align:left; padding-left:15px;"><b>${k}</b></td>
+            <td>${d.ok}</td><td>${d.fail}</td><td>${d.total}</td>
+            <td style="font-weight:bold; color:${color}">${yieldPor}%</td>
+        </tr>`;
     }).join('');
 }
     
-    function abrirModal(id) { 
-        document.getElementById(id).style.display = 'block'; 
-        pausaSincro = true; 
-    }
-
-    function cerrarModal(id) { 
-        document.getElementById(id).style.display = 'none'; 
-        pausaSincro = false; 
-    }
-
-    function prepararFin(i) { indexSel = i; abrirModal('modal-fin'); }
-    function abrirRechazos() { cerrarModal('modal-fin'); abrirModal('modal-rechazos'); generarDefectos(); }
-    function generarDefectos() { const q = parseInt(document.getElementById('rech-qty').value) || 1; const c = document.getElementById('contenedor-defectos'); c.innerHTML = ""; for(let i=0; i<q; i++) c.innerHTML += `<select class="m-rechazo">${defectosLista.map(d => `<option>${d}</option>`).join('')}</select>`; }
-    function generarDefectosAdmin() { const q = parseInt(document.getElementById('rech-qty-admin').value) || 1; const c = document.getElementById('contenedor-defectos-admin'); c.innerHTML = ""; for(let i=0; i<q; i++) c.innerHTML += `<select class="m-rechazo-admin">${defectosLista.map(d => `<option>${d}</option>`).join('')}</select>`; }
-    function exportarExcelGeneral() { exportarExcel([...dbHistorial].reverse(), 'Reporte_General_QC'); }
-    function exportarExcelYield() { const stats = calcularStatsYield(); let csv = "\uFEFFsep=;\nInspector;Aceptados;Rechazados;Total;Yield %\n"; Object.keys(stats).forEach(k => { const d = stats[k]; csv += `"${k}";"${d.ok}";"${d.fail}";"${d.total}";"${((d.ok/d.total)*100).toFixed(2)}%"\n`; }); descargarArchivo(csv, 'Yield_QC'); }
-    function exportarExcelGestion() { exportarExcel([...dbHistorial].reverse(), 'Gestion_QC'); }
-    function exportarExcel(datos, nombre) {
-        if(!datos.length) return alert("Sin datos");
-        let csv = "\uFEFFsep=;\nFecha;Hora;Linea;Producto;Inspector;Lote;Resultado;Detalle;Tiempo\n";
-        datos.forEach(r => { csv += `"${r.fecha}";"${r.hora}";"${r.linea}";"${r.producto || r.linea}";"${r.inspector}";"${r.lote}";"${r.resultado}";"${r.detalle}";"${r.tiempo}"\n`; });
-        descargarArchivo(csv, nombre);
-    }
-    function descargarArchivo(c, n) { const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement("a"); l.href = URL.createObjectURL(b); l.download = `${n}.csv`; l.click(); }
-
-    // --- FUNCIONES DE SINCRONIZACIÓN NUBE ---
-
-    async function sincronizarConNube() {
-        if (pausaSincro) return; 
-        try {
-            const res = await fetch(SHEETS_URL + "?get=pizarra");
-            const datosNube = await res.json();
-            if (JSON.stringify(estados) !== JSON.stringify(datosNube)) {
-                estados = datosNube;
-                dibujarPizarraSinGuardar();
-            }
-        } catch(e) { console.error("Error de sincronización"); }
-    }
-
-    function guardarEstadoPizarraEnNube() {
-    // Si la sincronización está pausada (porque tienes un modal abierto), no enviamos nada
-    if (pausaSincro) return;
-
-    const dataToSend = { 
-        action: 'save_pizarra', 
-        estados: estados,
-        // Agregamos metadatos para que el historial sea rastreable
-        timestamp: new Date().getTime(),
-        lastUpdateBy: document.getElementById('r-inspector').value || "Sistema",
-        version: "13.8.5" 
-    };
-
-    fetch(SHEETS_URL, {
-        method: 'POST',
-        mode: 'no-cors', // Importante para Google Apps Script
-        body: JSON.stringify(dataToSend)
-    }).catch(err => {
-        console.error("Error crítico de sincronización:", err);
-        // Opcional: podrías mostrar una alerta visual si falla el internet
-    });
+// --- FUNCIONES DE CONTROL DE MODALES ---
+function abrirModal(id) { 
+    const el = document.getElementById(id);
+    if(el) el.style.display = 'block'; 
+    pausaSincro = true; 
 }
 
-    function dibujarPizarraSinGuardar() {
-        const p = document.getElementById('pizarra');
-        p.innerHTML = estados.map((s, i) => `
-            <div class="card ${s.activo ? 'inspeccionando' : ''}">
-                <div class="card-header">${s.productoActivo}</div>
-                <div class="card-body">
-                    ${s.activo ? `<div>👤 ${s.inspector}</div><div class="lote-destacado">${s.lote}</div><div class="badge-info"><span>${s.proceso}</span> • <span>${s.ansi}</span></div><div class="timer-display" id="t-${i}">${s.tiempo}</div>` : '<div style="opacity:0.3; font-weight:bold;">DISPONIBLE</div>'}
-                </div>
-                ${s.activo ? `<button class="btn-card btn-terminar" onclick="prepararFin(${i})">TERMINAR</button>` : `<button class="btn-card btn-historial" onclick="abrirHistorialIndividual(${i})">HISTORIAL</button>`}
-            </div>`).join('');
+function cerrarModal(id) { 
+    const el = document.getElementById(id);
+    if(el) el.style.display = 'none'; 
+    pausaSincro = false; 
+}
+
+function prepararFin(i) {
+    const s = estados[i];
+    const sesionJSON = localStorage.getItem('qc_session');
+    
+    if (!sesionJSON) {
+        alert("Sesión no encontrada. Por favor reingresa al sistema.");
+        return;
     }
-</script>    
+
+    const sesion = JSON.parse(sesionJSON);
+    const usuarioActual = sesion.name.toUpperCase();
+    const inspectorLote = s.inspector.toUpperCase();
+
+    // Solo el dueño del lote o Admin pueden terminarlo
+    if (usuarioActual === inspectorLote || sesion.isAdmin === true) {
+        indexSel = i;
+        abrirModal('modal-fin');
+    } else {
+        alert(`⛔ BLOQUEADO\n\nLote de: ${s.inspector}\nTu usuario: ${sesion.name}\n\nSolo el responsable o un Administrador pueden finalizar.`);
+    }
+}
+
+function abrirRechazos() { 
+    cerrarModal('modal-fin'); 
+    abrirModal('modal-rechazos'); 
+    generarDefectos(); 
+}
+
+function generarDefectos() { 
+    const q = parseInt(document.getElementById('rech-qty').value) || 1; 
+    const c = document.getElementById('contenedor-defectos'); 
+    c.innerHTML = ""; 
+    for(let i=0; i<q; i++) {
+        c.innerHTML += `<select class="m-rechazo">${defectosLista.map(d => `<option>${d}</option>`).join('')}</select>`; 
+    }
+}
+
+// --- FUNCIONES DE INTERFAZ Y EXCEL ---
+function dibujarPizarraSinGuardar() {
+    const p = document.getElementById('pizarra');
+    if(!p) return;
+    p.innerHTML = estados.map((s, i) => `
+        <div class="card ${s.activo ? 'inspeccionando' : ''}">
+            <div class="card-header">${s.productoActivo}</div>
+            <div class="card-body">
+                ${s.activo ? `
+                    <div>👤 ${s.inspector}</div>
+                    <div class="lote-destacado">${s.lote}</div>
+                    <div class="badge-info"><span>${s.proceso}</span> • <span>${s.ansi}</span></div>
+                    <div class="timer-display" id="t-${i}">${s.tiempo}</div>
+                ` : '<div style="opacity:0.3; font-weight:bold;">DISPONIBLE</div>'}
+            </div>
+            ${s.activo ? 
+                `<button class="btn-card btn-terminar" onclick="prepararFin(${i})">TERMINAR</button>` : 
+                `<button class="btn-card btn-historial" onclick="abrirHistorialIndividual(${i})">HISTORIAL</button>`
+            }
+        </div>`).join('');
+}
+
+function exportarExcelGeneral() { exportarExcel([...dbHistorial].reverse(), 'Reporte_General_QC'); }
+function exportarExcelGestion() { exportarExcel([...dbHistorial].reverse(), 'Gestion_QC'); }
+
+function exportarExcelYield() {
+    const stats = calcularStatsYield();
+    let csv = "\uFEFFsep=;\nInspector;Aceptados;Rechazados;Total;Yield %\n";
+    Object.keys(stats).forEach(k => {
+        const d = stats[k];
+        const y = d.total > 0 ? ((d.ok / d.total) * 100).toFixed(1) : 0;
+        csv += `"${k}";"${d.ok}";"${d.fail}";"${d.total}";"${y}%"\n`;
+    });
+    descargarArchivo(csv, 'Reporte_Yield_Inspectores');
+}
+
+function exportarExcel(datos, nombre) {
+    if (datos.length === 0) return alert("No hay datos para exportar");
+    // Encabezados con Proceso y ANSI incluidos
+    let csv = "\uFEFFsep=;\nFecha;Hora;Linea;Producto;Inspector;Lote;Proceso;ANSI;Resultado;Tiempo;Detalle\n";
+    datos.forEach(r => {
+        csv += `"${r.fecha}";"${r.hora}";"${r.linea}";"${r.producto}";"${r.inspector}";"${r.lote}";"${r.proceso}";"${r.ansi}";"${r.resultado}";"${r.tiempo}";"${r.detalle}"\n`;
+    });
+    descargarArchivo(csv, nombre);
+}
+
+function descargarArchivo(contenido, nombre) {
+    const blob = new Blob([contenido], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    const fechaFila = new Date().toLocaleDateString().replace(/\//g, '-');
+    link.setAttribute("download", `${nombre}_${fechaFila}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// --- PERSISTENCIA Y SINCRONIZACIÓN ---
+async function guardarEstadoPizarraEnNube() {
+    if (pausaSincro) return;
+    try {
+        const payload = {
+            action: 'save_pizarra',
+            estados: estados,
+            lastUpdateBy: document.getElementById('r-inspector').value || "Sistema"
+        };
+        fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+    } catch (e) { console.warn("Fallo al guardar en nube"); }
+}
+
+async function sincronizarConNube() {
+    if (pausaSincro) return;
+    try {
+        const res = await fetch(SHEETS_URL);
+        const data = await res.json();
+        if (data.historial) dbHistorial = data.historial;
+        if (data.pizarra && !document.querySelector('.modal[style*="block"]')) {
+            const nubeStr = JSON.stringify(data.pizarra);
+            if (nubeStr !== JSON.stringify(estados)) {
+                estados = data.pizarra;
+                if (typeof render === "function") render();
+            }
+        }
+    } catch (e) { console.error("Error de sincronización"); }
+}
+
+</script>
 </body>
 </html>
