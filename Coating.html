@@ -147,7 +147,7 @@
     let currentUser = "Invitado";
 
     function verificarAccesoGlobal() {
-    // Busca en todas las posibles ubicaciones de sesión
+    // 1. Buscamos el nombre en todas las posibles llaves de memoria
     const sesion1 = localStorage.getItem('qc_current_user');
     const sesion2 = localStorage.getItem('usuario');
     const sesion3 = localStorage.getItem('qc_session');
@@ -159,13 +159,15 @@
     } else if (sesion2) {
         currentUser = sesion2;
     } else {
-        currentUser = "Invitado";
+        currentUser = "INVITADO"; // Por si nadie ha iniciado sesión
     }
 
+    // 2. Lo ponemos en el encabezado visual
     document.getElementById('display-user').innerText = currentUser.toUpperCase();
     
+    // 3. Arrancamos los motores del sistema
     cargarDatosNube();
-    setInterval(cargarDatosNube, 5000);
+    setInterval(cargarDatosNube, 5000); // Sincroniza con otros usuarios cada 5 seg
     setInterval(checkAutoLimpieza, 60000);
     setInterval(actualizarCronometrosLocales, 1000);
 }
@@ -217,50 +219,67 @@
         try {
             const res = await fetch(URL_NUBE);
             const d = await res.json();
+            
             if(!pausaSincro) {
-                document.getElementById('id-espera').innerHTML = d.e || "";
-                document.getElementById('id-proceso').innerHTML = d.p || "";
-                document.getElementById('id-terminado').innerHTML = d.t || "";
-                document.getElementById('cuerpoHistorial').innerHTML = d.h || "";
+                // Mapeamos los datos recibidos con los IDs de la página
+                const secciones = [
+                    { id: 'id-espera', contenido: d.e || "" },
+                    { id: 'id-proceso', contenido: d.p || "" },
+                    { id: 'id-terminado', contenido: d.t || "" },
+                    { id: 'cuerpoHistorial', contenido: d.h || "" }
+                ];
+
+                secciones.forEach(seccion => {
+                    const el = document.getElementById(seccion.id);
+                    // AQUÍ ESTÁ EL TRUCO: Solo cambia si el contenido es diferente
+                    if (el && el.innerHTML.trim() !== seccion.contenido.trim()) {
+                        el.innerHTML = seccion.contenido;
+                        console.log(`Actualizada sección: ${seccion.id}`);
+                    }
+                });
             }
-        } catch(e) {}
+        } catch(e) { 
+            console.warn("Sincronización pausada o error de red."); 
+        }
     }
 
-    function agregarLote() {
-        const input = document.getElementById('loteIn');
-        const select = document.getElementById('lineaSelect');
-        const lote = input.value.trim();
-        const linea = toTitleCase(select.value);
-        if(!lote) return;
-        
-        activarPausa();
-        const ahora = Date.now();
-        const div = document.createElement('div');
-        div.className = 'card';
-        div.setAttribute('data-creado', ahora);
-        div.setAttribute('data-reloj-inicio', ahora);
-        div.setAttribute('data-creador', currentUser);
+// --- FUNCIONES DE MOVIMIENTO DE LOTES ---
 
-        div.innerHTML = `
-            <button style="position:absolute;right:8px;top:8px;border:none;background:none;cursor:pointer;color:#999;font-weight:bold;" onclick="eliminarLote(this)">✕</button>
-            <h3>Lote: ${lote} <span class="badge-linea">${linea}</span></h3>
-            <p style="font-size:11px; color:#666; margin:2px 0;">Registrado por: ${currentUser}</p>
-            <div class="resumen-tiempos"><div class="linea-tiempo"><span>⏱ Espera:</span> <span class="cronometro">0m 0s</span></div></div>
-            <button class="btn-action" style="background:#859900;" onclick="tomar(this, '${lote}', '${linea}')">Tomar Lote</button>`;
-        
-        document.getElementById('id-espera').appendChild(div);
-        input.value = "";
-        enviarTeams(lote, linea);
-        guardarNube();
-    }
+function agregarLote() {
+    const input = document.getElementById('loteIn');
+    const select = document.getElementById('lineaSelect');
+    const lote = input.value.trim();
+    const linea = toTitleCase(select.value);
+    if(!lote) return;
+    
+    activarPausa();
+    const ahora = Date.now();
+    const div = document.createElement('div');
+    div.className = 'card';
+    
+    div.setAttribute('data-creado', ahora);
+    div.setAttribute('data-reloj-inicio', ahora);
+    div.setAttribute('data-creador', currentUser); 
 
-   function tomar(btn, lote, linea) {
+    div.innerHTML = `
+        <button style="position:absolute;right:8px;top:8px;border:none;background:none;cursor:pointer;color:#999;font-weight:bold;" onclick="eliminarLote(this)">✕</button>
+        <h3>Lote: ${lote} <span class="badge-linea">${linea}</span></h3>
+        <div class="resumen-tiempos">
+            <div class="linea-tiempo"><span>⏱ Espera:</span> <span class="cronometro">0m 0s</span></div>
+        </div>
+        <button class="btn-action" style="background:#859900;" onclick="tomar(this, '${lote}', '${linea}')">Tomar Lote</button>`;
+    
+    document.getElementById('id-espera').appendChild(div);
+    input.value = "";
+    enviarTeams(lote, linea);
+    guardarNube();
+}
+
+function tomar(btn, lote, linea) {
     activarPausa();
     const card = btn.closest('.card');
     const ahora = Date.now();
     
-    // CAPTURA DE NOMBRE (Lógica tipo Review)
-    // Leemos el nombre que aparece en la barra superior en ese instante
     const displayNombre = document.getElementById('display-user').innerText;
     const nombreReal = displayNombre.trim().toUpperCase(); 
 
@@ -268,12 +287,12 @@
     
     card.setAttribute('data-t-espera', tEspera);
     card.setAttribute('data-reloj-inicio', ahora);
-    card.setAttribute('data-inspector-fijo', nombreReal); // Sellamos con el nombre del encabezado
+    card.setAttribute('data-inspector-fijo', nombreReal); 
 
     card.innerHTML = `
         <button style="position:absolute;right:8px;top:8px;border:none;background:none;cursor:pointer;color:#999;font-weight:bold;" onclick="eliminarLote(this)">✕</button>
         <h3>Lote: ${lote} <span class="badge-linea">${linea}</span></h3>
-        <p style="font-size:12px; margin:2px 0; color:#333;">Inspector: <b style="color:#007bff;">${nombreReal}</b></p>
+        <p style="font-size:12px; margin:5px 0; color:#333;">Inspector: <b style="color:#007bff;">${nombreReal}</b></p> 
         <div class="resumen-tiempos">
             <div class="linea-tiempo"><span>⌛ Espera:</span> <span>${formatTime(tEspera)}</span></div>
             <div class="linea-tiempo"><span>⏱ Revisión:</span> <span class="cronometro">0m 0s</span></div>
@@ -285,44 +304,50 @@
 }
 
 function finalizar(btn, lote, linea) {
-        activarPausa();
-        const card = btn.closest('.card');
-        const ahora = Date.now();
-        const tEspera = parseInt(card.getAttribute('data-t-espera'));
-        const tRevision = ahora - parseInt(card.getAttribute('data-reloj-inicio'));
-        
-        // REFUERZO: Prioriza el nombre guardado en la tarjeta al "Tomar"
-        const responsable = card.getAttribute('data-inspector-fijo') || currentUser;
-        
-        const tiempoFinal = new Date();
-        const horaFin = tiempoFinal.getHours() + ":" + tiempoFinal.getMinutes().toString().padStart(2, '0');
-        
-        // ... (continúa el resto de tu código de finalizar)
+    activarPausa();
+    const card = btn.closest('.card');
+    const ahora = Date.now();
+    
+    // Recuperamos el sello que pusimos en 'tomar'
+    const responsable = card.getAttribute('data-inspector-fijo') || currentUser;
+    
+    const tEspera = parseInt(card.getAttribute('data-t-espera'));
+    const tRevision = ahora - parseInt(card.getAttribute('data-reloj-inicio'));
+    
+    const tiempoFinal = new Date();
+    const horaFin = tiempoFinal.getHours() + ":" + tiempoFinal.getMinutes().toString().padStart(2, '0');
 
-        card.setAttribute('data-fin-timestamp', ahora);
-        card.removeAttribute('data-reloj-inicio');
-        card.style.borderLeft = "5px solid #28a745";
+    card.setAttribute('data-fin-timestamp', ahora);
+    card.removeAttribute('data-reloj-inicio');
+    card.style.borderLeft = "5px solid #28a745";
+    
+    card.innerHTML = `
+        <button style="position:absolute;right:8px;top:8px;border:none;background:none;cursor:pointer;color:#999;font-weight:bold;" onclick="eliminarLote(this)">✕</button>
+        <span class="hora-fin-badge">🕒 ${horaFin}</span>
+        <h3>Lote: ${lote} <span class="badge-linea">${linea}</span></h3>
+        <p style="font-size:12px; margin:2px 0; color:#333;">Inspector: <b>${responsable}</b></p>
+        <div class="resumen-tiempos">
+            <div class="linea-tiempo"><span>⌛ Espera:</span> <span>${formatTime(tEspera)}</span></div>
+            <div class="linea-tiempo"><span>🔍 Revisión:</span> <span>${formatTime(tRevision)}</span></div>
+            <div class="linea-tiempo" style="font-weight:bold; color:var(--verde-qc);"><span>✅ Total:</span> <span>${formatTime(tEspera + tRevision)}</span></div>
+        </div>`;
         
-        card.innerHTML = `
-            <button style="position:absolute;right:8px;top:8px;border:none;background:none;cursor:pointer;color:#999;font-weight:bold;" onclick="eliminarLote(this)">✕</button>
-            <span class="hora-fin-badge">🕒 ${horaFin}</span>
-            <h3>Lote: ${lote} <span class="badge-linea">${linea}</span></h3>
-            <p style="font-size:11px; color:#666; margin:2px 0;">Resp: ${responsable}</p>
-            <div class="resumen-tiempos">
-                <div class="linea-tiempo"><span>⌛ Espera:</span> <span>${formatTime(tEspera)}</span></div>
-                <div class="linea-tiempo"><span>🔍 Revisión:</span> <span>${formatTime(tRevision)}</span></div>
-                <div class="linea-tiempo" style="font-weight:bold; color:var(--verde-qc);"><span>✅ Total:</span> <span>${formatTime(tEspera + tRevision)}</span></div>
-            </div>`;
-            
-        document.getElementById('id-terminado').appendChild(card);
-        
-        const fila = `<tr><td>${new Date().toLocaleDateString()} ${horaFin}</td><td>${lote}</td><td>${linea}</td><td>${responsable}</td><td>${formatTime(tEspera)}</td><td>${formatTime(tRevision)}</td><td>${formatTime(tEspera+tRevision)}</td></tr>`;
-        document.getElementById('cuerpoHistorial').insertAdjacentHTML('afterbegin', fila);
-        
-        guardarNube();
-    }
-
-    function actualizarCronometrosLocales() {
+    document.getElementById('id-terminado').appendChild(card);
+    
+    const fila = `<tr>
+        <td>${new Date().toLocaleDateString()} ${horaFin}</td>
+        <td>${lote}</td>
+        <td>${linea}</td>
+        <td>${responsable}</td>
+        <td>${formatTime(tEspera)}</td>
+        <td>${formatTime(tRevision)}</td>
+        <td>${formatTime(tEspera+tRevision)}</td>
+    </tr>`;
+    
+    document.getElementById('cuerpoHistorial').insertAdjacentHTML('afterbegin', fila);
+    guardarNube();
+}
+function actualizarCronometrosLocales() {
         document.querySelectorAll('.card').forEach(c => {
             const inicio = c.getAttribute('data-reloj-inicio');
             if(inicio && !c.getAttribute('data-fin-timestamp')) {
@@ -339,10 +364,7 @@ function finalizar(btn, lote, linea) {
             let huboCambios = false;
             document.querySelectorAll('.card').forEach(card => {
                 const fechaLote = new Date(parseInt(card.getAttribute('data-creado'))).toLocaleDateString();
-                if (fechaLote !== hoyStr) {
-                    card.remove();
-                    huboCambios = true;
-                }
+                if (fechaLote !== hoyStr) { card.remove(); huboCambios = true; }
             });
             if (huboCambios) guardarNube();
         }
