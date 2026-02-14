@@ -106,103 +106,157 @@
     <div class="fab" onclick="abrirModal('modal-reg')">+</div>
 
     <div id="modal-admin" class="airport-modal">
-        <div style="background: white; margin: 10px auto; width: 98%; max-width: 1150px; border-radius: 8px; padding: 25px; height: 90vh; overflow-y: auto; position: relative;">
-            <button style="position:absolute; top:15px; right:20px; font-size:25px; border:none; background:none; cursor:pointer;" onclick="cerrarModal('modal-admin')">×</button>
-            <h2 style="color:var(--primary-dark); margin-top:0;">Panel de Control Admin</h2>
-            <div style="display:flex; gap:10px; margin-bottom:20px;">
-                <button class="btn-main" onclick="mostrarTab('yield')">📊 Rendimiento Yield</button>
-                <button class="btn-main" onclick="mostrarTab('gestion')">⚙️ Gestión de Datos</button>
-            </div>
-            
-           <div id="sec-yield">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:10px;">
-        <input type="text" id="busqueda-inspector" class="search-bar" placeholder="🔍 Buscar Inspector..." onkeyup="filtrarYield()" style="margin-bottom:0; flex-grow:1;">
-        <button class="btn-excel-header" onclick="exportarExcelYield()">📥 EXCEL RENDIMIENTO</button>
-    </div>
-
-    <div style="display:flex; gap:8px; margin-bottom:15px; flex-wrap: wrap; background: #f8f9fa; padding: 10px; border-radius: 6px; border: 1px solid #eee;">
-        <button class="btn-main" style="background:#607d8b; font-size:0.75em; padding: 5px 10px;" onclick="filtrarPorFecha('hoy')">HOY</button>
-        <button class="btn-main" style="background:#607d8b; font-size:0.75em; padding: 5px 10px;" onclick="filtrarPorFecha('ayer')">AYER</button>
-        <button class="btn-main" style="background:#607d8b; font-size:0.75em; padding: 5px 10px;" onclick="filtrarPorFecha('semana')">SEMANA</button>
-        <button class="btn-main" style="background:#607d8b; font-size:0.75em; padding: 5px 10px;" onclick="filtrarPorFecha('mes')">MES</button>
-        <button class="btn-main" style="background:#455a64; font-size:0.75em; padding: 5px 10px;" onclick="filtrarPorFecha('todos')">TODO</button>
-        <span id="rango-actual" style="margin-left:auto; font-weight:bold; color:var(--primary-green); font-size:0.85em; align-self:center;">📍 Viendo: Todo</span>
-    </div>
-
-    <table class="airport-table">
-        <thead><tr><th>Inspector</th><th>Aceptados</th><th>Rechazados</th><th>Total</th><th>Yield %</th></tr></thead>
-        <tbody id="yield-table-body"></tbody>
-    </table>
-</div>
-
-            <div id="sec-gestion" style="display:none;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; gap:10px;">
-                    <input type="text" id="input-busqueda" class="search-bar" placeholder="🔍 Buscar por Lote # ..." onkeyup="filtrarLotesAdmin()" style="margin-bottom:0; flex-grow:1;">
-                    <button class="btn-excel-header" onclick="exportarExcelGestion()">📥 EXCEL GESTIÓN</button>
-                </div>
-                <table class="airport-table">
-                    <thead><tr><th>Lote</th><th>Línea Base</th><th>Resultado</th><th>Detalle/Defectos</th><th>Acción</th></tr></thead>
-                    <tbody id="gestion-table-body"></tbody>
-                </table>
-            </div>
+    <div style="background: white; margin: 10px auto; width: 98%; max-width: 1150px; border-radius: 8px; padding: 25px; height: 90vh; overflow-y: auto; position: relative;">
+        <button style="position:absolute; top:15px; right:20px; font-size:25px; border:none; background:none; cursor:pointer;" onclick="cerrarModal('modal-admin')">×</button>
+        <h2 style="color:var(--primary-dark); margin-top:0;">Panel de Control Admin</h2>
+        
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px;">
+            <button class="btn-main" style="height: 45px; background: var(--primary-green);" onclick="mostrarTab('yield')">📊 Rendimiento Yield</button>
+            <button class="btn-main" style="height: 45px; background: var(--primary-green);" onclick="mostrarTab('gestion')">⚙️ Gestión de Datos</button>
+            <button class="btn-main" style="height: 45px; background: #6c757d;" onclick="mostrarTab('defectos')">🛠️ Config. Defectos</button>
         </div>
-    </div>
 
-    <div id="modal-defecto-admin" class="modal">
-        <div class="modal-content">
-            <h3 style="color:var(--alert-red); border-color: var(--alert-red);">Cambiar a Rechazado</h3>
-            <label>Cantidad de Defectos:</label>
-            <input type="number" id="rech-qty-admin" value="1" min="1" onchange="generarDefectosAdmin()">
-            <div id="contenedor-defectos-admin" style="margin-bottom: 15px;"></div>
-            <button class="btn-main" style="width:100%; background:var(--alert-red);" onclick="confirmarCambioRechazo()">ACTUALIZAR REGISTRO</button>
-            <button class="btn-main" style="width:100%; background:#ccc; margin-top:10px; color:#333;" onclick="cerrarModal('modal-defecto-admin')">CANCELAR</button>
-        </div>
-    </div>
-
-    <div id="modal-historial-linea" class="airport-modal">
-        <div style="background: white; margin: 20px auto; width: 95%; max-width: 1000px; border-radius: 8px; padding: 25px; height: 80vh; overflow-y: auto; position: relative;">
-            <button style="position:absolute; top:15px; right:20px; font-size:25px; border:none; background:none; cursor:pointer;" onclick="cerrarModal('modal-historial-linea')">×</button>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <h3 id="hist-linea-titulo" style="margin:0;"></h3>
-                <button id="btn-descarga-individual" class="btn-excel-header">📥 DESCARGAR HISTORIAL</button>
+        <div id="sec-yield">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:10px;">
+                <input type="text" id="busqueda-inspector" class="search-bar" placeholder="🔍 Buscar Inspector..." onkeyup="filtrarYield()" style="margin-bottom:0; flex-grow:1;">
+                <button class="btn-excel-header" onclick="exportarExcelYield()">📥 EXCEL RENDIMIENTO</button>
             </div>
-            <input type="text" id="busqueda-lote-historial" class="search-bar" placeholder="🔍 Filtrar por Lote #..." onkeyup="filtrarLoteHistorialIndividual()">
+            <div style="display:flex; gap:8px; margin-bottom:15px; flex-wrap: wrap; background: #f8f9fa; padding: 10px; border-radius: 6px; border: 1px solid #eee;">
+                <button class="btn-main" style="background:#607d8b; font-size:0.75em; padding: 5px 10px;" onclick="filtrarPorFecha('hoy')">HOY</button>
+                <button class="btn-main" style="background:#607d8b; font-size:0.75em; padding: 5px 10px;" onclick="filtrarPorFecha('todos')">TODO</button>
+                <span id="rango-actual" style="margin-left:auto; font-weight:bold; color:var(--primary-green); font-size:0.85em; align-self:center;">📍 Viendo: Todo</span>
+            </div>
             <table class="airport-table">
-                <thead><tr><th>Fecha</th><th>Hora Inicio</th><th>Lote</th><th>Inspector</th><th>Resultado</th><th>Duración</th><th>Defecto</th></tr></thead>
-                <tbody id="hist-linea-body"></tbody>
+                <thead><tr><th>Inspector</th><th>Aceptados</th><th>Rechazados</th><th>Total</th><th>Yield %</th></tr></thead>
+                <tbody id="yield-table-body"></tbody>
+            </table>
+        </div>
+
+        <div id="sec-gestion" style="display:none;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; gap:10px;">
+                <input type="text" id="input-busqueda" class="search-bar" placeholder="🔍 Buscar por Lote # ..." onkeyup="filtrarLotesAdmin()" style="margin-bottom:0; flex-grow:1;">
+                <button class="btn-excel-header" onclick="exportarExcelGestion()">📥 EXCEL GESTIÓN</button>
+            </div>
+            <table class="airport-table">
+                <thead><tr><th>Lote</th><th>Línea Base</th><th>Resultado</th><th>Detalle/Defectos</th><th>Acción</th></tr></thead>
+                <tbody id="gestion-table-body"></tbody>
+            </table>
+        </div>
+
+        <div id="sec-defectos" style="display:none;">
+            <h3 style="color:var(--primary-dark); border-bottom: 2px solid #8e44ad; padding-bottom: 8px; margin-top:0;">Configuración de Defectos</h3>
+            <div style="background:#f1f3f5; padding:15px; border-radius:8px; margin-bottom:20px; border:1px solid var(--border);">
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:10px;">
+                    <div><label>1. Línea:</label><select id="admin-def-linea" onchange="renderizarListaDefectosAdmin()" style="width:100%;"></select></div>
+                    <div><label>2. Proceso:</label><select id="admin-def-proceso" onchange="renderizarListaDefectosAdmin()" style="width:100%;"><option>Shaft</option><option>Final</option><option>Hub Bonding</option></select></div>
+                    <div><label>3. Defecto:</label><input type="text" id="admin-def-nombre" placeholder="Nombre..." style="width:100%;"></div>
+                </div>
+                <button class="btn-main" style="width:100%; background:#8e44ad;" onclick="agregarDefectoNuevo()">＋ GUARDAR EN CATÁLOGO</button>
+            </div>
+            <table class="airport-table">
+                <thead><tr><th>Defecto Registrado</th><th style="width: 80px;">Acción</th></tr></thead>
+                <tbody id="lista-defectos-configurados-tabla"></tbody>
             </table>
         </div>
     </div>
+</div>
 
-    <div id="modal-reg" class="modal">
-        <div class="modal-content">
-            <button style="position:absolute; top:15px; right:20px; font-size:25px; border:none; background:none; cursor:pointer;" onclick="cerrarModal('modal-reg')">×</button>
-            <h3>Nueva Inspección</h3>
-            <label>Línea</label>
-            <select id="r-linea" onchange="verificarHibrida()"></select>
-            <div id="contenedor-hibrida" style="display:none; background: #f0f4f1; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid var(--border);">
-                <label><b>Producto Específico:</b></label>
-                <select id="r-producto-especifico"></select>
-            </div>
-            <input type="text" id="r-lote" placeholder="Lote #">
-            <input type="text" id="r-inspector" readonly style="background:#f1f1f1; cursor: not-allowed;">
-            <select id="r-proceso"><option>Shaft</option><option>Final</option><option>Hub Bonding</option></select>
-            <select id="r-ansi"><option>Normal</option><option>Reducido</option><option>Riguroso</option></select>
-            <button class="btn-main" style="width:100%;" onclick="iniciarLote()">INICIAR INSPECCIÓN</button>
-        </div>
+<div id="modal-defecto-admin" class="modal">
+    <div class="modal-content">
+        <h3 style="color:var(--alert-red);">Cambiar a Rechazado</h3>
+        <label>Cantidad de Defectos:</label>
+        <input type="number" id="rech-qty-admin" value="1" min="1" onchange="generarDefectosAdmin()">
+        <div id="contenedor-defectos-admin" style="margin-bottom: 15px;"></div>
+        <button class="btn-main" style="width:100%; background:var(--alert-red);" onclick="confirmarCambioRechazo()">ACTUALIZAR REGISTRO</button>
+        <button class="btn-main" style="width:100%; background:#ccc; margin-top:10px;" onclick="cerrarModal('modal-defecto-admin')">CANCELAR</button>
     </div>
+</div>
 
-    <div id="modal-fin" class="modal"><div class="modal-content"><h3>¿Lote Aceptado?</h3><button class="btn-main" style="width:100%;" onclick="finalizarLote(true)">ACEPTAR</button><button class="btn-main" style="background:var(--alert-red); width:100%; margin-top:10px;" onclick="abrirRechazos()">RECHAZAR</button></div></div>
-    <div id="modal-rechazos" class="modal"><div class="modal-content"><h3>Defectos Detectados</h3><input type="number" id="rech-qty" value="1" onchange="generarDefectos()"><div id="contenedor-defectos"></div><button class="btn-main" style="background:var(--alert-red); width:100%;" onclick="finalizarLote(false)">GUARDAR RECHAZO</button></div></div>
+<div id="modal-historial-linea" class="airport-modal">
+    <div style="background: white; margin: 20px auto; width: 95%; max-width: 1000px; border-radius: 8px; padding: 25px; height: 80vh; overflow-y: auto; position: relative;">
+        <button style="position:absolute; top:15px; right:20px; font-size:25px; border:none; background:none; cursor:pointer;" onclick="cerrarModal('modal-historial-linea')">×</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h3 id="hist-linea-titulo"></h3>
+            <button id="btn-descarga-individual" class="btn-excel-header">📥 DESCARGAR</button>
+        </div>
+        <input type="text" id="busqueda-lote-historial" class="search-bar" placeholder="🔍 Filtrar..." onkeyup="filtrarLoteHistorialIndividual()">
+        <table class="airport-table">
+            <thead><tr><th>Fecha</th><th>Hora Inicio</th><th>Lote</th><th>Inspector</th><th>Resultado</th><th>Duración</th><th>Defecto</th></tr></thead>
+            <tbody id="hist-linea-body"></tbody>
+        </table>
+    </div>
+</div>
 
+<div id="modal-reg" class="modal">
+    <div class="modal-content">
+        <button style="position:absolute; top:15px; right:20px; font-size:25px; border:none; background:none; cursor:pointer;" onclick="cerrarModal('modal-reg')">×</button>
+        <h3>Nueva Inspección</h3>
+        <label>Línea</label><select id="r-linea" onchange="verificarHibrida()"></select>
+        <div id="contenedor-hibrida" style="display:none; background: #f0f4f1; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid var(--border);">
+            <label>Producto Específico:</label><select id="r-producto-especifico"></select>
+        </div>
+        <input type="text" id="r-lote" placeholder="Lote #">
+        <input type="text" id="r-inspector" readonly style="background:#f1f1f1;">
+        <select id="r-proceso"><option>Shaft</option><option>Final</option><option>Hub Bonding</option></select>
+        <select id="r-ansi"><option>Normal</option><option>Reducido</option><option>Riguroso</option></select>
+        <button class="btn-main" style="width:100%;" onclick="iniciarLote()">INICIAR INSPECCIÓN</button>
+    </div>
+</div>
+
+<div id="modal-fin" class="modal"><div class="modal-content"><h3>¿Lote Aceptado?</h3><button class="btn-main" style="width:100%;" onclick="finalizarLote(true)">ACEPTAR</button><button class="btn-main" style="background:var(--alert-red); width:100%; margin-top:10px;" onclick="abrirRechazos()">RECHAZAR</button></div></div>
+<div id="modal-rechazos" class="modal">
+    <div class="modal-content" style="position: relative; padding-top: 35px;">
+        <button style="position:absolute; top:10px; right:15px; font-size:25px; border:none; background:none; cursor:pointer; color:#888;" onclick="cerrarModal('modal-rechazos')">×</button>
+        
+        <h3 style="color:var(--alert-red); margin-top:0;">Defectos Detectados</h3>
+        
+        <label style="display:block; font-size:12px; font-weight:bold; margin-bottom:5px;">Cantidad de piezas rechazadas:</label>
+        <input type="number" id="rech-qty" value="1" min="1" oninput="generarDefectos()" onchange="generarDefectos()" style="width:100%; margin-bottom:15px;">
+        
+        <div id="contenedor-defectos" style="max-height: 250px; overflow-y: auto; margin-bottom: 20px; padding-right: 5px;">
+            </div>
+        
+        <button class="btn-main" style="background:var(--alert-red); width:100%;" onclick="finalizarLote(false)">GUARDAR RECHAZO</button>
+    </div>
+</div>
     <script>
 
     // Variable para que no se crucen los datos mientras escribes
     let pausaSincro = false;
 
-    const SHEETS_URL = "https://script.google.com/macros/s/AKfycbw_s-tC7AxsQpSMeM2Rv2C4BCTTBE0r6xAy_CL2DxdZqNHwBT6VTM2n-JuHgiCglVTd/exec";
+    const SHEETS_URL = "https://script.google.com/macros/s/AKfycbxQ91aW8biMN8Maqxkw59_027OMuH4jBAgkqdjKbYhBjxJAFFTI6ydG2MxdhAAsnUi6/exec";
     const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
-    const defectosLista = ["Visual", "Derrame", "Medida", "Empaque"];
+    // --- NUEVO SISTEMA DE CATÁLOGO DE DEFECTOS ---
+// Estructura: catalogoDefectos["LINEA"]["PROCESO"] = ["Defecto A", "Defecto B"]
+let catalogoDefectos = JSON.parse(localStorage.getItem('qc_catalogo_v2')) || {};
+
+// Esta función guarda tus cambios para que no se borren al refrescar
+function guardarCatalogo() {
+    // 1. Guardar en la memoria local del navegador (como respaldo rápido)
+    localStorage.setItem('qc_catalogo_v2', JSON.stringify(catalogoDefectos));
+
+    // 2. Enviar a la nube (Google Sheets)
+    const payload = {
+        action: 'save_config',
+        datos: catalogoDefectos
+    };
+
+    fetch(SHEETS_URL, {
+        method: 'POST',
+        mode: 'no-cors', // Importante para evitar bloqueos de seguridad simples
+        body: JSON.stringify(payload)
+    })
+    .then(() => {
+        console.log("Sincronización con Google Sheets exitosa");
+        alert("✅ Catálogo actualizado y guardado en la nube.");
+    })
+    .catch(error => {
+        console.error("Error al sincronizar:", error);
+        alert("❌ Error al guardar en la nube, pero se guardó localmente.");
+    });
+}
+// Defectos de respaldo por si una línea no tiene nada configurado aún
+const defectosRespaldo = ["Visual", "Derrame", "Medida", "Empaque", "Otro"];
     let estados = []; let dbHistorial = []; let indexSel = null; let adminEditTemp = { idx: null, valor: null };
 
     function inicializarSistema() {
@@ -233,6 +287,26 @@
         try { const res = await fetch(SHEETS_URL); const datos = await res.json(); dbHistorial = datos.historial || []; } catch(e) { console.error("Error conexión"); }
     }
 
+// NUEVA FUNCIÓN: Solo para traer la configuración de defectos
+async function sincronizarConfiguracionDefectos() {
+    try { 
+        const res = await fetch(SHEETS_URL); 
+        const datos = await res.json(); 
+        
+        // Solo actualizamos el catálogo si el servidor envió la sección 'config'
+        if (datos.config && datos.config.CATALOGO_DEFECTOS) {
+            const catalogoNube = JSON.parse(datos.config.CATALOGO_DEFECTOS);
+            
+            // Verificamos que no venga vacío para no borrar lo que tienes en pantalla
+            if (Object.keys(catalogoNube).length > 0) {
+                catalogoDefectos = catalogoNube;
+                console.log("Catálogo de defectos sincronizado desde la nube.");
+            }
+        }
+    } catch(e) { 
+        console.warn("No se pudo sincronizar el catálogo, se mantiene el local.", e); 
+    }
+}
     function formatearTexto(valor) {
         if (!valor) return "";
         let str = String(valor);
@@ -441,7 +515,96 @@ async function finalizarLote(ok) {
         document.getElementById('reloj').innerText = new Date().toLocaleTimeString();
     }
 
-    function mostrarTab(t) { document.getElementById('sec-yield').style.display = t === 'yield' ? 'block' : 'none'; document.getElementById('sec-gestion').style.display = t === 'gestion' ? 'block' : 'none'; }
+    // Actualizamos mostrarTab para incluir la pestaña de defectos
+function mostrarTab(t) { 
+    document.getElementById('sec-yield').style.display = t === 'yield' ? 'block' : 'none'; 
+    document.getElementById('sec-gestion').style.display = t === 'gestion' ? 'block' : 'none'; 
+    document.getElementById('sec-defectos').style.display = t === 'defectos' ? 'block' : 'none'; 
+    
+    if(t === 'defectos') {
+        inicializarSelectoresAdmin();
+    }
+}
+
+// Llena el selector de líneas del panel admin usando tu array lineasArr
+function inicializarSelectoresAdmin() {
+    const selL = document.getElementById('admin-def-linea');
+    if(selL.options.length === 0) { // Solo llenar si está vacío
+        selL.innerHTML = lineasArr.map(n => `<option value="${n}">${n}</option>`).join('');
+    }
+    renderizarListaDefectosAdmin();
+}
+
+// Dibuja los cuadritos de los defectos que ya existen
+function renderizarListaDefectosAdmin() {
+    const linea = document.getElementById('admin-def-linea').value;
+    const proceso = document.getElementById('admin-def-proceso').value;
+    const tbody = document.getElementById('lista-defectos-configurados-tabla');
+    
+    if (!tbody) return; // Seguridad por si el ID no existe
+    
+    // Obtener la lista del catálogo
+    const lista = (catalogoDefectos[linea] && catalogoDefectos[linea][proceso]) 
+                  ? catalogoDefectos[linea][proceso] 
+                  : [];
+    
+    if (lista.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="2" style="color:#999; padding:20px; text-align:center;">No hay defectos para esta selección.</td></tr>`;
+        return;
+    }
+
+    // Generar las filas con el botón de borrar
+    tbody.innerHTML = lista.map((def, i) => `
+        <tr>
+            <td style="text-align:left; padding-left:20px; font-weight:bold; color:var(--primary-dark);">${def}</td>
+            <td style="text-align:center;">
+                <button onclick="eliminarDefecto('${linea}', '${proceso}', ${i})" style="background:none; border:none; cursor:pointer; font-size:1.2em;">🗑️</button>
+            </td>
+        </tr>
+    `).join('');
+}
+// Agrega un nuevo defecto a la memoria
+function agregarDefectoNuevo() {
+    const linea = document.getElementById('admin-def-linea').value;
+    const proceso = document.getElementById('admin-def-proceso').value;
+    const inputNombre = document.getElementById('admin-def-nombre');
+    const nombre = inputNombre.value.trim();
+
+    if (!nombre) {
+        alert("Escribe el nombre del defecto");
+        return;
+    }
+
+    // Inicializar estructura si no existe
+    if (!catalogoDefectos[linea]) catalogoDefectos[linea] = {};
+    if (!catalogoDefectos[linea][proceso]) catalogoDefectos[linea][proceso] = [];
+
+    // Evitar duplicados
+    if (catalogoDefectos[linea][proceso].includes(nombre)) {
+        alert("Este defecto ya existe");
+        return;
+    }
+
+    // Guardar en el objeto
+    catalogoDefectos[linea][proceso].push(nombre);
+    
+    // Guardar en LocalStorage y Nube
+    guardarCatalogo();
+
+    // LIMPIAR INPUT
+    inputNombre.value = "";
+
+    // REFRESCAR LA TABLA INMEDIATAMENTE
+    renderizarListaDefectosAdmin();
+}
+// Borra un defecto de la memoria
+function eliminarDefecto(linea, proceso, index) {
+    if(confirm("¿Deseas eliminar este defecto?")) {
+        catalogoDefectos[linea][proceso].splice(index, 1);
+        guardarCatalogo();
+        renderizarListaDefectosAdmin();
+    }
+}
     function filtrarYield() { const q = document.getElementById('busqueda-inspector').value.toLowerCase(); const filas = document.querySelectorAll('#yield-table-body tr'); filas.forEach(f => { f.style.display = f.cells[0].innerText.toLowerCase().includes(q) ? "" : "none"; }); }
     function filtrarLotesAdmin() { const q = document.getElementById('input-busqueda').value.toLowerCase(); const filas = document.querySelectorAll('#gestion-table-body tr'); filas.forEach(f => { f.style.display = f.cells[0].innerText.toLowerCase().includes(q) ? "" : "none"; }); }
     function calcularStatsYield() {
@@ -590,14 +753,54 @@ function abrirRechazos() {
 }
 
 function generarDefectos() { 
-    const q = parseInt(document.getElementById('rech-qty').value) || 1; 
+    const q = parseInt(document.getElementById('rech-qty').value) || 0; 
     const c = document.getElementById('contenedor-defectos'); 
+    
+    // 1. Limpiamos el contenedor para que no se amontonen
     c.innerHTML = ""; 
-    for(let i=0; i<q; i++) {
-        c.innerHTML += `<select class="m-rechazo">${defectosLista.map(d => `<option>${d}</option>`).join('')}</select>`; 
+    
+    // 2. Obtenemos los datos del lote que se está inspeccionando actualmente
+    const loteActual = estados[indexSel];
+    if (!loteActual) return;
+
+    const lineaActual = loteActual.productoOriginal || loteActual.productoActivo; 
+    const procesoActual = loteActual.proceso;
+
+    // 3. Buscamos qué defectos hay guardados para esa línea/proceso en el Admin
+    let opcionesDefectos = (catalogoDefectos[lineaActual] && catalogoDefectos[lineaActual][procesoActual]) 
+                           ? catalogoDefectos[lineaActual][procesoActual] 
+                           : ["Visual", "Derrame", "Medida", "Otro"]; // Lista por defecto si no hay nada en Admin
+
+    // 4. Creamos un selector por cada cantidad (Q) indicada
+    for(let i = 0; i < q; i++) {
+        const divGrupo = document.createElement('div');
+        divGrupo.style.marginBottom = "10px";
+        
+        const label = document.createElement('label');
+        label.innerHTML = `<small>Defecto pieza ${i+1}:</small>`;
+        label.style.display = "block";
+        label.style.fontSize = "10px";
+        
+        const select = document.createElement('select');
+        select.className = "m-rechazo"; // Esta clase es la que usas para guardar el resultado
+        select.style.width = "100%";
+        select.style.padding = "8px";
+        select.style.border = "1px solid var(--alert-red)";
+        select.style.borderRadius = "4px";
+        
+        // Llenamos el selector con las opciones del catálogo
+        opcionesDefectos.forEach(def => {
+            const opt = document.createElement('option');
+            opt.value = def;
+            opt.textContent = def;
+            select.appendChild(opt);
+        });
+        
+        divGrupo.appendChild(label);
+        divGrupo.appendChild(select);
+        c.appendChild(divGrupo);
     }
 }
-
 // --- FUNCIONES DE INTERFAZ Y EXCEL ---
 function dibujarPizarraSinGuardar() {
     const p = document.getElementById('pizarra');
@@ -673,7 +876,19 @@ async function sincronizarConNube() {
     try {
         const res = await fetch(SHEETS_URL);
         const data = await res.json();
+        
+        // 1. Actualiza Historial (Tu código original)
         if (data.historial) dbHistorial = data.historial;
+        
+        // 2. Actualiza Catálogo de Defectos (LO NUEVO)
+        if (data.config && data.config.CATALOGO_DEFECTOS) {
+            const catalogoNube = JSON.parse(data.config.CATALOGO_DEFECTOS);
+            if (Object.keys(catalogoNube).length > 0) {
+                catalogoDefectos = catalogoNube;
+            }
+        }
+
+        // 3. Actualiza Pizarra (Tu código original con validación de modales)
         if (data.pizarra && !document.querySelector('.modal[style*="block"]')) {
             const nubeStr = JSON.stringify(data.pizarra);
             if (nubeStr !== JSON.stringify(estados)) {
@@ -681,9 +896,10 @@ async function sincronizarConNube() {
                 if (typeof render === "function") render();
             }
         }
-    } catch (e) { console.error("Error de sincronización"); }
+    } catch (e) { 
+        console.error("Error de sincronización de datos globales", e); 
+    }
 }
-
 </script>
 </body>
 </html>
