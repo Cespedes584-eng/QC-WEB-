@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DO<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -224,10 +224,9 @@
     // Variable para que no se crucen los datos mientras escribes
     let pausaSincro = false;
 
-    const SHEETS_URL = "https://script.google.com/macros/s/AKfycbxdRMoY6kcLGmUG19zIFxVLmv12MRaY00v8EzTqDyZ7dtHAN7ua087hjEylv-fpRtcI/exec";
-    const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
-   let isFinalizing = false; // Esta vpariable será nuestro semáforo
- // --- NUEVO SISTEMA DE CATÁLOGO DE DEFECTOS ---
+    const SHEETS_URL = "https://script.google.com/macros/s/AKfycbxQ91aW8biMN8Maqxkw59_027OMuH4jBAgkqdjKbYhBjxJAFFTI6ydG2MxdhAAsnUi6/exec";
+    const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
+    // --- NUEVO SISTEMA DE CATÁLOGO DE DEFECTOS ---
 // Estructura: catalogoDefectos["LINEA"]["PROCESO"] = ["Defecto A", "Defecto B"]
 let catalogoDefectos = JSON.parse(localStorage.getItem('qc_catalogo_v2')) || {};
 
@@ -260,47 +259,29 @@ function guardarCatalogo() {
 const defectosRespaldo = ["Visual", "Derrame", "Medida", "Empaque", "Otro"];
     let estados = []; let dbHistorial = []; let indexSel = null; let adminEditTemp = { idx: null, valor: null };
 
- function inicializarSistema() {
-    // 1. Recuperar sesión (Usuario e Inspector)
-    const sesion = localStorage.getItem('qc_session');
-    if(sesion) {
-        const data = JSON.parse(sesion);
-        document.getElementById('user-display').innerText = `👤 ${data.name.toUpperCase()}`;
-        document.getElementById('r-inspector').value = data.name.toUpperCase();
-        if(data.isAdmin) {
-            const btnAdmin = document.getElementById('btn-admin-access');
-            if(btnAdmin) btnAdmin.style.display = 'inline-block';
+    function inicializarSistema() {
+        const sesion = localStorage.getItem('qc_session');
+        if(sesion) {
+            const data = JSON.parse(sesion);
+            document.getElementById('user-display').innerText = `👤 ${data.name.toUpperCase()} (ID: ${data.id})`;
+            document.getElementById('r-inspector').value = data.name.toUpperCase();
+            if(data.isAdmin) {
+                document.getElementById('btn-admin-access').style.display = 'inline-block';
+            }
         }
-    }
-
-    // --- CIRUGÍA DE CARGA RÁPIDA ---
-    // 2. Intentar cargar el respaldo local de la pizarra inmediatamente
-    const respaldoLocal = localStorage.getItem('qc_v13_respaldo');
-    
-    if (respaldoLocal) {
-        // Si hay respaldo, lo usamos para no mostrar la pantalla vacía
-        estados = JSON.parse(respaldoLocal);
-    } else {
-        // Si es la primera vez (computadora nueva), creamos la estructura base
-        estados = lineasArr.map(nom => ({ 
-            activo: false, lote: '', inspector: '', inicio: null, horaInicioReal: '', 
-            tiempo: '00:00', productoActivo: nom.split(" / ")[0].trim(), 
-            productoOriginal: nom, proceso: 'Final', ansi: 'Normal' 
+        const local = localStorage.getItem('qc_v13_respaldo');
+        estados = local ? JSON.parse(local) : lineasArr.map(nom => ({ 
+            activo: false, lote: '', inspector: '', inicio: null, horaInicioReal: '', tiempo: '00:00', 
+            productoActivo: nom.split(" / ")[0].trim(), productoOriginal: nom, proceso: 'Final', ansi: 'Normal' 
         }));
+        const selL = document.getElementById('r-linea');
+        lineasArr.forEach((n, i) => { selL.innerHTML += `<option value="${i}">${n}</option>`; });
+        cargarHistorialNube(); 
+        render(); 
+        setInterval(tick, 1000);
+        sincronizarConNube(); 
+        setInterval(sincronizarConNube, 7000); 
     }
-
-    // 3. Llenar el selector de líneas
-    const selL = document.getElementById('r-linea');
-    if(selL) selL.innerHTML = lineasArr.map((n, i) => `<option value="${i}">${n}</option>`).join('');
-    
-    // 4. Dibujar la pizarra con lo que tenemos a mano
-    render();
-
-    // 5. Iniciar reloj y sincronización real con la nube
-    setInterval(tick, 1000);
-    sincronizarConNube(); // Esta irá por los datos "frescos" a Google
-    setInterval(sincronizarConNube, 10000); 
-}
 
     async function cargarHistorialNube() {
         try { const res = await fetch(SHEETS_URL); const datos = await res.json(); dbHistorial = datos.historial || []; } catch(e) { console.error("Error conexión"); }
@@ -337,32 +318,19 @@ async function sincronizarConfiguracionDefectos() {
     }
 
     function render() {
-    const p = document.getElementById('pizarra');
-    if (!p) return; // Seguridad por si el elemento no existe aún
-
-    p.innerHTML = estados.map((s, i) => `
-        <div class="card ${s.activo ? 'inspeccionando' : ''}">
-            <div class="card-header">${s.productoActivo}</div>
-            <div class="card-body">
-                ${s.activo ? `
-                    <div>👤 ${s.inspector}</div>
-                    <div class="lote-destacado">${s.lote}</div>
-                    <div class="badge-info"><span>${s.proceso}</span> • <span>${s.ansi}</span></div>
-                    <div class="timer-display" id="t-${i}">${s.tiempo}</div>
-                ` : '<div style="opacity:0.3; font-weight:bold;">DISPONIBLE</div>'}
-            </div>
-            ${s.activo ? 
-                <button id="btn-terminar-${i}" class="btn-card btn-terminar" onclick="prepararFin(${i})">TERMINAR</button> : 
-                `<button class="btn-card btn-historial" onclick="abrirHistorialIndividual(${i})">HISTORIAL</button>`
-            }
-        </div>`).join('');
-    
-    // Guardamos en LocalStorage para que la carga inicial sea rápida
-    localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
-    
-    // NOTA: Hemos quitado guardarEstadoPizarraEnNube() de aquí para evitar bucles.
-    // El envío a la nube ahora solo se hace en iniciarLote() y finalizarLote().
-}
+        const p = document.getElementById('pizarra');
+        p.innerHTML = estados.map((s, i) => `
+            <div class="card ${s.activo ? 'inspeccionando' : ''}">
+                <div class="card-header">${s.productoActivo}</div>
+                <div class="card-body">
+                    ${s.activo ? `<div>👤 ${s.inspector}</div><div class="lote-destacado">${s.lote}</div><div class="badge-info"><span>${s.proceso}</span> • <span>${s.ansi}</span></div><div class="timer-display" id="t-${i}">${s.tiempo}</div>` : '<div style="opacity:0.3; font-weight:bold;">DISPONIBLE</div>'}
+                </div>
+                ${s.activo ? `<button class="btn-card btn-terminar" onclick="prepararFin(${i})">TERMINAR</button>` : `<button class="btn-card btn-historial" onclick="abrirHistorialIndividual(${i})">HISTORIAL</button>`}
+            </div>`).join('');
+        
+        localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
+        if (!pausaSincro) guardarEstadoPizarraEnNube();
+    }
 
     function abrirHistorialIndividual(idx) {
         const nom = lineasArr[idx];
@@ -485,22 +453,8 @@ function borrarRegistro(idx) {
         cerrarModal('modal-reg'); render();
         guardarEstadoPizarraEnNube();
     }
+
 async function finalizarLote(ok) {
-    // --- CIRUGÍA 1: El Bloqueo Lógico ---
-    if (isFinalizing) return; 
-    isFinalizing = true; 
-
-    // --- NUEVO: Bloqueo Visual del Botón ---
-    // Buscamos el botón específico en la pizarra usando el ID que añadiremos al HTML
-    const botonPizarra = document.getElementById(`btn-terminar-${indexSel}`);
-    let textoOriginal = "";
-    if (botonPizarra) {
-        textoOriginal = botonPizarra.innerText;
-        botonPizarra.disabled = true;
-        botonPizarra.innerText = "GUARDANDO...";
-        botonPizarra.style.opacity = "0.5";
-    }
-
     const s = estados[indexSel]; 
     const ahora = new Date();
     const diffMs = Date.now() - s.inicio;
@@ -527,44 +481,18 @@ async function finalizarLote(ok) {
     };
 
     try {
-        // --- CIRUGÍA 2: Esperar el envío (await) ---
-        await fetch(SHEETS_URL, { 
-            method: 'POST', 
-            mode: 'no-cors', 
-            body: JSON.stringify(registro) 
-        });
-        
+        fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) });
         dbHistorial.push(registro);
         s.activo = false; 
         s.tiempo = '00:00'; 
         s.horaInicioReal = '';
-        
         cerrarModal('modal-fin'); 
         cerrarModal('modal-rechazos'); 
-        
-        // El render() volverá a dibujar la pizarra, eliminando el botón viejo
         render();
         guardarEstadoPizarraEnNube();
-
     } catch(e) {
         alert("Error al guardar: Revisa tu conexión.");
-        // Si falló, regresamos el botón a su estado normal
-        if (botonPizarra) {
-            botonPizarra.disabled = false;
-            botonPizarra.innerText = textoOriginal;
-            botonPizarra.style.opacity = "1";
-        }
-        isFinalizing = false; 
-    } finally {
-        // --- CIRUGÍA 3: Liberación segura ---
-        setTimeout(() => { isFinalizing = false; }, 3000);
     }
-}
-
-// ESTA ES LA FUNCIÓN QUE TE FALTABA PARA QUE EL BOTÓN FUNCIONE
-function prepararFin(i) {
-    indexSel = i; 
-    abrirModal('modal-fin');
 }
     function verificarHibrida() {
         const idx = document.getElementById('r-linea').value;
@@ -949,10 +877,10 @@ async function sincronizarConNube() {
         const res = await fetch(SHEETS_URL);
         const data = await res.json();
         
-        // 1. Actualiza Historial (Dato global)
+        // 1. Actualiza Historial (Tu código original)
         if (data.historial) dbHistorial = data.historial;
         
-        // 2. Actualiza Catálogo de Defectos (Dato de configuración)
+        // 2. Actualiza Catálogo de Defectos (LO NUEVO)
         if (data.config && data.config.CATALOGO_DEFECTOS) {
             const catalogoNube = JSON.parse(data.config.CATALOGO_DEFECTOS);
             if (Object.keys(catalogoNube).length > 0) {
@@ -960,71 +888,18 @@ async function sincronizarConNube() {
             }
         }
 
-        // 3. ACTUALIZACIÓN PROTEGIDA Y LIMPIEZA DE "FANTASMAS"
+        // 3. Actualiza Pizarra (Tu código original con validación de modales)
         if (data.pizarra && !document.querySelector('.modal[style*="block"]')) {
-            
-            data.pizarra.forEach((loteNube, i) => {
-                // REGLA A: Si mi línea local está disponible, acepto lo que diga la nube
-                if (!estados[i].activo) {
-                    estados[i] = loteNube;
-                } 
-                // REGLA B: Si mi línea local dice que hay un lote activo...
-                else {
-                    // ...pero la Nube dice que esa línea ya está LIBRE (false)
-                    // significa que mi dato local es viejo. ¡LO LIMPIAMOS!
-                    if (loteNube.activo === false) {
-                        estados[i] = loteNube;
-                    }
-                    // Si ambos están activos, no hacemos nada (mantenemos tu cronómetro local)
-                }
-            });
-
-            // Refrescar la pantalla para ver los cambios de los otros 9 PCs
-            if (typeof render === "function") render();
+            const nubeStr = JSON.stringify(data.pizarra);
+            if (nubeStr !== JSON.stringify(estados)) {
+                estados = data.pizarra;
+                if (typeof render === "function") render();
+            }
         }
     } catch (e) { 
-        console.warn("Fallo de conexión: Trabajando con datos locales.", e); 
+        console.error("Error de sincronización de datos globales", e); 
     }
-async function prepararFin(i) {
-    // 1. Guardamos el índice globalmente para que 'finalizarLote' sepa cuál procesar
-    indexSel = i; 
-
-    // 2. Buscamos el botón específico para dar feedback visual
-    const boton = document.getElementById(`btn-terminar-${i}`);
-    
-    // 3. Abrimos el modal de decisión (Aceptar/Rechazar) que ya tienes en tu HTML
-    abrirModal('modal-fin');
-
 }
-// --- PASO 2: SINCRO AUTOMÁTICA ---
-// Esto hace que la PC revise la nube cada 15 segundos
-setInterval(function() {
-    // Solo sincronizamos si el usuario NO está guardando algo en ese momento
-    if (!isFinalizing) {
-        console.log("Sincronizando pizarra automáticamente...");
-        // Llamamos a la función que descarga los datos de la nube
-        // En tu código suele llamarse cargarEstadoPizarra() o similar
-        cargarEstadoPizarraDesdeNube(); 
-    }
-}, 15000); // 15000 milisegundos = 15 segundos
-// ... (aquí terminan tus otras funciones) ...
-
-    // --- NUEVA FUNCIÓN DE SINCRO AUTOMÁTICA ---
-    function cargarEstadoPizarraDesdeNube() {
-        // Si el usuario está guardando algo o hay un modal abierto, no interrumpimos
-        const modalAbierto = document.querySelector('.modal.active') || document.querySelector('.airport-modal[style*="display: block"]');
-        if (isFinalizing || pausaSincro || modalAbierto) return;
-
-        console.log("Revisando cambios en la nube...");
-        
-        // Llamamos a la función que ya tienes para traer datos
-        sincronizarConNube(); 
-    }
-
-    // Activamos la revisión automática cada 15 segundos
-    setInterval(cargarEstadoPizarraDesdeNube, 15000);
-
-
 </script>
 </body>
 </html>
