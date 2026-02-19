@@ -352,7 +352,7 @@ async function sincronizarConfiguracionDefectos() {
                 ` : '<div style="opacity:0.3; font-weight:bold;">DISPONIBLE</div>'}
             </div>
             ${s.activo ? 
-                `<button class="btn-card btn-terminar" onclick="prepararFin(${i})">TERMINAR</button>` : 
+                <button id="btn-terminar-${i}" class="btn-card btn-terminar" onclick="prepararFin(${i})">TERMINAR</button> : 
                 `<button class="btn-card btn-historial" onclick="abrirHistorialIndividual(${i})">HISTORIAL</button>`
             }
         </div>`).join('');
@@ -486,9 +486,20 @@ function borrarRegistro(idx) {
         guardarEstadoPizarraEnNube();
     }
 async function finalizarLote(ok) {
-    // --- CIRUGÍA 1: El Bloqueo ---
+    // --- CIRUGÍA 1: El Bloqueo Lógico ---
     if (isFinalizing) return; 
     isFinalizing = true; 
+
+    // --- NUEVO: Bloqueo Visual del Botón ---
+    // Buscamos el botón específico en la pizarra usando el ID que añadiremos al HTML
+    const botonPizarra = document.getElementById(`btn-terminar-${indexSel}`);
+    let textoOriginal = "";
+    if (botonPizarra) {
+        textoOriginal = botonPizarra.innerText;
+        botonPizarra.disabled = true;
+        botonPizarra.innerText = "GUARDANDO...";
+        botonPizarra.style.opacity = "0.5";
+    }
 
     const s = estados[indexSel]; 
     const ahora = new Date();
@@ -517,8 +528,11 @@ async function finalizarLote(ok) {
 
     try {
         // --- CIRUGÍA 2: Esperar el envío (await) ---
-        // Usamos await para que el código se detenga aquí hasta que la nube reciba el dato
-        await fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) });
+        await fetch(SHEETS_URL, { 
+            method: 'POST', 
+            mode: 'no-cors', 
+            body: JSON.stringify(registro) 
+        });
         
         dbHistorial.push(registro);
         s.activo = false; 
@@ -527,17 +541,32 @@ async function finalizarLote(ok) {
         
         cerrarModal('modal-fin'); 
         cerrarModal('modal-rechazos'); 
+        
+        // El render() volverá a dibujar la pizarra, eliminando el botón viejo
         render();
         guardarEstadoPizarraEnNube();
+
     } catch(e) {
         alert("Error al guardar: Revisa tu conexión.");
-        isFinalizing = false; // Si falló, liberamos el bloqueo para reintentar
+        // Si falló, regresamos el botón a su estado normal
+        if (botonPizarra) {
+            botonPizarra.disabled = false;
+            botonPizarra.innerText = textoOriginal;
+            botonPizarra.style.opacity = "1";
+        }
+        isFinalizing = false; 
     } finally {
         // --- CIRUGÍA 3: Liberación segura ---
-        // Esperamos 3 segundos antes de permitir otro envío, solo por seguridad
         setTimeout(() => { isFinalizing = false; }, 3000);
     }
-}    function verificarHibrida() {
+}
+
+// ESTA ES LA FUNCIÓN QUE TE FALTABA PARA QUE EL BOTÓN FUNCIONE
+function prepararFin(i) {
+    indexSel = i; 
+    abrirModal('modal-fin');
+}
+    function verificarHibrida() {
         const idx = document.getElementById('r-linea').value;
         const nom = lineasArr[idx];
         const cont = document.getElementById('contenedor-hibrida');
@@ -956,7 +985,46 @@ async function sincronizarConNube() {
     } catch (e) { 
         console.warn("Fallo de conexión: Trabajando con datos locales.", e); 
     }
+async function prepararFin(i) {
+    // 1. Guardamos el índice globalmente para que 'finalizarLote' sepa cuál procesar
+    indexSel = i; 
+
+    // 2. Buscamos el botón específico para dar feedback visual
+    const boton = document.getElementById(`btn-terminar-${i}`);
+    
+    // 3. Abrimos el modal de decisión (Aceptar/Rechazar) que ya tienes en tu HTML
+    abrirModal('modal-fin');
+
 }
+// --- PASO 2: SINCRO AUTOMÁTICA ---
+// Esto hace que la PC revise la nube cada 15 segundos
+setInterval(function() {
+    // Solo sincronizamos si el usuario NO está guardando algo en ese momento
+    if (!isFinalizing) {
+        console.log("Sincronizando pizarra automáticamente...");
+        // Llamamos a la función que descarga los datos de la nube
+        // En tu código suele llamarse cargarEstadoPizarra() o similar
+        cargarEstadoPizarraDesdeNube(); 
+    }
+}, 15000); // 15000 milisegundos = 15 segundos
+// ... (aquí terminan tus otras funciones) ...
+
+    // --- NUEVA FUNCIÓN DE SINCRO AUTOMÁTICA ---
+    function cargarEstadoPizarraDesdeNube() {
+        // Si el usuario está guardando algo o hay un modal abierto, no interrumpimos
+        const modalAbierto = document.querySelector('.modal.active') || document.querySelector('.airport-modal[style*="display: block"]');
+        if (isFinalizing || pausaSincro || modalAbierto) return;
+
+        console.log("Revisando cambios en la nube...");
+        
+        // Llamamos a la función que ya tienes para traer datos
+        sincronizarConNube(); 
+    }
+
+    // Activamos la revisión automática cada 15 segundos
+    setInterval(cargarEstadoPizarraDesdeNube, 15000);
+
+
 </script>
 </body>
 </html>
