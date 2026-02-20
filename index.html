@@ -198,35 +198,33 @@
 };
 
         function verificarLogin() {
-            const userIn = document.getElementById('loginUser').value.trim();
-            const passIn = document.getElementById('loginPass').value.trim();
-            let encontrado = null;
+    const userIn = document.getElementById('loginUser').value.trim().toLowerCase(); // <-- Aquí convertimos a minúscula
+    const passIn = document.getElementById('loginPass').value.trim();
+    let encontrado = null;
 
-            // 1. Caso Admin Maestro
-            if(userIn === "admin" && passIn === "12345") { 
-                encontrado = { name: "admin", nombre: "ADMIN", id: "MASTER", isAdmin: true }; 
-            }
+    // 1. Caso Admin Maestro (Opcional, si lo quieres mantener)
+    if(userIn === "admin" && passIn === "12345") { 
+        encontrado = { name: "admin", nombre: "ADMIN", id: "MASTER", isAdmin: true }; 
+    }
 
-            // 2. Buscar en usuarios de Firebase
-            Object.values(usuariosGlobal).forEach(u => { 
-                if(u.name.toLowerCase() === userIn && u.pass === passIn) { 
-                    encontrado = u;
-                    // Agregamos 'nombre' para que el Tracker lo reconozca sin errores
-                    encontrado.nombre = u.name; 
-                } 
-            });
+    // 2. Buscar en usuarios de Firebase
+    Object.values(usuariosGlobal).forEach(u => { 
+        // Comparamos AMBOS en minúsculas y aseguramos que la clave sea texto
+        if(u.name && u.name.toLowerCase() === userIn && u.pass.toString() === passIn) { 
+            encontrado = u;
+            encontrado.nombre = u.name; 
+        } 
+    });
 
-            if(encontrado) { 
-                // Guardamos en la memoria del navegador
-                localStorage.setItem('qc_session', JSON.stringify(encontrado)); 
-                
-                // Aplicamos la sesión visualmente
-                aplicarSesion(encontrado.name, encontrado.id, encontrado.isAdmin); 
-            }
-            else { 
-                document.getElementById('error-msg').style.display = 'block'; 
-            }
-        }
+    if(encontrado) { 
+        localStorage.setItem('qc_session', JSON.stringify(encontrado)); 
+        aplicarSesion(encontrado.name, encontrado.id, encontrado.isAdmin); 
+        document.getElementById('error-msg').style.display = 'none'; // Limpiamos el error si existe
+    }
+    else { 
+        document.getElementById('error-msg').style.display = 'block'; 
+    }
+}
         function aplicarSesion(nombre, id, isAdmin) {
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('portal-content').style.display = 'block';
