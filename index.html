@@ -185,10 +185,17 @@
         }
         setInterval(actualizarReloj, 1000);
 
-        window.onload = function() {
-            const sesion = localStorage.getItem('qc_session');
-            if(sesion) { const u = JSON.parse(sesion); aplicarSesion(u.name, u.id, u.isAdmin); }
-        };
+       window.onload = function() {
+    const sesion = localStorage.getItem('qc_session');
+    if(sesion) { 
+        const u = JSON.parse(sesion); 
+        aplicarSesion(u.name, u.id, u.isAdmin); 
+    } else {
+        // Si no hay sesión, nos aseguramos de que el portal esté oculto
+        document.getElementById('login-screen').style.display = 'flex';
+        document.getElementById('portal-content').style.display = 'none';
+    }
+};
 
         function verificarLogin() {
             const userIn = document.getElementById('loginUser').value.trim().toLowerCase();
@@ -228,8 +235,10 @@
             document.getElementById('btn-admin-panel').style.display = isAdmin ? 'inline-block' : 'none';
         }
 
-        function cerrarSesion() { localStorage.removeItem('qc_session'); location.reload(); }
-
+       function cerrarSesion() { 
+    localStorage.removeItem('qc_session'); 
+    location.reload(); 
+}
         // SINCRONIZACIÓN EN TIEMPO REAL
         db.ref().on('value', snap => {
             const data = snap.val() || {};
