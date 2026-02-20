@@ -148,7 +148,12 @@
             <div style="background:#f1f3f5; padding:15px; border-radius:8px; margin-bottom:20px; border:1px solid var(--border);">
                 <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:10px;">
                     <div><label>1. Línea:</label><select id="admin-def-linea" onchange="renderizarListaDefectosAdmin()" style="width:100%;"></select></div>
-                    <div><label>2. Proceso:</label><select id="admin-def-proceso" onchange="renderizarListaDefectosAdmin()" style="width:100%;"><option>Shaft</option><option>Final</option><option>Hub Bonding</option></select></div>
+                    <select id="admin-def-proceso" onchange="renderizarListaDefectosAdmin()">
+    <option value="Shaft">Shaft</option>
+    <option value="Final">Final</option>
+    <option value="HubBonding">Hub Bonding</option>
+    <option value="Pre-Empaque">Pre-Empaque</option>
+</select>
                     <div><label>3. Defecto:</label><input type="text" id="admin-def-nombre" placeholder="Nombre..." style="width:100%;"></div>
                 </div>
                 <button class="btn-main" style="width:100%; background:#8e44ad;" onclick="agregarDefectoNuevo()">＋ GUARDAR EN CATÁLOGO</button>
@@ -181,9 +186,22 @@
         </div>
         <input type="text" id="busqueda-lote-historial" class="search-bar" placeholder="🔍 Filtrar..." onkeyup="filtrarLoteHistorialIndividual()">
         <table class="airport-table">
-            <thead><tr><th>Fecha</th><th>Hora Inicio</th><th>Lote</th><th>Inspector</th><th>Resultado</th><th>Duración</th><th>Defecto</th></tr></thead>
-            <tbody id="hist-linea-body"></tbody>
-        </table>
+        <table class="airport-table">
+    <thead>
+        <tr>
+            <th>Fecha</th>
+            <th>Lote</th>
+            <th>Proceso</th>
+            <th>ANSI</th>
+            <th>Inspector</th>
+            <th>Resultado</th>
+            <th>Tiempo</th>
+            <th>Detalle</th>
+        </tr>
+    </thead>
+    <tbody id="hist-linea-body">
+        </tbody>
+</table>
     </div>
 </div>
 
@@ -197,7 +215,8 @@
         </div>
         <input type="text" id="r-lote" placeholder="Lote #">
         <input type="text" id="r-inspector" readonly style="background:#f1f1f1;">
-        <select id="r-proceso"><option>Shaft</option><option>Final</option><option>Hub Bonding</option></select>
+      <select id="r-proceso">
+    </select>
         <select id="r-ansi"><option>Normal</option><option>Reducido</option><option>Riguroso</option></select>
         <button class="btn-main" style="width:100%;" onclick="iniciarLote()">INICIAR INSPECCIÓN</button>
     </div>
@@ -259,52 +278,108 @@ function guardarCatalogo() {
 const defectosRespaldo = ["Visual", "Derrame", "Medida", "Empaque", "Otro"];
     let estados = []; let dbHistorial = []; let indexSel = null; let adminEditTemp = { idx: null, valor: null };
 
-    function inicializarSistema() {
-        const sesion = localStorage.getItem('qc_session');
-        if(sesion) {
-            const data = JSON.parse(sesion);
-            document.getElementById('user-display').innerText = `👤 ${data.name.toUpperCase()} (ID: ${data.id})`;
-            document.getElementById('r-inspector').value = data.name.toUpperCase();
-            if(data.isAdmin) {
-                document.getElementById('btn-admin-access').style.display = 'inline-block';
+
+
+function obtenerConteosTurnos(nombreLinea) {
+    let conteo = { ta: 0, tb: 0 };
+    const hoy = new Date().toLocaleDateString();
+
+    if (!dbHistorial || dbHistorial.length === 0) return conteo;
+
+    dbHistorial.forEach(r => {
+        // Limpieza extrema: quitamos espacios y normalizamos el texto
+        const hLinea = String(r.linea || "").trim().toLowerCase();
+        const tLinea = String(nombreLinea || "").trim().toLowerCase();
+
+        // Verificamos si la fecha coincide y si el nombre de la línea está contenido o es igual
+        if ((hLinea === tLinea || hLinea.includes(tLinea) || tLinea.includes(hLinea)) && r.fecha === hoy) {
+            if (!r.hora) return;
+            
+            const partesHora = r.hora.split(':');
+            const horas = parseInt(partesHora[0]);
+            const minutos = parseInt(partesHora[1]);
+            const minutosTotales = (horas * 60) + minutos;
+
+            const inicioTA = 6 * 60;          // 06:00 AM
+            const finTA = 15 * 60 + 30;       // 03:30 PM
+            const finTB = 24 * 60;            // 12:00 AM
+
+            if (minutosTotales >= inicioTA && minutosTotales < finTA) {
+                conteo.ta++;
+            } else if (minutosTotales >= finTA && minutosTotales < finTB) {
+                conteo.tb++;
             }
         }
-        const local = localStorage.getItem('qc_v13_respaldo');
-        estados = local ? JSON.parse(local) : lineasArr.map(nom => ({ 
+    });
+    return conteo;
+}
+  function inicializarSistema() {
+    const sesion = localStorage.getItem('qc_session');
+    if(sesion) {
+        const data = JSON.parse(sesion);
+      document.getElementById('user-display').innerText = `👤 ${data.name} (ID: ${data.id})`;
+        document.getElementById('r-inspector').value = data.name.toUpperCase();
+        if(data.isAdmin) {
+            document.getElementById('btn-admin-access').style.display = 'inline-block';
+        }
+    }
+
+    // --- LÓGICA DE REINICIO POR FECHA ---
+    const fechaHoy = new Date().toLocaleDateString();
+    const ultimaFechaGuardada = localStorage.getItem('qc_ultima_fecha');
+    const localRespaldo = localStorage.getItem('qc_v13_respaldo');
+
+    // Si es un día nuevo, ignoramos el respaldo viejo y reseteamos
+    if (ultimaFechaGuardada !== fechaHoy) {
+        console.log("Detectado cambio de día o inicio de jornada. Limpiando tarjetas...");
+        localStorage.removeItem('qc_v13_respaldo'); // Borramos lo de ayer
+        localStorage.setItem('qc_ultima_fecha', fechaHoy); // Guardamos la fecha de hoy
+        
+        // Creamos estados limpios desde cero
+        estados = lineasArr.map(nom => ({ 
             activo: false, lote: '', inspector: '', inicio: null, horaInicioReal: '', tiempo: '00:00', 
             productoActivo: nom.split(" / ")[0].trim(), productoOriginal: nom, proceso: 'Final', ansi: 'Normal' 
         }));
-        const selL = document.getElementById('r-linea');
-        lineasArr.forEach((n, i) => { selL.innerHTML += `<option value="${i}">${n}</option>`; });
-        cargarHistorialNube(); 
-        render(); 
-        setInterval(tick, 1000);
-        sincronizarConNube(); 
-        setInterval(sincronizarConNube, 7000); 
+    } else {
+        // Si es el mismo día, cargamos el respaldo local normalmente
+        estados = localRespaldo ? JSON.parse(localRespaldo) : lineasArr.map(nom => ({ 
+            activo: false, lote: '', inspector: '', inicio: null, horaInicioReal: '', tiempo: '00:00', 
+            productoActivo: nom.split(" / ")[0].trim(), productoOriginal: nom, proceso: 'Final', ansi: 'Normal' 
+        }));
     }
+    // ------------------------------------
 
-    async function cargarHistorialNube() {
-        try { const res = await fetch(SHEETS_URL); const datos = await res.json(); dbHistorial = datos.historial || []; } catch(e) { console.error("Error conexión"); }
-    }
+    const selL = document.getElementById('r-linea');
+    selL.innerHTML = ""; // Limpiamos para evitar duplicados al recargar
+    lineasArr.forEach((n, i) => { selL.innerHTML += `<option value="${i}">${n}</option>`; });
 
-// NUEVA FUNCIÓN: Solo para traer la configuración de defectos
-async function sincronizarConfiguracionDefectos() {
+    cargarHistorialNube(); 
+    render(); 
+    setInterval(tick, 1000);
+    
+    // Sincronización inicial y repetitiva
+    sincronizarConNube(); 
+    setInterval(sincronizarConNube, 7000); 
+}
+
+   async function cargarHistorialNube() {
     try { 
         const res = await fetch(SHEETS_URL); 
         const datos = await res.json(); 
         
-        // Solo actualizamos el catálogo si el servidor envió la sección 'config'
-        if (datos.config && datos.config.CATALOGO_DEFECTOS) {
-            const catalogoNube = JSON.parse(datos.config.CATALOGO_DEFECTOS);
-            
-            // Verificamos que no venga vacío para no borrar lo que tienes en pantalla
-            if (Object.keys(catalogoNube).length > 0) {
-                catalogoDefectos = catalogoNube;
-                console.log("Catálogo de defectos sincronizado desde la nube.");
-            }
-        }
+        // Guardamos el historial en la variable global
+        dbHistorial = datos.historial || []; 
+        
+        console.log("✅ Historial recibido de la nube. Actualizando contadores...");
+
+        // FORZAMOS EL RENDER: 
+        // Esta es la orden que hace que los contadores pasen de 0 a sus números reales
+        render(); 
+
     } catch(e) { 
-        console.warn("No se pudo sincronizar el catálogo, se mantiene el local.", e); 
+        console.error("❌ Error de conexión al cargar historial inicial:", e); 
+        // Si falla la red, al menos dibujamos lo que tengamos en el respaldo local
+        render();
     }
 }
     function formatearTexto(valor) {
@@ -317,73 +392,126 @@ async function sincronizarConfiguracionDefectos() {
         return str;
     }
 
-    function render() {
-        const p = document.getElementById('pizarra');
-        p.innerHTML = estados.map((s, i) => `
+function render() {
+    const p = document.getElementById('pizarra');
+    if (!p) return;
+
+    p.innerHTML = estados.map((s, i) => {
+        const turnos = obtenerConteosTurnos(lineasArr[i]);
+
+        return `
             <div class="card ${s.activo ? 'inspeccionando' : ''}">
-                <div class="card-header">${s.productoActivo}</div>
-                <div class="card-body">
-                    ${s.activo ? `<div>👤 ${s.inspector}</div><div class="lote-destacado">${s.lote}</div><div class="badge-info"><span>${s.proceso}</span> • <span>${s.ansi}</span></div><div class="timer-display" id="t-${i}">${s.tiempo}</div>` : '<div style="opacity:0.3; font-weight:bold;">DISPONIBLE</div>'}
+                <div class="card-header" style="text-align: center; font-weight: bold; padding: 12px;">
+                    ${s.productoActivo || lineasArr[i]}
                 </div>
-                ${s.activo ? `<button class="btn-card btn-terminar" onclick="prepararFin(${i})">TERMINAR</button>` : `<button class="btn-card btn-historial" onclick="abrirHistorialIndividual(${i})">HISTORIAL</button>`}
-            </div>`).join('');
+
+                <div style="display: flex; background: #f8f9fa; border-bottom: 1px solid #eee; padding: 5px 0;">
+                    <div style="flex: 1; text-align: center; border-right: 1px solid #eee;">
+                        <small style="color: #666; display: block; font-size: 0.65em; text-transform: uppercase;">Turno A</small>
+                        <b style="color: #0056b3; font-size: 0.9em;">${turnos.ta}</b>
+                    </div>
+                    <div style="flex: 1; text-align: center;">
+                        <small style="color: #666; display: block; font-size: 0.65em; text-transform: uppercase;">Turno B</small>
+                        <b style="color: #555; font-size: 0.9em;">${turnos.tb}</b>
+                    </div>
+                </div>
+                
+                <div class="card-body" style="padding: 15px;">
+                    ${s.activo ? 
+                        `<div style="font-size: 0.9em; margin-bottom: 5px;">👤 ${s.inspector}</div>
+                         <div class="lote-destacado" style="font-size: 1.4em; margin: 10px 0;">${s.lote}</div>
+                         <div class="badge-info"><span>${s.proceso}</span> • <span>${s.ansi}</span></div>
+                         <div class="timer-display" id="t-${i}" style="font-size: 1.8em; font-weight: bold;">${s.tiempo}</div>` 
+                        : 
+                        `<div style="opacity:0.3; font-weight:bold; height: 95px; display: flex; align-items: center; justify-content: center; font-size: 1.1em;">
+                            DISPONIBLE
+                         </div>`
+                    }
+                </div>
+
+                <div class="card-footer" style="border-top: 1px solid #eee; background: #fff; border-radius: 0 0 8px 8px; overflow: hidden;">
+                    ${s.activo ? 
+                        `<button class="btn-card" style="width: 100%; padding: 14px; border: none; background: #2e7d32; color: white; cursor: pointer; font-weight: bold; font-size: 1em; text-transform: uppercase;" onclick="prepararFin(${i})">TERMINAR</button>` : 
+                        `<button class="btn-card" style="width: 100%; padding: 14px; border: none; background: #fcfcfc; color: #2e7d32; cursor: pointer; font-weight: bold; font-size: 0.9em;" onclick="abrirHistorialIndividual(${i})">HISTORIAL</button>`
+                    }
+                </div>
+            </div>`;
+    }).join('');
+    
+    // Guardamos respaldo local
+    localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
+}
+  function abrirHistorialIndividual(idx) {
+    const nom = lineasArr[idx];
+    document.getElementById('hist-linea-titulo').innerText = "Historial: " + nom;
+    document.getElementById('busqueda-lote-historial').value = "";
+    
+    // Obtenemos los datos filtrados por línea
+    const filtrados = dbHistorial.filter(r => r.linea === nom).reverse();
+    
+    // Actualizamos el cuerpo de la tabla con las nuevas columnas
+    document.getElementById('hist-linea-body').innerHTML = filtrados.map(r => `
+        <tr>
+            <td>${formatearTexto(r.fecha)}</td>
+            <td><b>${r.lote}</b></td>
+            <td><small>${r.proceso || '-'}</small></td>
+            <td><span style="font-size: 0.85em; background: #eee; padding: 2px 5px; border-radius: 3px;">${r.ansi || '-'}</span></td>
+            <td>${r.inspector}</td>
+            <td style="color:${r.resultado==='ACEPTADO'?'#2e7d32':'#c62828'}; font-weight:bold;">${r.resultado}</td>
+            <td>${r.tiempo}</td>
+            <td style="font-size: 0.9em; color: #555;">${r.detalle}</td>
+        </tr>`).join('');
         
-        localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
-        if (!pausaSincro) guardarEstadoPizarraEnNube();
-    }
-
-    function abrirHistorialIndividual(idx) {
-        const nom = lineasArr[idx];
-        document.getElementById('hist-linea-titulo').innerText = "Historial: " + nom;
-        document.getElementById('busqueda-lote-historial').value = "";
-        const filtrados = dbHistorial.filter(r => r.linea === nom).reverse();
-        document.getElementById('hist-linea-body').innerHTML = filtrados.map(r => `
-            <tr>
-                <td>${formatearTexto(r.fecha)}</td>
-                <td>${formatearTexto(r.hora)}</td>
-                <td><b>${r.lote}</b></td>
-                <td>${r.inspector}</td>
-                <td style="color:${r.resultado==='ACEPTADO'?'green':'red'}; font-weight:bold;">${r.resultado}</td>
-                <td>${r.tiempo}</td>
-                <td>${r.detalle}</td>
-            </tr>`).join('');
-        document.getElementById('btn-descarga-individual').onclick = () => exportarExcel(filtrados, `Historial_${nom.replace(/ /g, "_")}`);
-        abrirModal('modal-historial-linea');
-    }
-
+    document.getElementById('btn-descarga-individual').onclick = () => exportarExcel(filtrados, `Historial_${nom.replace(/ /g, "_")}`);
+    abrirModal('modal-historial-linea');
+}
     function filtrarLoteHistorialIndividual() {
-        const query = document.getElementById('busqueda-lote-historial').value.toLowerCase();
-        const filas = document.querySelectorAll('#hist-linea-body tr');
-        filas.forEach(f => { f.style.display = f.cells[2].innerText.toLowerCase().includes(query) ? "" : "none"; });
-    }
-
+    const query = document.getElementById('busqueda-lote-historial').value.toLowerCase();
+    const filas = document.querySelectorAll('#hist-linea-body tr');
+    // Usamos cells[1] porque el Lote es ahora la segunda columna
+    filas.forEach(f => { 
+        f.style.display = f.cells[1].innerText.toLowerCase().includes(query) ? "" : "none"; 
+    });
+}
     function abrirAdmin() { abrirModal('modal-admin'); cargarHistorialNube().then(() => { generarReporteYield(); generarGestionLotes(); }); }
     
-   function generarGestionLotes() {
+function generarGestionLotes() {
     const ultimos = [...dbHistorial].reverse();
-    document.getElementById('gestion-table-body').innerHTML = ultimos.map((r, i) => {
+    const tbody = document.getElementById('gestion-table-body');
+    if(!tbody) return;
+
+    tbody.innerHTML = ultimos.map((r, i) => {
         const realIdx = dbHistorial.length - 1 - i;
-        // Esta es la parte pesada: crear los selectores de edición para cada fila
         return `<tr>
             <td><b>${r.lote}</b></td>
             <td>
-                <select onchange="adminModificar(${realIdx}, 'linea', this.value)">
-                    ${lineasArr.map(l => `<option ${r.linea===l?'selected':''}>${l}</option>`).join('')}
+                <select onchange="adminModificar(${realIdx}, 'proceso', this.value)" style="width:100%">
+                    <option value="Shaft" ${r.proceso==='Shaft'?'selected':''}>Shaft</option>
+                    <option value="Final" ${r.proceso==='Final'?'selected':''}>Final</option>
+                    <option value="HubBonding" ${r.proceso==='HubBonding'?'selected':''}>Hub Bonding</option>
+                    <option value="Pre-Empaque" ${r.proceso==='Pre-Empaque'?'selected':''}>Pre-Empaque</option>
+                    <option value="Guidwire" ${r.proceso==='Guidwire'?'selected':''}>Guidwire</option>
+                </select>
+            </td>
+            <td>
+                <select onchange="adminModificar(${realIdx}, 'ansi', this.value)" style="width:100%">
+                    <option value="NORMAL" ${r.ansi==='NORMAL'?'selected':''}>NORMAL</option>
+                    <option value="REDUCIDO" ${r.ansi==='REDUCIDO'?'selected':''}>REDUCIDO</option>
+                    <option value="RIGUROSO" ${r.ansi==='RIGUROSO'?'selected':''}>RIGUROSO</option>
                 </select>
             </td>
             <td>
                 <select onchange="adminModificar(${realIdx}, 'resultado', this.value)" 
-                        style="color:${r.resultado==='ACEPTADO'?'green':'red'}; font-weight:bold;">
+                        style="color:${r.resultado==='ACEPTADO'?'green':'red'}; font-weight:bold; width:100%">
                     <option value="ACEPTADO" ${r.resultado==='ACEPTADO'?'selected':''}>ACEPTADO</option>
                     <option value="RECHAZADO" ${r.resultado==='RECHAZADO'?'selected':''}>RECHAZADO</option>
                 </select>
             </td>
             <td><input type="text" value="${r.detalle}" onchange="adminModificar(${realIdx}, 'detalle', this.value)" style="width:90%"></td>
-            <td><button onclick="borrarRegistro(${realIdx})" style="background:none; border:none; cursor:pointer;">🗑️</button></td>
+            <td><button onclick="borrarRegistro(${realIdx})" style="background:none; border:none; cursor:pointer; font-size:1.2em;">🗑️</button></td>
         </tr>`;
     }).join('');
 }
-
     function adminModificar(idx, campo, valor) {
         if (campo === 'resultado' && valor === 'RECHAZADO') {
             adminEditTemp = { idx, valor };
@@ -410,49 +538,79 @@ async function sincronizarConfiguracionDefectos() {
         fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'edit', ...registro }) });
         generarReporteYield(); generarGestionLotes();
     }
-function borrarRegistro(idx) {
-    if (!confirm("¿Estás seguro de que deseas eliminar este registro? Esta acción no se puede deshacer en la base de datos.")) return;
+async function borrarRegistro(idx) {
+    if (!confirm("⚠️ ¿Estás seguro? El registro se eliminará permanentemente de la nube.")) return;
 
     const registroABorrar = dbHistorial[idx];
-    
-    // Enviamos la instrucción de borrado a Google Sheets
-    fetch(SHEETS_URL, { 
-        method: 'POST', 
-        mode: 'no-cors', 
-        body: JSON.stringify({ 
-            action: 'delete', 
-            lote: registroABorrar.lote,
-            fecha: registroABorrar.fecha,
-            hora: registroABorrar.hora 
-        }) 
-    });
+    const originalText = event.target.innerText;
+    const btnEnAccion = event.target;
 
-    // Lo eliminamos visualmente de inmediato
-    dbHistorial.splice(idx, 1);
-    generarGestionLotes();
-    generarReporteYield();
-    alert("Registro eliminado localmente. La nube se actualizará en breve.");
-}
+    // Feedback visual: bloqueamos el botón mientras procesa
+    btnEnAccion.innerText = "⏳";
+    btnEnAccion.style.pointerEvents = "none";
 
-    function iniciarLote() {
-        const inputLote = document.getElementById('r-lote');
-        const lVal = inputLote.value.trim();
-        if(!lVal) return alert("Ingrese Lote");
-        const idx = document.getElementById('r-linea').value;
-        const s = estados[idx];
-        const ahora = new Date();
-        s.activo = true; 
-        s.lote = lVal; 
-        s.inicio = ahora.getTime(); 
-        s.horaInicioReal = ahora.toLocaleTimeString();
-        s.inspector = document.getElementById('r-inspector').value;
-        s.proceso = document.getElementById('r-proceso').value;
-        s.ansi = document.getElementById('r-ansi').value;
-        s.productoActivo = (document.getElementById('contenedor-hibrida').style.display === 'block') ? document.getElementById('r-producto-especifico').value : lineasArr[idx];
-        inputLote.value = "";
-        cerrarModal('modal-reg'); render();
-        guardarEstadoPizarraEnNube();
+    try {
+        // Quitamos el 'no-cors' para poder esperar la respuesta real
+        const response = await fetch(SHEETS_URL, { 
+            method: 'POST', 
+            body: JSON.stringify({ 
+                action: 'delete', 
+                lote: registroABorrar.lote,
+                fecha: registroABorrar.fecha,
+                hora: registroABorrar.hora 
+            }) 
+        });
+
+        // Solo si la nube responde que todo OK, borramos de la pantalla
+        dbHistorial.splice(idx, 1);
+        generarGestionLotes();
+        generarReporteYield();
+        alert("✅ Eliminado con éxito de la base de datos.");
+
+    } catch (error) {
+        console.error("Error al borrar:", error);
+        alert("❌ Error de conexión: No se pudo borrar en la nube. Intenta de nuevo.");
+        
+        // Si falló, regresamos el botón a su estado normal
+        btnEnAccion.innerText = originalText;
+        btnEnAccion.style.pointerEvents = "auto";
     }
+}
+    function iniciarLote() {
+    const inputLote = document.getElementById('r-lote');
+    const lVal = inputLote.value.trim();
+    if(!lVal) return alert("Ingrese Lote");
+
+    const idx = document.getElementById('r-linea').value;
+    const s = estados[idx];
+    const ahora = new Date();
+
+    s.activo = true; 
+    s.lote = lVal; 
+    s.inicio = ahora.getTime(); 
+
+    // --- CORRECCIÓN DE HORA 24H ---
+    // Forzamos el formato HH:mm manual para evitar el AM/PM
+    const hrs = ahora.getHours().toString().padStart(2, '0');
+    const mins = ahora.getMinutes().toString().padStart(2, '0');
+    s.horaInicioReal = `${hrs}:${mins}`; 
+    // ------------------------------
+
+    s.inspector = document.getElementById('r-inspector').value;
+    s.proceso = document.getElementById('r-proceso').value;
+    s.ansi = document.getElementById('r-ansi').value;
+
+    // Lógica de producto activo
+    s.productoActivo = (document.getElementById('contenedor-hibrida').style.display === 'block') 
+        ? document.getElementById('r-producto-especifico').value 
+        : lineasArr[idx];
+
+    inputLote.value = "";
+    cerrarModal('modal-reg'); 
+    
+    render();
+    guardarEstadoPizarraEnNube();
+}
 
 async function finalizarLote(ok) {
     const s = estados[indexSel]; 
@@ -462,17 +620,21 @@ async function finalizarLote(ok) {
     const seg = Math.floor((diffMs % 60000) / 1000).toString().padStart(2, '0');
     const tiempoFinal = `${min}:${seg}`;
     
+    // Gestión de detalles de rechazo
     let det = ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ");
     if (!ok && det === "") det = "Defecto no especificado";
 
+    // OBJETO DE REGISTRO CON CORRECCIÓN DE CEROS
     const registro = { 
         action: 'add', 
-        fecha: ahora.toLocaleDateString(), 
+        fecha: ahora.toLocaleDateString('es-ES'), 
         hora: s.horaInicioReal, 
-        linea: s.productoOriginal, 
+        linea: lineasArr[indexSel],   
         producto: s.productoActivo, 
         inspector: s.inspector, 
-        lote: s.lote, 
+        // --- CAMBIO AQUÍ: Agregamos el apóstrofe para conservar los ceros en Sheets ---
+        lote: "'" + s.lote, 
+        // ----------------------------------------------------------------------------
         proceso: s.proceso, 
         ansi: s.ansi, 
         tiempo: tiempoFinal, 
@@ -480,30 +642,67 @@ async function finalizarLote(ok) {
         detalle: det 
     };
 
+    // --- MEJORA DE SEGURIDAD INTERFAZ ---
+    const btnGuardar = event.target;
+    const originalText = btnGuardar.innerText;
+    btnGuardar.innerText = "⏳ GUARDANDO...";
+    btnGuardar.disabled = true;
+
     try {
-        fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) });
+        const response = await fetch(SHEETS_URL, { 
+            method: 'POST', 
+            body: JSON.stringify(registro) 
+        });
+
+        // Actualización local tras confirmación de la nube
         dbHistorial.push(registro);
         s.activo = false; 
         s.tiempo = '00:00'; 
         s.horaInicioReal = '';
+        
         cerrarModal('modal-fin'); 
         cerrarModal('modal-rechazos'); 
+        
         render();
         guardarEstadoPizarraEnNube();
+        console.log("✅ Lote guardado con ceros preservados.");
+
     } catch(e) {
-        alert("Error al guardar: Revisa tu conexión.");
+        console.error("Error al guardar lote:", e);
+        alert("❌ ERROR DE CONEXIÓN: El lote NO se pudo guardar. Intenta de nuevo.");
+        btnGuardar.innerText = originalText;
+        btnGuardar.disabled = false;
     }
 }
     function verificarHibrida() {
-        const idx = document.getElementById('r-linea').value;
-        const nom = lineasArr[idx];
-        const cont = document.getElementById('contenedor-hibrida');
-        if (nom.includes(" / ")) {
-            document.getElementById('r-producto-especifico').innerHTML = nom.split(" / ").map(p => `<option value="${p.trim()}">${p.trim()}</option>`).join('');
-            cont.style.display = 'block';
-        } else { cont.style.display = 'none'; }
+    const idx = document.getElementById('r-linea').value;
+    const nom = lineasArr[idx];
+    const cont = document.getElementById('contenedor-hibrida');
+    const selProceso = document.getElementById('r-proceso');
+
+    // 1. Lógica de productos híbridos (lo que ya tenías)
+    if (nom.includes(" / ")) {
+        document.getElementById('r-producto-especifico').innerHTML = nom.split(" / ").map(p => `<option value="${p.trim()}">${p.trim()}</option>`).join('');
+        cont.style.display = 'block';
+    } else { 
+        cont.style.display = 'none'; 
     }
 
+    // 2. NUEVA LÓGICA: Procesos inteligentes
+    let opciones = `
+        <option value="Shaft">Shaft</option>
+        <option value="Final">Final</option>
+        <option value="HubBonding">Hub Bonding</option>
+        <option value="Pre-Empaque">Pre-Empaque</option>
+    `;
+
+    // Si la línea es SCEPTER (exactamente o contiene la palabra)
+    if (nom.toUpperCase().includes("SCEPTER")) {
+        opciones += `<option value="Guidewire">Guidewire</option>`;
+    }
+
+    selProceso.innerHTML = opciones;
+}
     function tick() {
         estados.forEach((s, i) => {
             if(s.activo) {
@@ -716,8 +915,12 @@ function abrirModal(id) {
     const el = document.getElementById(id);
     if(el) el.style.display = 'block'; 
     pausaSincro = true; 
-}
 
+    // Si abrimos el registro, forzamos la actualización de procesos
+    if(id === 'modal-reg') {
+        verificarHibrida();
+    }
+}
 function cerrarModal(id) { 
     const el = document.getElementById(id);
     if(el) el.style.display = 'none'; 
@@ -839,14 +1042,19 @@ function exportarExcelYield() {
 
 function exportarExcel(datos, nombre) {
     if (datos.length === 0) return alert("No hay datos para exportar");
-    // Encabezados con Proceso y ANSI incluidos
+    
+    // Encabezados actualizados para incluir Proceso y ANSI en el Excel
     let csv = "\uFEFFsep=;\nFecha;Hora;Linea;Producto;Inspector;Lote;Proceso;ANSI;Resultado;Tiempo;Detalle\n";
+    
     datos.forEach(r => {
-        csv += `"${r.fecha}";"${r.hora}";"${r.linea}";"${r.producto}";"${r.inspector}";"${r.lote}";"${r.proceso}";"${r.ansi}";"${r.resultado}";"${r.tiempo}";"${r.detalle}"\n`;
+        // Limpiamos posibles puntos y comas en el detalle para no romper el CSV
+        const detalleLimpio = r.detalle ? r.detalle.replace(/;/g, ",") : "";
+        
+        csv += `"${r.fecha}";"${r.hora || ''}";"${r.linea}";"${r.producto}";"${r.inspector}";"${r.lote}";"${r.proceso || ''}";"${r.ansi || ''}";"${r.resultado}";"${r.tiempo}";"${detalleLimpio}"\n`;
     });
+    
     descargarArchivo(csv, nombre);
 }
-
 function descargarArchivo(contenido, nombre) {
     const blob = new Blob([contenido], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
@@ -861,39 +1069,64 @@ function descargarArchivo(contenido, nombre) {
 // --- PERSISTENCIA Y SINCRONIZACIÓN ---
 async function guardarEstadoPizarraEnNube() {
     if (pausaSincro) return;
+    
     try {
         const payload = {
             action: 'save_pizarra',
             estados: estados,
-            lastUpdateBy: document.getElementById('r-inspector').value || "Sistema"
+            // Guardamos quién fue el último en mover la pizarra para trazabilidad
+            lastUpdateBy: document.getElementById('r-inspector').value || "Sistema",
+            timestamp: new Date().getTime() // Añadimos una marca de tiempo
         };
-        fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
-    } catch (e) { console.warn("Fallo al guardar en nube"); }
-}
 
+        // Eliminamos 'no-cors' para poder usar el await y asegurar que la nube recibió el dato
+        const response = await fetch(SHEETS_URL, { 
+            method: 'POST', 
+            body: JSON.stringify(payload) 
+        });
+
+        console.log("☁️ Pizarra sincronizada globalmente por: " + payload.lastUpdateBy);
+    } catch (e) { 
+        console.error("❌ Fallo crítico al sincronizar con la nube:", e); 
+    }
+}
 async function sincronizarConNube() {
     if (pausaSincro) return;
     try {
         const res = await fetch(SHEETS_URL);
         const data = await res.json();
         
-        // 1. Actualiza Historial (Tu código original)
+        // 1. Actualiza Historial
         if (data.historial) dbHistorial = data.historial;
         
-        // 2. Actualiza Catálogo de Defectos (LO NUEVO)
+        // 2. Actualiza Catálogo de Defectos
         if (data.config && data.config.CATALOGO_DEFECTOS) {
             const catalogoNube = JSON.parse(data.config.CATALOGO_DEFECTOS);
-            if (Object.keys(catalogoNube).length > 0) {
-                catalogoDefectos = catalogoNube;
-            }
+            if (Object.keys(catalogoNube).length > 0) catalogoDefectos = catalogoNube;
         }
 
-        // 3. Actualiza Pizarra (Tu código original con validación de modales)
+        // 3. Actualiza Pizarra con Protección Anti-Borrados
         if (data.pizarra && !document.querySelector('.modal[style*="block"]')) {
-            const nubeStr = JSON.stringify(data.pizarra);
-            if (nubeStr !== JSON.stringify(estados)) {
-                estados = data.pizarra;
-                if (typeof render === "function") render();
+            let huboCambios = false;
+
+            data.pizarra.forEach((estadoNube, i) => {
+                // REGLA DE ORO: Solo actualizo mi tarjeta si NO estoy trabajando en ella (activo = false)
+                // Esto evita que si otra PC manda una pizarra vacía, me borre mi lote actual.
+                if (!estados[i].activo) {
+                    const localStr = JSON.stringify(estados[i]);
+                    const nubeStr = JSON.stringify(estadoNube);
+
+                    if (localStr !== nubeStr) {
+                        estados[i] = estadoNube;
+                        huboCambios = true;
+                    }
+                }
+            });
+
+            // Solo redibujamos la pantalla si realmente hubo un cambio externo
+            if (huboCambios && typeof render === "function") {
+                render();
+                console.log("🔄 Pizarra sincronizada: Se detectaron cambios en otras líneas.");
             }
         }
     } catch (e) { 
