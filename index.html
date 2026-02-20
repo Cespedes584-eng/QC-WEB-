@@ -20,7 +20,7 @@
         .nav-links { display: flex; gap: 5px; align-items: center; }
         .session-info { display: flex; align-items: center; gap: 20px; background: rgba(255,255,255,0.05); padding: 5px 15px; border-radius: 8px; margin-right: 10px; }
         .user-badge { border-right: 1px solid rgba(255,255,255,0.2); padding-right: 15px; text-align: right; }
-        .user-badge b { color: var(--accent); display: block; font-size: 14px; text-transform: capitalize; }
+        .user-badge b { color: var(--accent); display: block; font-size: 14px; }
         .user-badge span { font-size: 11px; color: #bdc3c7; }
         .reloj-container { text-align: right; min-width: 100px; }
         #reloj { font-size: 1.2em; font-weight: bold; color: white; }
@@ -198,7 +198,7 @@
 };
 
         function verificarLogin() {
-            const userIn = document.getElementById('loginUser').value.trim().toLowerCase();
+            const userIn = document.getElementById('loginUser').value.trim();
             const passIn = document.getElementById('loginPass').value.trim();
             let encontrado = null;
 
