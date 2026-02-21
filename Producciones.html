@@ -1,4 +1,4 @@
-<!DO<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -260,11 +260,13 @@ function guardarCatalogo() {
         datos: catalogoDefectos
     };
 
-    fetch(SHEETS_URL, {
-        method: 'POST',
-        mode: 'no-cors', // Importante para evitar bloqueos de seguridad simples
-        body: JSON.stringify(payload)
-    })
+   fetch(SHEETS_URL, {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+})
     .then(() => {
         console.log("Sincronización con Google Sheets exitosa");
         alert("✅ Catálogo actualizado y guardado en la nube.");
@@ -534,10 +536,18 @@ function generarGestionLotes() {
         cerrarModal('modal-defecto-admin');
     }
 
-    function ejecutarSync(registro) {
-        fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'edit', ...registro }) });
-        generarReporteYield(); generarGestionLotes();
-    }
+   function ejecutarSync(registro) {
+    fetch(SHEETS_URL, { 
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'edit', ...registro })
+    });
+
+    generarReporteYield(); 
+    generarGestionLotes();
+}
 async function borrarRegistro(idx) {
     if (!confirm("⚠️ ¿Estás seguro? El registro se eliminará permanentemente de la nube.")) return;
 
@@ -551,15 +561,18 @@ async function borrarRegistro(idx) {
 
     try {
         // Quitamos el 'no-cors' para poder esperar la respuesta real
-        const response = await fetch(SHEETS_URL, { 
-            method: 'POST', 
-            body: JSON.stringify({ 
-                action: 'delete', 
-                lote: registroABorrar.lote,
-                fecha: registroABorrar.fecha,
-                hora: registroABorrar.hora 
-            }) 
-        });
+       const response = await fetch(SHEETS_URL, { 
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ 
+        action: 'delete', 
+        lote: registroABorrar.lote,
+        fecha: registroABorrar.fecha,
+        hora: registroABorrar.hora 
+    }) 
+});
 
         // Solo si la nube responde que todo OK, borramos de la pantalla
         dbHistorial.splice(idx, 1);
@@ -646,9 +659,10 @@ async function finalizarLote(ok) {
     };
 
     // --- BLOQUEO FÍSICO DEL BOTÓN ---
-    const btnGuardar = event.target;
-    btnGuardar.disabled = true; // Desactivar de inmediato
-    btnGuardar.innerText = "⏳ PROCESANDO...";
+    const botones = document.querySelectorAll('#modal-fin button, #modal-rechazos button');
+botones.forEach(b => {
+    b.disabled = true;
+});
 
     // 1. Limpieza Local INMEDIATA (Para que el usuario no vea más el lote)
     pausaSincro = true; 
@@ -661,11 +675,13 @@ async function finalizarLote(ok) {
 
     try {
         // 3. Enviamos el registro sin esperar (Fuego y olvido con no-cors)
-        fetch(SHEETS_URL, { 
-            method: 'POST', 
-            mode: 'no-cors', 
-            body: JSON.stringify(registro) 
-        });
+        await fetch(SHEETS_URL, { 
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(registro)
+});
 
         // 4. Liberamos la línea en la nube
         await guardarEstadoPizarraEnNube();
@@ -677,11 +693,14 @@ async function finalizarLote(ok) {
         console.error("Error en envío:", e);
     } finally {
         // Liberamos el seguro después de 3 segundos para la siguiente operación
-        setTimeout(() => { 
-            pausaSincro = false; 
-            procesandoCierre = false; // Permitir nuevos cierres después de la pausa
-        }, 3000);
-    }
+      procesandoCierre = false;
+pausaSincro = false;
+
+const botones = document.querySelectorAll('#modal-fin button, #modal-rechazos button');
+botones.forEach(b => {
+    b.disabled = false;
+});
+    
 }
     function verificarHibrida() {
     const idx = document.getElementById('r-linea').value;
