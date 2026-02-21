@@ -574,34 +574,47 @@
             guardarEstadoPizarraEnNube();
         }
 
-       async function finalizarLote(ok) {
+      async function finalizarLote(ok) {
     const s = estados[indexSel];
-    const ahora = new Date();
-    // ... tu lógica de tiempo ...
+    if (!s) return;
 
-    // 1. DESACTIVAR LOCALMENTE PRIMERO
-    s.activo = false;
-    pausaSincro = true; // Bloqueamos la descarga de la nube
+    const ahora = new Date();
+    const diffMs = Date.now() - s.inicio;
+    const tiempoFinal = `${Math.floor(diffMs / 60000).toString().padStart(2, '0')}:${Math.floor((diffMs % 60000) / 1000).toString().padStart(2, '0')}`;
+    
+    let det = ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ");
+    
+    const registro = {
+        action: 'add', fecha: ahora.toLocaleDateString('es-ES'), hora: s.horaInicioReal,
+        linea: lineasArr[indexSel], producto: s.productoActivo, inspector: s.inspector,
+        lote: "'" + s.lote, proceso: s.proceso, ansi: s.ansi, tiempo: tiempoFinal,
+        resultado: ok ? "ACEPTADO" : "RECHAZADO", detalle: det
+    };
+
+    // --- BLOQUEO CRÍTICO ---
+    pausaSincro = true; 
+    s.activo = false; // Desactivar objeto en memoria
+    
+    // Limpiar el respaldo del localStorage para que no se recupere al fallar la red
+    localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
 
     cerrarModal('modal-fin');
     cerrarModal('modal-rechazos');
-    render(); // Dibujamos la pantalla vacía de inmediato
+    render(); // Actualizar pantalla YA
 
-    // 2. ENVIAR DATOS
-    const registro = { /* tu objeto registro */ };
-    
-    // Usamos await para asegurar que se intenten enviar
-    await fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) });
-    await guardarEstadoPizarraEnNube();
-
-    // 3. ESPERAR 3 SEGUNDOS ANTES DE VOLVER A ESCUCHAR A LA NUBE
-    // Esto evita que el "fantasma" del lote vuelva a aparecer
-    setTimeout(() => {
-        pausaSincro = false;
-        console.log("Sincronización reactivada");
-    }, 3000); 
-
-    dbHistorial.push(registro);
+    try {
+        // Enviamos historial y pizarra
+        await fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) });
+        await guardarEstadoPizarraEnNube();
+        
+        // Añadir al historial local para que se vea en el Excel inmediato
+        dbHistorial.push(registro);
+    } catch (e) {
+        console.error("Error al guardar:", e);
+    } finally {
+        // Esperamos 4 segundos antes de volver a permitir que la nube hable
+        setTimeout(() => { pausaSincro = false; }, 4000);
+    }
 }
         function verificarHibrida() {
             const idx = document.getElementById('r-linea').value;
@@ -632,7 +645,6 @@
         }
 
       async function sincronizarConNube() {
-    // Si hay un modal abierto o la sincronización está pausada, NO HACER NADA
     if (pausaSincro || document.querySelector('.modal[style*="block"]')) return;
 
     try {
@@ -644,20 +656,23 @@
         if (data.pizarra) {
             let huboCambio = false;
             data.pizarra.forEach((n, i) => {
-                // REGLA DE SEGURIDAD: 
-                // Si mi estado local dice que la tarjeta está libre (activo: false),
-                // no permito que la nube me la vuelva a poner como activa.
-                if (estados[i].activo === false && n.activo === true) {
-                    return; // Ignoramos este cambio de la nube
+                // Si mi estado local dice que la línea está vacía (activo: false)
+                // NO permito que la nube me "empuje" un lote de nuevo a esa posición.
+                if (estados[i].activo === false) {
+                    return; 
                 }
 
-                // Solo actualizamos si el contenido es diferente para evitar parpadeos
+                // Solo actualizar si hay cambios reales para no resetear los timers
                 if (JSON.stringify(estados[i]) !== JSON.stringify(n)) {
                     estados[i] = n;
                     huboCambio = true;
                 }
             });
-            if (huboCambio) render();
+            
+            if (huboCambio) {
+                render();
+                localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
+            }
         }
     } catch (e) { 
         console.error("Error Sync:", e); 
