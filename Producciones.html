@@ -937,18 +937,23 @@ function prepararFin(i) {
     }
 
     const sesion = JSON.parse(sesionJSON);
-    const usuarioActual = sesion.name.toUpperCase();
-    const inspectorLote = s.inspector.toUpperCase();
+    
+    // .trim() elimina espacios invisibles al inicio o final que rompen la igualdad
+    const usuarioActual = sesion.name.toUpperCase().trim();
+    const inspectorLote = s.inspector.toUpperCase().trim();
 
-    // Solo el dueño del lote o Admin pueden terminarlo
-    if (usuarioActual === inspectorLote || sesion.isAdmin === true) {
+    // Cambiamos '===' por '.includes()' para que si el usuario es "MARLON" 
+    // y el lote dice "MARLON CESPEDES", lo reconozca como el mismo dueño.
+    const esDueño = inspectorLote.includes(usuarioActual) || usuarioActual.includes(inspectorLote);
+    const esAdmin = sesion.isAdmin === true;
+
+    if (esDueño || esAdmin) {
         indexSel = i;
         abrirModal('modal-fin');
     } else {
-        alert(`⛔ BLOQUEADO\n\nLote de: ${s.inspector}\nTu usuario: ${sesion.name}\n\nSolo el responsable o un Administrador pueden finalizar.`);
+        alert(`⛔ BLOQUEADO\n\nEste lote pertenece a: ${s.inspector}\nTu usuario actual es: ${sesion.name}\n\nSolo el responsable o un Administrador pueden finalizar.`);
     }
 }
-
 function abrirRechazos() { 
     cerrarModal('modal-fin'); 
     abrirModal('modal-rechazos'); 
