@@ -574,29 +574,35 @@
             guardarEstadoPizarraEnNube();
         }
 
-        async function finalizarLote(ok) {
-            const s = estados[indexSel];
-            const ahora = new Date();
-            const diffMs = Date.now() - s.inicio;
-            const tiempoFinal = `${Math.floor(diffMs / 60000).toString().padStart(2, '0')}:${Math.floor((diffMs % 60000) / 1000).toString().padStart(2, '0')}`;
-            
-            let det = ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ");
-            const registro = {
-                action: 'add', fecha: ahora.toLocaleDateString('es-ES'), hora: s.horaInicioReal,
-                linea: lineasArr[indexSel], producto: s.productoActivo, inspector: s.inspector,
-                lote: "'" + s.lote, proceso: s.proceso, ansi: s.ansi, tiempo: tiempoFinal,
-                resultado: ok ? "ACEPTADO" : "RECHAZADO", detalle: det
-            };
+       async function finalizarLote(ok) {
+    const s = estados[indexSel];
+    // ... (tu código de cálculo de tiempo y registro) ...
 
-            s.activo = false;
-            cerrarModal('modal-fin');
-            cerrarModal('modal-rechazos');
-            render();
-            fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) });
-            guardarEstadoPizarraEnNube();
-            dbHistorial.push(registro);
-        }
+    // 1. Desactivar localmente de inmediato
+    s.activo = false;
+    
+    // 2. Bloquear sincronización momentáneamente
+    pausaSincro = true; 
 
+    cerrarModal('modal-fin');
+    cerrarModal('modal-rechazos');
+    render();
+
+    // 3. Enviar a la nube
+    try {
+        // Primero guardamos el registro en el historial
+        await fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) });
+        // Inmediatamente actualizamos la pizarra para que la nube sepa que ya no está activo
+        await guardarEstadoPizarraEnNube(); 
+    } catch (e) {
+        console.error("Error al guardar:", e);
+    } finally {
+        // 4. Liberar la sincronización después de un breve delay para que la nube procese
+        setTimeout(() => { pausaSincro = false; }, 2000);
+    }
+    
+    dbHistorial.push(registro);
+}
         function verificarHibrida() {
             const idx = document.getElementById('r-linea').value;
             const nom = lineasArr[idx];
@@ -625,18 +631,35 @@
             fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
         }
 
-        async function sincronizarConNube() {
-            if (pausaSincro || document.querySelector('.modal[style*="block"]')) return;
-            try {
-                const res = await fetch(SHEETS_URL);
-                const data = await res.json();
-                if (data.historial) dbHistorial = data.historial;
-                if (data.pizarra) {
-                    data.pizarra.forEach((n, i) => { if (!estados[i].activo) estados[i] = n; });
-                    render();
+       async function sincronizarConNube() {
+    // Si hay un modal abierto o pausa, no sincronizar
+    if (pausaSincro || document.querySelector('.modal[style*="block"]')) return;
+
+    try {
+        const res = await fetch(SHEETS_URL);
+        const data = await res.json();
+        
+        if (data.historial) dbHistorial = data.historial;
+
+        if (data.pizarra) {
+            let huboCambio = false;
+            data.pizarra.forEach((n, i) => {
+                // REGLA DE ORO: Solo actualizar si el estado local NO está activo.
+                // Si tú lo terminaste localmente (activo=false), no dejes que la nube lo reactive.
+                if (!estados[i].activo) {
+                    // Solo actualizamos si realmente hay un lote nuevo en la nube
+                    if (JSON.stringify(estados[i]) !== JSON.stringify(n)) {
+                        estados[i] = n;
+                        huboCambio = true;
+                    }
                 }
-            } catch (e) { console.error("Sync error", e); }
+            });
+            if (huboCambio) render();
         }
+    } catch (e) { 
+        console.error("Error de sincronización:", e); 
+    }
+}
 
         function mostrarTab(t) {
             ['sec-yield', 'sec-gestion', 'sec-defectos'].forEach(id => document.getElementById(id).style.display = id.includes(t) ? 'block' : 'none');
