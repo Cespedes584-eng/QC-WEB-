@@ -576,31 +576,31 @@
 
        async function finalizarLote(ok) {
     const s = estados[indexSel];
-    // ... (tu código de cálculo de tiempo y registro) ...
+    const ahora = new Date();
+    // ... tu lógica de tiempo ...
 
-    // 1. Desactivar localmente de inmediato
+    // 1. DESACTIVAR LOCALMENTE PRIMERO
     s.activo = false;
-    
-    // 2. Bloquear sincronización momentáneamente
-    pausaSincro = true; 
+    pausaSincro = true; // Bloqueamos la descarga de la nube
 
     cerrarModal('modal-fin');
     cerrarModal('modal-rechazos');
-    render();
+    render(); // Dibujamos la pantalla vacía de inmediato
 
-    // 3. Enviar a la nube
-    try {
-        // Primero guardamos el registro en el historial
-        await fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) });
-        // Inmediatamente actualizamos la pizarra para que la nube sepa que ya no está activo
-        await guardarEstadoPizarraEnNube(); 
-    } catch (e) {
-        console.error("Error al guardar:", e);
-    } finally {
-        // 4. Liberar la sincronización después de un breve delay para que la nube procese
-        setTimeout(() => { pausaSincro = false; }, 2000);
-    }
+    // 2. ENVIAR DATOS
+    const registro = { /* tu objeto registro */ };
     
+    // Usamos await para asegurar que se intenten enviar
+    await fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) });
+    await guardarEstadoPizarraEnNube();
+
+    // 3. ESPERAR 3 SEGUNDOS ANTES DE VOLVER A ESCUCHAR A LA NUBE
+    // Esto evita que el "fantasma" del lote vuelva a aparecer
+    setTimeout(() => {
+        pausaSincro = false;
+        console.log("Sincronización reactivada");
+    }, 3000); 
+
     dbHistorial.push(registro);
 }
         function verificarHibrida() {
@@ -631,8 +631,8 @@
             fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
         }
 
-       async function sincronizarConNube() {
-    // Si hay un modal abierto o pausa, no sincronizar
+      async function sincronizarConNube() {
+    // Si hay un modal abierto o la sincronización está pausada, NO HACER NADA
     if (pausaSincro || document.querySelector('.modal[style*="block"]')) return;
 
     try {
@@ -644,20 +644,23 @@
         if (data.pizarra) {
             let huboCambio = false;
             data.pizarra.forEach((n, i) => {
-                // REGLA DE ORO: Solo actualizar si el estado local NO está activo.
-                // Si tú lo terminaste localmente (activo=false), no dejes que la nube lo reactive.
-                if (!estados[i].activo) {
-                    // Solo actualizamos si realmente hay un lote nuevo en la nube
-                    if (JSON.stringify(estados[i]) !== JSON.stringify(n)) {
-                        estados[i] = n;
-                        huboCambio = true;
-                    }
+                // REGLA DE SEGURIDAD: 
+                // Si mi estado local dice que la tarjeta está libre (activo: false),
+                // no permito que la nube me la vuelva a poner como activa.
+                if (estados[i].activo === false && n.activo === true) {
+                    return; // Ignoramos este cambio de la nube
+                }
+
+                // Solo actualizamos si el contenido es diferente para evitar parpadeos
+                if (JSON.stringify(estados[i]) !== JSON.stringify(n)) {
+                    estados[i] = n;
+                    huboCambio = true;
                 }
             });
             if (huboCambio) render();
         }
     } catch (e) { 
-        console.error("Error de sincronización:", e); 
+        console.error("Error Sync:", e); 
     }
 }
 
