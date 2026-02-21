@@ -638,48 +638,42 @@ async function finalizarLote(ok) {
         detalle: det 
     };
 
-    // --- BLOQUEO DE INTERFAZ ---
+    // --- INTERFAZ ---
     const btnGuardar = event.target;
-    const originalText = btnGuardar.innerText;
     btnGuardar.innerText = "⏳ GUARDANDO...";
     btnGuardar.disabled = true;
 
-    // --- SOLUCIÓN AL REAPARECIMIENTO ---
-    // 1. Desactivamos la tarjeta LOCALMENTE de inmediato
-    s.activo = false; 
-    s.tiempo = '00:00'; 
-    s.horaInicioReal = '';
-    
-    // 2. Pausamos la sincronización entrante momentáneamente
+    // 1. Limpieza Local INMEDIATA
     pausaSincro = true; 
+    s.activo = false; 
+    
+    // 2. Cerramos todo en la pantalla del usuario YA
+    cerrarModal('modal-fin'); 
+    cerrarModal('modal-rechazos'); 
+    render(); 
 
     try {
-        // 3. Enviamos el registro a la base de datos
+        // 3. Enviamos el registro (el sistema seguirá trabajando esto en segundo plano)
         await fetch(SHEETS_URL, { 
             method: 'POST', 
+            mode: 'no-cors', // Volvemos a poner no-cors para evitar que se quede esperando
             body: JSON.stringify(registro) 
         });
 
-        // 4. Actualizamos la PIZARRA en la nube para que aparezca "DISPONIBLE" para todos
+        // 4. Liberamos la línea en la nube
         await guardarEstadoPizarraEnNube();
-
-        dbHistorial.push(registro);
-        cerrarModal('modal-fin'); 
-        cerrarModal('modal-rechazos'); 
         
-        render();
-        console.log("✅ Lote guardado y línea liberada.");
+        dbHistorial.push(registro);
+        console.log("✅ Datos enviados a la nube.");
 
     } catch(e) {
-        // Si falla, revertimos el estado local para no perder el lote
-        s.activo = true;
-        console.error("Error al guardar lote:", e);
-        alert("❌ ERROR DE CONEXIÓN: Intenta de nuevo.");
-        btnGuardar.innerText = originalText;
-        btnGuardar.disabled = false;
+        console.error("Error silencioso en la nube:", e);
+        // No alertamos al usuario porque el lote ya se quitó de su vista para no estorbar
     } finally {
-        // Reanudamos la sincronización normal
-        pausaSincro = false;
+        // 5. Esperamos 3 segundos antes de volver a sincronizar para dejar que la nube respire
+        setTimeout(() => { 
+            pausaSincro = false; 
+        }, 3000);
     }
 }
     function verificarHibrida() {
@@ -1081,11 +1075,10 @@ function descargarArchivo(contenido, nombre) {
 
 // --- PERSISTENCIA Y SINCRONIZACIÓN ---
 async function guardarEstadoPizarraEnNube() {
-    // Si estamos en pausa (como durante un cierre de lote), no dejamos que nada sobrescriba
-    if (pausaSincro) return;
+    // IMPORTANTE: Aquí NO ponemos 'if (pausaSincro) return' porque 
+    // necesitamos que funcione cuando se llama desde finalizarLote
     
     try {
-        // Obtenemos el nombre desde la sesión de localStorage en lugar del input del DOM
         const sesionJSON = localStorage.getItem('qc_session');
         const nombreUsuario = sesionJSON ? JSON.parse(sesionJSON).name : "Sistema";
 
@@ -1096,17 +1089,16 @@ async function guardarEstadoPizarraEnNube() {
             timestamp: Date.now() 
         };
 
-        // Sin 'no-cors' para asegurar que el navegador espere la confirmación real
-        const response = await fetch(SHEETS_URL, { 
+        // Usamos no-cors para que el envío sea instantáneo y no bloquee
+        await fetch(SHEETS_URL, { 
             method: 'POST', 
+            mode: 'no-cors',
             body: JSON.stringify(payload) 
         });
 
-        if (response.ok) {
-            console.log(`☁️ Pizarra sincronizada globalmente por: ${payload.lastUpdateBy}`);
-        }
+        console.log("☁️ Pizarra enviada a la nube.");
     } catch (e) { 
-        console.error("❌ Fallo crítico al sincronizar con la nube:", e); 
+        console.error("❌ Fallo al sincronizar:", e); 
     }
 }
 async function sincronizarConNube() {
