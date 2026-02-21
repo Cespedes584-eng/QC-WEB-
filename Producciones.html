@@ -612,7 +612,14 @@ async function borrarRegistro(idx) {
     guardarEstadoPizarraEnNube();
 }
 
+// Variable de control fuera de la función para bloqueo total
+let procesandoCierre = false;
+
 async function finalizarLote(ok) {
+    // SEGURO 1: Si ya se está procesando un cierre, ignoramos cualquier otro clic
+    if (procesandoCierre) return;
+    procesandoCierre = true; 
+
     const s = estados[indexSel]; 
     const ahora = new Date();
     const diffMs = Date.now() - s.inicio;
@@ -638,25 +645,25 @@ async function finalizarLote(ok) {
         detalle: det 
     };
 
-    // --- INTERFAZ ---
+    // --- BLOQUEO FÍSICO DEL BOTÓN ---
     const btnGuardar = event.target;
-    btnGuardar.innerText = "⏳ GUARDANDO...";
-    btnGuardar.disabled = true;
+    btnGuardar.disabled = true; // Desactivar de inmediato
+    btnGuardar.innerText = "⏳ PROCESANDO...";
 
-    // 1. Limpieza Local INMEDIATA
+    // 1. Limpieza Local INMEDIATA (Para que el usuario no vea más el lote)
     pausaSincro = true; 
     s.activo = false; 
     
-    // 2. Cerramos todo en la pantalla del usuario YA
+    // 2. Cerramos la interfaz YA
     cerrarModal('modal-fin'); 
     cerrarModal('modal-rechazos'); 
     render(); 
 
     try {
-        // 3. Enviamos el registro (el sistema seguirá trabajando esto en segundo plano)
-        await fetch(SHEETS_URL, { 
+        // 3. Enviamos el registro sin esperar (Fuego y olvido con no-cors)
+        fetch(SHEETS_URL, { 
             method: 'POST', 
-            mode: 'no-cors', // Volvemos a poner no-cors para evitar que se quede esperando
+            mode: 'no-cors', 
             body: JSON.stringify(registro) 
         });
 
@@ -664,15 +671,15 @@ async function finalizarLote(ok) {
         await guardarEstadoPizarraEnNube();
         
         dbHistorial.push(registro);
-        console.log("✅ Datos enviados a la nube.");
+        console.log("✅ Lote enviado (un solo registro).");
 
     } catch(e) {
-        console.error("Error silencioso en la nube:", e);
-        // No alertamos al usuario porque el lote ya se quitó de su vista para no estorbar
+        console.error("Error en envío:", e);
     } finally {
-        // 5. Esperamos 3 segundos antes de volver a sincronizar para dejar que la nube respire
+        // Liberamos el seguro después de 3 segundos para la siguiente operación
         setTimeout(() => { 
             pausaSincro = false; 
+            procesandoCierre = false; // Permitir nuevos cierres después de la pausa
         }, 3000);
     }
 }
