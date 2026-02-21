@@ -442,7 +442,7 @@ function render() {
     
     // Guardamos respaldo local
     localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
-}
+
   function abrirHistorialIndividual(idx) {
     const nom = lineasArr[idx];
     document.getElementById('hist-linea-titulo').innerText = "Historial: " + nom;
@@ -701,6 +701,7 @@ botones.forEach(b => {
     b.disabled = false;
 });
     
+}
 }
     function verificarHibrida() {
     const idx = document.getElementById('r-linea').value;
