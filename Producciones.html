@@ -620,11 +620,9 @@ async function finalizarLote(ok) {
     const seg = Math.floor((diffMs % 60000) / 1000).toString().padStart(2, '0');
     const tiempoFinal = `${min}:${seg}`;
     
-    // Gestión de detalles de rechazo
     let det = ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ");
     if (!ok && det === "") det = "Defecto no especificado";
 
-    // OBJETO DE REGISTRO CON CORRECCIÓN DE CEROS
     const registro = { 
         action: 'add', 
         fecha: ahora.toLocaleDateString('es-ES'), 
@@ -632,9 +630,7 @@ async function finalizarLote(ok) {
         linea: lineasArr[indexSel],   
         producto: s.productoActivo, 
         inspector: s.inspector, 
-        // --- CAMBIO AQUÍ: Agregamos el apóstrofe para conservar los ceros en Sheets ---
         lote: "'" + s.lote, 
-        // ----------------------------------------------------------------------------
         proceso: s.proceso, 
         ansi: s.ansi, 
         tiempo: tiempoFinal, 
@@ -642,36 +638,48 @@ async function finalizarLote(ok) {
         detalle: det 
     };
 
-    // --- MEJORA DE SEGURIDAD INTERFAZ ---
+    // --- BLOQUEO DE INTERFAZ ---
     const btnGuardar = event.target;
     const originalText = btnGuardar.innerText;
     btnGuardar.innerText = "⏳ GUARDANDO...";
     btnGuardar.disabled = true;
 
+    // --- SOLUCIÓN AL REAPARECIMIENTO ---
+    // 1. Desactivamos la tarjeta LOCALMENTE de inmediato
+    s.activo = false; 
+    s.tiempo = '00:00'; 
+    s.horaInicioReal = '';
+    
+    // 2. Pausamos la sincronización entrante momentáneamente
+    pausaSincro = true; 
+
     try {
-        const response = await fetch(SHEETS_URL, { 
+        // 3. Enviamos el registro a la base de datos
+        await fetch(SHEETS_URL, { 
             method: 'POST', 
             body: JSON.stringify(registro) 
         });
 
-        // Actualización local tras confirmación de la nube
+        // 4. Actualizamos la PIZARRA en la nube para que aparezca "DISPONIBLE" para todos
+        await guardarEstadoPizarraEnNube();
+
         dbHistorial.push(registro);
-        s.activo = false; 
-        s.tiempo = '00:00'; 
-        s.horaInicioReal = '';
-        
         cerrarModal('modal-fin'); 
         cerrarModal('modal-rechazos'); 
         
         render();
-        guardarEstadoPizarraEnNube();
-        console.log("✅ Lote guardado con ceros preservados.");
+        console.log("✅ Lote guardado y línea liberada.");
 
     } catch(e) {
+        // Si falla, revertimos el estado local para no perder el lote
+        s.activo = true;
         console.error("Error al guardar lote:", e);
-        alert("❌ ERROR DE CONEXIÓN: El lote NO se pudo guardar. Intenta de nuevo.");
+        alert("❌ ERROR DE CONEXIÓN: Intenta de nuevo.");
         btnGuardar.innerText = originalText;
         btnGuardar.disabled = false;
+    } finally {
+        // Reanudamos la sincronización normal
+        pausaSincro = false;
     }
 }
     function verificarHibrida() {
@@ -1073,30 +1081,38 @@ function descargarArchivo(contenido, nombre) {
 
 // --- PERSISTENCIA Y SINCRONIZACIÓN ---
 async function guardarEstadoPizarraEnNube() {
+    // Si estamos en pausa (como durante un cierre de lote), no dejamos que nada sobrescriba
     if (pausaSincro) return;
     
     try {
+        // Obtenemos el nombre desde la sesión de localStorage en lugar del input del DOM
+        const sesionJSON = localStorage.getItem('qc_session');
+        const nombreUsuario = sesionJSON ? JSON.parse(sesionJSON).name : "Sistema";
+
         const payload = {
             action: 'save_pizarra',
             estados: estados,
-            // Guardamos quién fue el último en mover la pizarra para trazabilidad
-            lastUpdateBy: document.getElementById('r-inspector').value || "Sistema",
-            timestamp: new Date().getTime() // Añadimos una marca de tiempo
+            lastUpdateBy: nombreUsuario,
+            timestamp: Date.now() 
         };
 
-        // Eliminamos 'no-cors' para poder usar el await y asegurar que la nube recibió el dato
+        // Sin 'no-cors' para asegurar que el navegador espere la confirmación real
         const response = await fetch(SHEETS_URL, { 
             method: 'POST', 
             body: JSON.stringify(payload) 
         });
 
-        console.log("☁️ Pizarra sincronizada globalmente por: " + payload.lastUpdateBy);
+        if (response.ok) {
+            console.log(`☁️ Pizarra sincronizada globalmente por: ${payload.lastUpdateBy}`);
+        }
     } catch (e) { 
         console.error("❌ Fallo crítico al sincronizar con la nube:", e); 
     }
 }
 async function sincronizarConNube() {
-    if (pausaSincro) return;
+    // Si la sincronización está pausada manualmente o hay un modal abierto, no hacemos nada
+    if (pausaSincro || document.querySelector('.modal[style*="block"]')) return;
+    
     try {
         const res = await fetch(SHEETS_URL);
         const data = await res.json();
@@ -1110,28 +1126,28 @@ async function sincronizarConNube() {
             if (Object.keys(catalogoNube).length > 0) catalogoDefectos = catalogoNube;
         }
 
-        // 3. Actualiza Pizarra con Protección Anti-Borrados
-        if (data.pizarra && !document.querySelector('.modal[style*="block"]')) {
+        // 3. Actualiza Pizarra con Doble Protección
+        if (data.pizarra) {
             let huboCambios = false;
 
             data.pizarra.forEach((estadoNube, i) => {
-                // REGLA DE ORO: Solo actualizo mi tarjeta si NO estoy trabajando en ella (activo = false)
-                // Esto evita que si otra PC manda una pizarra vacía, me borre mi lote actual.
+                // PROTECCIÓN: Solo actualizo si mi estado local es inactivo Y la nube trae algo nuevo.
+                // Además, verificamos que no estemos en proceso de "limpieza" local.
                 if (!estados[i].activo) {
                     const localStr = JSON.stringify(estados[i]);
                     const nubeStr = JSON.stringify(estadoNube);
 
                     if (localStr !== nubeStr) {
+                        // Solo aceptamos el cambio de la nube si no acabamos de cerrar el lote nosotros
                         estados[i] = estadoNube;
                         huboCambios = true;
                     }
                 }
             });
 
-            // Solo redibujamos la pantalla si realmente hubo un cambio externo
             if (huboCambios && typeof render === "function") {
                 render();
-                console.log("🔄 Pizarra sincronizada: Se detectaron cambios en otras líneas.");
+                console.log("🔄 Pizarra sincronizada con éxito.");
             }
         }
     } catch (e) { 
