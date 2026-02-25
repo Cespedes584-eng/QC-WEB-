@@ -434,7 +434,7 @@
 
     <script>
         let pausaSincro = false;
-        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbyqw46xkFJFVV9ANvXoM_-5Ng9IplFgp3gCvpKmEjF5xkulM1Wywwlk1sS2sMLLUVrw/exec";
+        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbwBnpP2Y-hZCEoX-jNmE5GPepfcLmiGvrYpigDeICenrG6M81mITLiYHlDxkrCYgs95/exec";
         const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
 
         let catalogoDefectos = JSON.parse(localStorage.getItem('qc_catalogo_v2')) || {};
@@ -594,12 +594,18 @@ async function finalizarLote(ok) {
     if (!s || !s.activo) return;
 
     pausaSincro = true; 
-    s.loteAnterior = s.lote; // Escudo para que sincronizarConNube no lo reactive por error
+    s.loteAnterior = s.lote; 
 
     const ahora = new Date();
+    
+    // --- NUEVO: CAPTURAMOS LA HORA DE CIERRE ---
+    const horaFin = ahora.getHours().toString().padStart(2, '0') + ':' + 
+                    ahora.getMinutes().toString().padStart(2, '0');
+
     const registro = {
         action: 'add', 
         fecha: ahora.toLocaleDateString('es-ES'), 
+        horaFin: horaFin, // <--- SE AGREGA AL REGISTRO
         hora: s.horaInicioReal,
         linea: lineasArr[indexSel], 
         producto: s.productoActivo, 
@@ -615,32 +621,29 @@ async function finalizarLote(ok) {
     // --- LIMPIEZA LOCAL INMEDIATA ---
     s.activo = false; 
     s.lote = "";
-    s.productoActivo = ""; // Limpiamos para que la tarjeta diga "DISPONIBLE" o el nombre de la línea
+    s.productoActivo = ""; 
     s.inicio = null;
     s.tiempo = "00:00:00";
 
     cerrarModal('modal-fin');
     cerrarModal('modal-rechazos');
-    render(); // Actualizamos la pantalla del usuario al instante
+    render(); 
 
     try {
-        // Enviamos los datos a Google Sheets (Historial + Pizarra)
         await Promise.all([
             fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) }),
             guardarEstadoPizarraEnNube()
         ]);
         
-        // Actualizamos el historial local para que se vea en las tablas sin recargar
         dbHistorial.push(registro);
-        console.log("Lote finalizado y sincronizado");
+        console.log("Lote finalizado con hora:", horaFin);
     } catch (e) { 
         console.error("Error al finalizar lote:", e); 
     } finally { 
-        // Esperamos 4 segundos antes de volver a escuchar a la nube
-        // Esto da tiempo a que el servidor procese el cambio
         setTimeout(() => { pausaSincro = false; }, 4000); 
     }
 }
+
         function verificarHibrida() {
             const idx = document.getElementById('r-linea').value;
             const nom = lineasArr[idx];
@@ -792,22 +795,31 @@ async function sincronizarConNube() {
         function abrirAdmin() { abrirModal('modal-admin'); mostrarTab('yield'); }
         
         function abrirHistorialIndividual(idx) {
-            const nom = lineasArr[idx];
-            document.getElementById('hist-linea-titulo').innerText = "Historial: " + nom;
-            const filtrados = dbHistorial.filter(r => r.linea === nom).reverse();
-            document.getElementById('hist-linea-body').innerHTML = filtrados.map(r => `
-                <tr>
-                    <td>${r.fecha}</td>
-                    <td>${r.lote}</td>
-                    <td>${r.proceso}</td>
-                    <td>${r.ansi}</td>
-                    <td>${r.inspector}</td>
-                    <td>${r.resultado}</td>
-                    <td>${r.tiempo}</td>
-                    <td>${r.detalle}</td>
-                </tr>`).join('');
-            abrirModal('modal-historial-linea');
-        }
+    const nom = lineasArr[idx];
+    document.getElementById('hist-linea-titulo').innerText = "Historial: " + nom;
+    const filtrados = dbHistorial.filter(r => r.linea === nom).reverse();
+    
+    document.getElementById('hist-linea-body').innerHTML = filtrados.map(r => `
+        <tr>
+            <td style="line-height: 1.2; min-width: 90px;">
+                ${r.fecha} <br> 
+                <span style="font-size: 0.85em; color: #555; font-weight: bold;">
+                    🏁 ${r.horaFin || '--:--'}
+                </span>
+            </td>
+            <td>${r.lote}</td>
+            <td>${r.proceso}</td>
+            <td>${r.ansi}</td>
+            <td>${r.inspector}</td>
+            <td style="font-weight: bold; color: ${r.resultado === 'ACEPTADO' ? '#28a745' : '#dc3545'};">
+                ${r.resultado}
+            </td>
+            <td>${r.tiempo}</td>
+            <td>${r.detalle}</td>
+        </tr>`).join('');
+        
+    abrirModal('modal-historial-linea');
+}
 async function guardarEstadoPizarraEnNube() {
     try {
         const sesion = JSON.parse(localStorage.getItem('qc_session'));
