@@ -645,26 +645,39 @@ async function finalizarLote(ok) {
 }
 
         function verificarHibrida() {
-            const idx = document.getElementById('r-linea').value;
-            const nom = lineasArr[idx];
-            const cont = document.getElementById('contenedor-hibrida');
-            if (nom.includes(" / ")) {
-                document.getElementById('r-producto-especifico').innerHTML = nom.split(" / ").map(p => `<option value="${p.trim()}">${p.trim()}</option>`).join('');
-                cont.style.display = 'block';
-            } else cont.style.display = 'none';
+    const idx = document.getElementById('r-linea').value;
+    const nom = lineasArr[idx];
+    const cont = document.getElementById('contenedor-hibrida');
+    const selProceso = document.getElementById('r-proceso');
+    const selAnsi = document.getElementById('r-ansi');
 
-            let opciones = `<option value="Shaft">Shaft</option><option value="Final">Final</option><option value="HubBonding">Hub Bonding</option><option value="Pre-Empaque">Pre-Empaque</option>`;
-            if (nom.toUpperCase().includes("SCEPTER")) opciones += `<option value="Guidewire">Guidewire</option>`;
-            document.getElementById('r-proceso').innerHTML = opciones;
-        }
+    // 1. Lógica de productos híbridos (tu código actual)
+    if (nom.includes(" / ")) {
+        document.getElementById('r-producto-especifico').innerHTML = nom.split(" / ").map(p => `<option value="${p.trim()}">${p.trim()}</option>`).join('');
+        cont.style.display = 'block';
+    } else {
+        cont.style.display = 'none';
+    }
 
-        function generarDefectos() {
-            const q = parseInt(document.getElementById('rech-qty').value) || 1;
-            const c = document.getElementById('contenedor-defectos');
-            const s = estados[indexSel];
-            let lista = (catalogoDefectos[s.productoOriginal] && catalogoDefectos[s.productoOriginal][s.proceso]) ? catalogoDefectos[s.productoOriginal][s.proceso] : ["Visual", "Derrame", "Medida", "Otro"];
-            c.innerHTML = Array.from({ length: q }).map((_, i) => `<select class="m-rechazo">${lista.map(d => `<option value="${d}">${d}</option>`).join('')}</select>`).join('');
+    // 2. Lógica de procesos (tu código actual)
+    let opciones = `<option value="Shaft">Shaft</option><option value="Final">Final</option><option value="HubBonding">Hub Bonding</option><option value="Pre-Empaque">Pre-Empaque</option>`;
+    if (nom.toUpperCase().includes("SCEPTER")) opciones += `<option value="Guidewire">Guidewire</option>`;
+    selProceso.innerHTML = opciones;
+
+    // --- NUEVO: Lógica para ocultar ANSI si es Pre-Empaque ---
+    // Agregamos un listener para cuando cambien el proceso manualmente
+    selProceso.onchange = function() {
+        if (this.value === "Pre-Empaque") {
+            selAnsi.style.display = "none";
+            // Opcional: podrías poner una etiqueta que diga "No aplica"
+        } else {
+            selAnsi.style.display = "block";
         }
+    };
+    
+    // Ejecutar una vez al abrir para resetear el estado
+    selAnsi.style.display = (selProceso.value === "Pre-Empaque") ? "none" : "block";
+}
 
 async function sincronizarConNube() {
     if (pausaSincro || document.querySelector('.modal[style*="block"]')) return;
@@ -870,7 +883,22 @@ async function guardarEstadoPizarraEnNube() {
     } catch (error) {
         console.error("Error crítico en guardarEstadoPizarraEnNube:", error);
     }
-}    
+} 
+function filtrarLotesAdmin() {
+    const busqueda = document.getElementById('input-busqueda').value.toLowerCase();
+    const filas = document.querySelectorAll('#gestion-table-body tr');
+
+    filas.forEach(fila => {
+        // Obtenemos el texto de la primera celda (Lote)
+        const textoLote = fila.cells[0].textContent.toLowerCase();
+        
+        if (textoLote.includes(busqueda)) {
+            fila.style.display = "";
+        } else {
+            fila.style.display = "none";
+        }
+    });
+}   
 </script>
 </body>
 </html>
