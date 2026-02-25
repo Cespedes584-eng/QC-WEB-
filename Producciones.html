@@ -476,7 +476,7 @@
             cargarHistorialNube();
             render();
             setInterval(tick, 1000);
-            setInterval(sincronizarConNube, 7000);
+            setInterval(sincronizarConNube, 3000);
         }
 
         async function cargarHistorialNube() {
@@ -638,13 +638,8 @@
             c.innerHTML = Array.from({ length: q }).map((_, i) => `<select class="m-rechazo">${lista.map(d => `<option value="${d}">${d}</option>`).join('')}</select>`).join('');
         }
 
-        async function guardarEstadoPizarraEnNube() {
-            const sesion = JSON.parse(localStorage.getItem('qc_session'));
-            const payload = { action: 'save_pizarra', estados: estados, lastUpdateBy: sesion?.name || "Sistema" };
-            fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
-        }
-
       async function sincronizarConNube() {
+    // Si el usuario tiene un modal abierto, no sincronizamos para no borrar lo que está escribiendo
     if (pausaSincro || document.querySelector('.modal[style*="block"]')) return;
 
     try {
@@ -656,26 +651,56 @@
         if (data.pizarra) {
             let huboCambio = false;
             data.pizarra.forEach((n, i) => {
-                // Si mi estado local dice que la línea está vacía (activo: false)
-                // NO permito que la nube me "empuje" un lote de nuevo a esa posición.
-                if (estados[i].activo === false) {
-                    return; 
-                }
-
-                // Solo actualizar si hay cambios reales para no resetear los timers
-                if (JSON.stringify(estados[i]) !== JSON.stringify(n)) {
+                // ELIMINAMOS EL BLOQUEO ANTERIOR.
+                // Ahora comparamos: ¿Es el lote de la nube diferente al que yo tengo en pantalla?
+                if (estados[i].activo !== n.activo || estados[i].lote !== n.lote) {
+                    
+                    // Si el lote es diferente o el estado cambió, actualizamos
                     estados[i] = n;
                     huboCambio = true;
                 }
             });
             
             if (huboCambio) {
-                render();
+                render(); // Esto hace que aparezca el lote del compañero en mi pantalla
                 localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
             }
         }
     } catch (e) { 
-        console.error("Error Sync:", e); 
+        console.error("Error al recibir datos de otros usuarios:", e); 
+    }
+}
+
+  async function sincronizarConNube() {
+    // Si el usuario tiene un modal abierto, no sobrescribimos para no borrar lo que está escribiendo
+    if (pausaSincro || document.querySelector('.modal[style*="block"]')) return;
+
+    try {
+        const res = await fetch(SHEETS_URL);
+        const data = await res.json();
+        
+        if (data.historial) dbHistorial = data.historial;
+
+        if (data.pizarra) {
+            let huboCambio = false;
+            data.pizarra.forEach((n, i) => {
+                // EXPLICACIÓN: Aquí eliminamos el "if (estados[i].activo === false) return;"
+                // Ahora, si la nube dice que hay un lote, tu pantalla lo aceptará.
+                
+                // Solo actualizamos si el estado de actividad cambió o si el número de lote es distinto
+                if (estados[i].activo !== n.activo || estados[i].lote !== n.lote) {
+                    estados[i] = n;
+                    huboCambio = true;
+                }
+            });
+            
+            if (huboCambio) {
+                render(); // Esto redibuja las tarjetas de todos los usuarios
+                localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
+            }
+        }
+    } catch (e) { 
+        console.error("Error al sincronizar datos de otros usuarios:", e); 
     }
 }
 
