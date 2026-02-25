@@ -574,46 +574,59 @@
             guardarEstadoPizarraEnNube();
         }
 
-      async function finalizarLote(ok) {
+async function finalizarLote(ok) {
     const s = estados[indexSel];
-    if (!s) return;
+    if (!s || !s.activo) return; // Evita el doble clic si alguien presiona rápido
+
+    pausaSincro = true; // Bloqueamos la entrada de datos de la nube
+    
+    // GUARDAMOS EL LOTE EN MEMORIA ANTES DE BORRARLO
+    // Esto es vital para que sincronizarConNube() sepa que este lote ya murió
+    s.loteAnterior = s.lote;
 
     const ahora = new Date();
-    const diffMs = Date.now() - s.inicio;
-    const tiempoFinal = `${Math.floor(diffMs / 60000).toString().padStart(2, '0')}:${Math.floor((diffMs % 60000) / 1000).toString().padStart(2, '0')}`;
+    const tiempoFinal = s.tiempo; 
     
     let det = ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ");
     
     const registro = {
-        action: 'add', fecha: ahora.toLocaleDateString('es-ES'), hora: s.horaInicioReal,
-        linea: lineasArr[indexSel], producto: s.productoActivo, inspector: s.inspector,
-        lote: "'" + s.lote, proceso: s.proceso, ansi: s.ansi, tiempo: tiempoFinal,
-        resultado: ok ? "ACEPTADO" : "RECHAZADO", detalle: det
+        action: 'add', 
+        fecha: ahora.toLocaleDateString('es-ES'), 
+        hora: s.horaInicioReal,
+        linea: lineasArr[indexSel], 
+        producto: s.productoActivo, 
+        inspector: s.inspector,
+        lote: "'" + s.lote, 
+        proceso: s.proceso, 
+        ansi: s.ansi, 
+        tiempo: tiempoFinal,
+        resultado: ok ? "ACEPTADO" : "RECHAZADO", 
+        detalle: det
     };
 
-    // --- BLOQUEO CRÍTICO ---
-    pausaSincro = true; 
-    s.activo = false; // Desactivar objeto en memoria
+    // ACTUALIZACIÓN LOCAL INMEDIATA (Para que el usuario vea la línea libre ya)
+    s.activo = false; 
+    s.lote = "";
+    s.inicio = null;
     
-    // Limpiar el respaldo del localStorage para que no se recupere al fallar la red
-    localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
-
     cerrarModal('modal-fin');
     cerrarModal('modal-rechazos');
-    render(); // Actualizar pantalla YA
+    render(); 
 
     try {
-        // Enviamos historial y pizarra
-        await fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) });
-        await guardarEstadoPizarraEnNube();
+        // Ejecutamos ambas tareas al mismo tiempo para máxima velocidad
+        await Promise.all([
+            fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) }),
+            guardarEstadoPizarraEnNube()
+        ]);
         
-        // Añadir al historial local para que se vea en el Excel inmediato
         dbHistorial.push(registro);
+        console.log("Historial y Pizarra actualizados correctamente");
     } catch (e) {
-        console.error("Error al guardar:", e);
+        console.error("Error al finalizar:", e);
     } finally {
-        // Esperamos 4 segundos antes de volver a permitir que la nube hable
-        setTimeout(() => { pausaSincro = false; }, 4000);
+        // Mantener la pausa 5 segundos para asegurar que la nube se limpie
+        setTimeout(() => { pausaSincro = false; }, 5000);
     }
 }
         function verificarHibrida() {
@@ -638,8 +651,8 @@
             c.innerHTML = Array.from({ length: q }).map((_, i) => `<select class="m-rechazo">${lista.map(d => `<option value="${d}">${d}</option>`).join('')}</select>`).join('');
         }
 
-      async function sincronizarConNube() {
-    // Si el usuario tiene un modal abierto, no sincronizamos para no borrar lo que está escribiendo
+async function sincronizarConNube() {
+    // Si el usuario está trabajando en un modal, no tocamos nada para no borrar sus datos
     if (pausaSincro || document.querySelector('.modal[style*="block"]')) return;
 
     try {
@@ -651,56 +664,34 @@
         if (data.pizarra) {
             let huboCambio = false;
             data.pizarra.forEach((n, i) => {
-                // ELIMINAMOS EL BLOQUEO ANTERIOR.
-                // Ahora comparamos: ¿Es el lote de la nube diferente al que yo tengo en pantalla?
+                // VALIDACIÓN CRÍTICA:
+                // Si mi pantalla dice que la línea está vacía (activo: false)
+                // y la nube dice que está ocupada (activo: true) con el MISMO lote que ya terminé,
+                // ignoramos a la nube para que el lote no "reviva".
+                if (estados[i].activo === false && n.activo === true && n.lote === estados[i].loteAnterior) {
+                    return; 
+                }
+
+                // Si hay un cambio real (se activó, se desactivó o cambió el número de lote)
                 if (estados[i].activo !== n.activo || estados[i].lote !== n.lote) {
                     
-                    // Si el lote es diferente o el estado cambió, actualizamos
+                    // Si el lote se está cerrando en la nube, guardamos el nombre para recordarlo
+                    if (n.activo === false) {
+                        estados[i].loteAnterior = estados[i].lote;
+                    }
+
                     estados[i] = n;
                     huboCambio = true;
                 }
             });
             
             if (huboCambio) {
-                render(); // Esto hace que aparezca el lote del compañero en mi pantalla
+                render();
                 localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
             }
         }
     } catch (e) { 
-        console.error("Error al recibir datos de otros usuarios:", e); 
-    }
-}
-
-  async function sincronizarConNube() {
-    // Si el usuario tiene un modal abierto, no sobrescribimos para no borrar lo que está escribiendo
-    if (pausaSincro || document.querySelector('.modal[style*="block"]')) return;
-
-    try {
-        const res = await fetch(SHEETS_URL);
-        const data = await res.json();
-        
-        if (data.historial) dbHistorial = data.historial;
-
-        if (data.pizarra) {
-            let huboCambio = false;
-            data.pizarra.forEach((n, i) => {
-                // EXPLICACIÓN: Aquí eliminamos el "if (estados[i].activo === false) return;"
-                // Ahora, si la nube dice que hay un lote, tu pantalla lo aceptará.
-                
-                // Solo actualizamos si el estado de actividad cambió o si el número de lote es distinto
-                if (estados[i].activo !== n.activo || estados[i].lote !== n.lote) {
-                    estados[i] = n;
-                    huboCambio = true;
-                }
-            });
-            
-            if (huboCambio) {
-                render(); // Esto redibuja las tarjetas de todos los usuarios
-                localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
-            }
-        }
-    } catch (e) { 
-        console.error("Error al sincronizar datos de otros usuarios:", e); 
+        console.error("Error en sincronización:", e); 
     }
 }
 
