@@ -899,6 +899,21 @@ function filtrarLotesAdmin() {
         }
     });
 }   
+function filtrarLoteHistorialIndividual() {
+    const busqueda = document.getElementById('busqueda-lote-historial').value.toLowerCase();
+    const filas = document.querySelectorAll('#hist-linea-body tr');
+
+    filas.forEach(fila => {
+        // Buscamos en la celda del Lote (columna 1)
+        const textoLote = fila.cells[1].textContent.toLowerCase();
+        
+        if (textoLote.includes(busqueda)) {
+            fila.style.display = "";
+        } else {
+            fila.style.display = "none";
+        }
+    });
+}
 </script>
 </body>
 </html>
