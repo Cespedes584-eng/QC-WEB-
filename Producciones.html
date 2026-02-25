@@ -434,7 +434,7 @@
 
     <script>
         let pausaSincro = false;
-        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbxQ91aW8biMN8Maqxkw59_027OMuH4jBAgkqdjKbYhBjxJAFFTI6ydG2MxdhAAsnUi6/exec";
+        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbyqw46xkFJFVV9ANvXoM_-5Ng9IplFgp3gCvpKmEjF5xkulM1Wywwlk1sS2sMLLUVrw/exec";
         const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
 
         let catalogoDefectos = JSON.parse(localStorage.getItem('qc_catalogo_v2')) || {};
@@ -489,34 +489,50 @@
         }
 
         function render() {
-            const p = document.getElementById('pizarra');
-            if (!p) return;
-            p.innerHTML = estados.map((s, i) => {
-                const turnos = obtenerConteosTurnos(lineasArr[i]);
-                return `
-                <div class="card ${s.activo ? 'inspeccionando' : ''}">
-                    <div class="card-header">${s.productoActivo}</div>
-                    <div style="display: flex; background: #f8f9fa; font-size: 0.8em; padding: 5px; border-bottom: 1px solid #eee;">
-                        <div style="flex:1; text-align:center;">A: ${turnos.ta}</div>
-                        <div style="flex:1; text-align:center;">B: ${turnos.tb}</div>
+    const p = document.getElementById('pizarra');
+    if (!p) return;
+
+    p.innerHTML = estados.map((s, i) => {
+        const turnos = obtenerConteosTurnos(lineasArr[i]);
+        
+        // CORRECCIÓN: Si no hay producto activo, mostrar el nombre de la línea
+        const tituloCard = s.activo ? s.productoActivo : lineasArr[i];
+        
+        return `
+        <div class="card ${s.activo ? 'inspeccionando' : ''}">
+            <div class="card-header">${tituloCard}</div>
+            
+            <div style="display: flex; background: #f8f9fa; font-size: 0.8em; padding: 5px; border-bottom: 1px solid #eee;">
+                <div style="flex:1; text-align:center;">A: ${turnos.ta}</div>
+                <div style="flex:1; text-align:center;">B: ${turnos.tb}</div>
+            </div>
+
+            <div class="card-body">
+                ${s.activo ? `
+                    <div>👤 ${s.inspector}</div>
+                    <div class="lote-destacado">${s.lote}</div>
+                    <div class="badge-info">
+                        <span>${s.proceso}</span> • <span>${s.ansi}</span>
                     </div>
-                    <div class="card-body">
-                        ${s.activo ? `
-                            <div>👤 ${s.inspector}</div>
-                            <div class="lote-destacado">${s.lote}</div>
-                            <div class="badge-info"><span>${s.proceso}</span> • <span>${s.ansi}</span></div>
-                            <div class="timer-display" id="t-${i}">${s.tiempo}</div>` : 
-                            '<div style="opacity:0.3; font-weight:bold;">DISPONIBLE</div>'}
-                    </div>
-                    <div class="card-footer">
-                        ${s.activo ? 
-                            `<button class="btn-card btn-terminar" onclick="prepararFin(${i})">TERMINAR</button>` : 
-                            `<button class="btn-card btn-historial" onclick="abrirHistorialIndividual(${i})">HISTORIAL</button>`}
-                    </div>
-                </div>`;
-            }).join('');
-            localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
-        }
+                    <div class="timer-display" id="t-${i}">${s.tiempo}</div>
+                ` : `
+                    <div style="margin-bottom:10px; opacity:0.3; font-weight:bold;">DISPONIBLE</div>
+                    <button class="btn-card" style="background:#28a745; color:white;" onclick="abrirModalInicio(${i})">INICIAR LOTE</button>
+                `}
+            </div>
+
+            <div class="card-footer">
+                ${s.activo ? 
+                    `<button class="btn-card btn-terminar" onclick="prepararFin(${i})">TERMINAR</button>` : 
+                    `<button class="btn-card btn-historial" onclick="abrirHistorialIndividual(${i})">HISTORIAL</button>`
+                }
+            </div>
+        </div>`;
+    }).join('');
+
+    // Guardamos respaldo local
+    localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
+}
 
         function obtenerConteosTurnos(nombreLinea) {
             let conteo = { ta: 0, tb: 0 };
@@ -576,19 +592,12 @@
 
 async function finalizarLote(ok) {
     const s = estados[indexSel];
-    if (!s || !s.activo) return; // Evita el doble clic si alguien presiona rápido
+    if (!s || !s.activo) return;
 
-    pausaSincro = true; // Bloqueamos la entrada de datos de la nube
-    
-    // GUARDAMOS EL LOTE EN MEMORIA ANTES DE BORRARLO
-    // Esto es vital para que sincronizarConNube() sepa que este lote ya murió
-    s.loteAnterior = s.lote;
+    pausaSincro = true; 
+    s.loteAnterior = s.lote; // Escudo para que sincronizarConNube no lo reactive por error
 
     const ahora = new Date();
-    const tiempoFinal = s.tiempo; 
-    
-    let det = ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ");
-    
     const registro = {
         action: 'add', 
         fecha: ahora.toLocaleDateString('es-ES'), 
@@ -599,34 +608,38 @@ async function finalizarLote(ok) {
         lote: "'" + s.lote, 
         proceso: s.proceso, 
         ansi: s.ansi, 
-        tiempo: tiempoFinal,
+        tiempo: s.tiempo,
         resultado: ok ? "ACEPTADO" : "RECHAZADO", 
-        detalle: det
+        detalle: ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ")
     };
 
-    // ACTUALIZACIÓN LOCAL INMEDIATA (Para que el usuario vea la línea libre ya)
+    // --- LIMPIEZA LOCAL INMEDIATA ---
     s.activo = false; 
     s.lote = "";
+    s.productoActivo = ""; // Limpiamos para que la tarjeta diga "DISPONIBLE" o el nombre de la línea
     s.inicio = null;
-    
+    s.tiempo = "00:00:00";
+
     cerrarModal('modal-fin');
     cerrarModal('modal-rechazos');
-    render(); 
+    render(); // Actualizamos la pantalla del usuario al instante
 
     try {
-        // Ejecutamos ambas tareas al mismo tiempo para máxima velocidad
+        // Enviamos los datos a Google Sheets (Historial + Pizarra)
         await Promise.all([
             fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) }),
             guardarEstadoPizarraEnNube()
         ]);
         
+        // Actualizamos el historial local para que se vea en las tablas sin recargar
         dbHistorial.push(registro);
-        console.log("Historial y Pizarra actualizados correctamente");
-    } catch (e) {
-        console.error("Error al finalizar:", e);
-    } finally {
-        // Mantener la pausa 5 segundos para asegurar que la nube se limpie
-        setTimeout(() => { pausaSincro = false; }, 5000);
+        console.log("Lote finalizado y sincronizado");
+    } catch (e) { 
+        console.error("Error al finalizar lote:", e); 
+    } finally { 
+        // Esperamos 4 segundos antes de volver a escuchar a la nube
+        // Esto da tiempo a que el servidor procese el cambio
+        setTimeout(() => { pausaSincro = false; }, 4000); 
     }
 }
         function verificarHibrida() {
@@ -652,7 +665,6 @@ async function finalizarLote(ok) {
         }
 
 async function sincronizarConNube() {
-    // Si el usuario está trabajando en un modal, no tocamos nada para no borrar sus datos
     if (pausaSincro || document.querySelector('.modal[style*="block"]')) return;
 
     try {
@@ -660,39 +672,26 @@ async function sincronizarConNube() {
         const data = await res.json();
         
         if (data.historial) dbHistorial = data.historial;
-
         if (data.pizarra) {
             let huboCambio = false;
             data.pizarra.forEach((n, i) => {
-                // VALIDACIÓN CRÍTICA:
-                // Si mi pantalla dice que la línea está vacía (activo: false)
-                // y la nube dice que está ocupada (activo: true) con el MISMO lote que ya terminé,
-                // ignoramos a la nube para que el lote no "reviva".
+                // Protección: No aceptamos un lote de la nube que coincida con el que acabamos de cerrar
                 if (estados[i].activo === false && n.activo === true && n.lote === estados[i].loteAnterior) {
                     return; 
                 }
 
-                // Si hay un cambio real (se activó, se desactivó o cambió el número de lote)
-                if (estados[i].activo !== n.activo || estados[i].lote !== n.lote) {
-                    
-                    // Si el lote se está cerrando en la nube, guardamos el nombre para recordarlo
-                    if (n.activo === false) {
+                if (JSON.stringify(estados[i]) !== JSON.stringify(n)) {
+                    // Si se está desactivando, guardamos memoria del lote para que no reviva
+                    if (estados[i].activo === true && n.activo === false) {
                         estados[i].loteAnterior = estados[i].lote;
                     }
-
                     estados[i] = n;
                     huboCambio = true;
                 }
             });
-            
-            if (huboCambio) {
-                render();
-                localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
-            }
+            if (huboCambio) render();
         }
-    } catch (e) { 
-        console.error("Error en sincronización:", e); 
-    }
+    } catch (e) { console.error("Error Sync:", e); }
 }
 
         function mostrarTab(t) {
@@ -810,6 +809,26 @@ async function sincronizarConNube() {
                 </tr>`).join('');
             abrirModal('modal-historial-linea');
         }
-    </script>
+async function guardarEstadoPizarraEnNube() {
+    try {
+        const sesion = JSON.parse(localStorage.getItem('qc_session'));
+        const payload = { 
+            action: 'save_pizarra', 
+            estados: estados, 
+            lastUpdateBy: sesion?.name || "Sistema" 
+        };
+        
+        console.log("Sincronizando pizarra con la nube...");
+        
+        return await fetch(SHEETS_URL, { 
+            method: 'POST', 
+            mode: 'no-cors', 
+            body: JSON.stringify(payload) 
+        });
+    } catch (error) {
+        console.error("Error crítico en guardarEstadoPizarraEnNube:", error);
+    }
+}    
+</script>
 </body>
 </html>
