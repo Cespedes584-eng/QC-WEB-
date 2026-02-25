@@ -411,7 +411,7 @@
             <button style="position:absolute; top:15px; right:20px; font-size:25px; border:none; background:none; cursor:pointer;" onclick="cerrarModal('modal-historial-linea')">×</button>
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h3 id="hist-linea-titulo"></h3>
-                <button id="btn-descarga-individual" class="btn-excel-header">📥 DESCARGAR</button>
+                <button id="btn-descarga-individual" onclick="exportarHistorialIndividual()" class="btn-excel-header">📥 DESCARGAR</button>
             </div>
             <input type="text" id="busqueda-lote-historial" class="search-bar" placeholder="🔍 Filtrar Lote..." onkeyup="filtrarLoteHistorialIndividual()">
             <table class="airport-table">
@@ -779,19 +779,22 @@ async function sincronizarConNube() {
         }
 
         function abrirRechazos() { cerrarModal('modal-fin'); abrirModal('modal-rechazos'); generarDefectos(); }
-
-        function exportarExcelGeneral() {
-            let csv = "\uFEFFsep=;\nFecha;Hora;Linea;Producto;Inspector;Lote;Proceso;ANSI;Resultado;Tiempo;Detalle\n";
-            dbHistorial.forEach(r => {
-                csv += `${r.fecha};${r.hora};${r.linea};${r.producto};${r.inspector};${r.lote};${r.proceso};${r.ansi};${r.resultado};${r.tiempo};${r.detalle}\n`;
-            });
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = "Reporte_QC.csv";
-            link.click();
-        }
-
+function exportarExcelGeneral() {
+    // 1. Agregamos "Hora Fin" en los encabezados después de "Hora"
+    let csv = "\uFEFFsep=;\nFecha;Hora Inicio;Hora Fin;Linea;Producto;Inspector;Lote;Proceso;ANSI;Resultado;Tiempo;Detalle\n";
+    
+    dbHistorial.forEach(r => {
+        // 2. Insertamos r.horaFin en la cadena de datos
+        // Usamos (r.horaFin || "--:--") para que los registros viejos no salgan vacíos
+        csv += `${r.fecha};${r.hora};${r.horaFin || '--:--'};${r.linea};${r.producto};${r.inspector};${r.lote};${r.proceso};${r.ansi};${r.resultado};${r.tiempo};${r.detalle}\n`;
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "Reporte_QC_Final.csv";
+    link.click();
+}
         function abrirAdmin() { abrirModal('modal-admin'); mostrarTab('yield'); }
         
         function abrirHistorialIndividual(idx) {
@@ -804,7 +807,7 @@ async function sincronizarConNube() {
             <td style="line-height: 1.2; min-width: 90px;">
                 ${r.fecha} <br> 
                 <span style="font-size: 0.85em; color: #555; font-weight: bold;">
-                    🏁 ${r.horaFin || '--:--'}
+                     Fin: ${r.horaFin || '--:--'}
                 </span>
             </td>
             <td>${r.lote}</td>
@@ -819,6 +822,34 @@ async function sincronizarConNube() {
         </tr>`).join('');
         
     abrirModal('modal-historial-linea');
+}
+function exportarHistorialIndividual() {
+    // 1. Obtenemos el nombre de la línea desde el título del modal
+    const titulo = document.getElementById('hist-linea-titulo').innerText;
+    const nombreLinea = titulo.replace("Historial: ", "").trim();
+
+    // 2. Filtramos los datos de dbHistorial igual que lo hace la tabla
+    const filtrados = dbHistorial.filter(r => r.linea === nombreLinea).reverse();
+
+    if (filtrados.length === 0) {
+        alert("No hay datos para exportar");
+        return;
+    }
+
+    // 3. Creamos el CSV con el mismo orden que tu Excel General, incluyendo Hora Fin
+    let csv = "\uFEFFsep=;\nFecha;Hora Inicio;Hora Fin;Linea;Producto;Inspector;Lote;Proceso;ANSI;Resultado;Tiempo;Detalle\n";
+
+    filtrados.forEach(r => {
+        // Usamos punto y coma para que Excel lo abra correctamente
+        csv += `${r.fecha};${r.hora || '--:--'};${r.horaFin || '--:--'};${r.linea};${r.producto || ''};${r.inspector};${r.lote};${r.proceso};${r.ansi};${r.resultado};${r.tiempo};${r.detalle}\n`;
+    });
+
+    // 4. Descarga del archivo
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `Historial_${nombreLinea}.csv`;
+    link.click();
 }
 async function guardarEstadoPizarraEnNube() {
     try {
