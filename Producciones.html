@@ -514,7 +514,7 @@
                     <div class="badge-info">
                         <span>${s.proceso}</span> • <span>${s.ansi}</span>
                     </div>
-                    <div class="timer-display" id="t-${i}">${s.tiempo}</div>
+                   <div class="timer-display" id="t-${i}">${document.getElementById(`t-${i}`) ? document.getElementById(`t-${i}`).innerText : s.tiempo}</div>
                 ` : `
                    
                 `}
