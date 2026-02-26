@@ -488,14 +488,12 @@
             } catch (e) { console.error("Error historial", e); }
         }
 
-        function render() {
+    function render() {
     const p = document.getElementById('pizarra');
     if (!p) return;
 
     p.innerHTML = estados.map((s, i) => {
         const turnos = obtenerConteosTurnos(lineasArr[i]);
-        
-        // CORRECCIÓN: Si no hay producto activo, mostrar el nombre de la línea
         const tituloCard = s.activo ? s.productoActivo : lineasArr[i];
         
         return `
@@ -515,10 +513,10 @@
                         <span>${s.proceso}</span> • <span>${s.ansi}</span>
                     </div>
                    <div class="timer-display" id="t-${i}">${document.getElementById(`t-${i}`) ? document.getElementById(`t-${i}`).innerText : s.tiempo}</div>
-                ` <div style="text-align: center; color: #ccc; font-weight: bold; font-size: 1.2em; letter-spacing: 2px; padding: 20px 0;">
-    DISPONIBLE
-</div> `
-                   
+                ` : `
+                    <div style="text-align: center; color: #ccc; font-weight: bold; font-size: 1.2em; letter-spacing: 2px; padding: 20px 0;">
+                        DISPONIBLE
+                    </div>
                 `}
             </div>
 
@@ -531,7 +529,6 @@
         </div>`;
     }).join('');
 
-    // Guardamos respaldo local
     localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
 }
 
