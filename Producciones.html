@@ -507,7 +507,7 @@
                 <div style="flex:1; text-align:center;">B: ${turnos.tb}</div>
             </div>
 
-            <div class="card-body">
+            <div class="card-body" style="min-height: 120px; display: flex; flex-direction: column; justify-content: center;">
                 ${s.activo ? `
                     <div>👤 ${s.inspector}</div>
                     <div class="lote-destacado">${s.lote}</div>
@@ -515,7 +515,9 @@
                         <span>${s.proceso}</span> • <span>${s.ansi}</span>
                     </div>
                    <div class="timer-display" id="t-${i}">${document.getElementById(`t-${i}`) ? document.getElementById(`t-${i}`).innerText : s.tiempo}</div>
-                ` : `
+                ` <div style="text-align: center; color: #ccc; font-weight: bold; font-size: 1.2em; letter-spacing: 2px; padding: 20px 0;">
+    DISPONIBLE
+</div> `
                    
                 `}
             </div>
