@@ -533,17 +533,30 @@
 }
 
         function obtenerConteosTurnos(nombreLinea) {
-            let conteo = { ta: 0, tb: 0 };
-            const hoy = new Date().toLocaleDateString();
-            dbHistorial.forEach(r => {
-                if (r.linea === nombreLinea && r.fecha === hoy) {
-                    const hrs = parseInt(r.hora?.split(':')[0] || 0);
-                    if (hrs >= 6 && hrs < 15.5) conteo.ta++;
-                    else conteo.tb++;
-                }
-            });
-            return conteo;
+    let conteo = { ta: 0, tb: 0 };
+    const hoy = new Date().toLocaleDateString();
+    
+    dbHistorial.forEach(r => {
+        if (r.linea === nombreLinea && r.fecha === hoy) {
+            // 1. Extraemos hora y minutos
+            const partes = r.hora ? r.hora.split(':') : ["0", "0"];
+            const hrs = parseInt(partes[0]);
+            const mins = parseInt(partes[1]);
+            
+            // 2. Convertimos todo a "minutos del día" para comparar exacto
+            const minutosTotales = (hrs * 60) + mins;
+            
+            // 3. El corte es a las 15:30 (que son 930 minutos)
+            // Turno A: de 06:00 (360 min) hasta las 15:29 (929 min)
+            if (minutosTotales >= 360 && minutosTotales < 930) {
+                conteo.ta++;
+            } else {
+                conteo.tb++;
+            }
         }
+    });
+    return conteo;
+}
 
         function tick() {
             estados.forEach((s, i) => {
@@ -795,7 +808,7 @@ async function sincronizarConNube() {
         function renderizarListaDefectosAdmin() {
             const l = document.getElementById('admin-def-linea').value;
             const p = document.getElementById('admin-def-proceso').value;
-            const lista = (catalogoDefectos[l] && catalogoDefectos[l][p]) ? catalogoDefectos[l][p] : [];
+            const lista = (catalogoDefectos[l] && clogoDefectos[l][p]) ? catalogoDefectos[l][p] : [];
             document.getElementById('lista-defectos-configurados-tabla').innerHTML = lista.map((d, i) => `<tr><td>${d}</td><td><button onclick="eliminarDefecto('${l}','${p}',${i})">🗑️</button></td></tr>`).join('');
         }
 
