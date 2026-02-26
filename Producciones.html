@@ -615,11 +615,12 @@
         btn.disabled = false;
         btn.innerText = "INICIAR INSPECCIÓN";
         
-        // 🛡️ PASO 3: TIEMPO DE GRACIA
-        // Esperamos 5 segundos antes de permitir que la nube actualice nuestra pantalla
+        // Aumentamos a 10 segundos porque Google Sheets 
+        // a veces tiene picos de lentitud
         setTimeout(() => { 
             pausaSincro = false; 
-        }, 5000); 
+            console.log("🛡️ Escudo desactivado, sincronización normal reactivada.");
+        }, 10000); 
     }
 }
 async function finalizarLote(ok) {
@@ -727,6 +728,7 @@ async function finalizarLote(ok) {
 }
 
 async function sincronizarConNube() {
+    // 🛡️ CANDADO 1: Si hay pausa manual o un modal abierto, no tocar nada.
     if (pausaSincro || document.querySelector('.modal[style*="block"]')) return;
 
     try {
@@ -736,27 +738,49 @@ async function sincronizarConNube() {
         if (data.historial) dbHistorial = data.historial;
         if (data.pizarra) {
             let huboCambio = false;
+            const ahora = new Date().getTime();
+
             data.pizarra.forEach((n, i) => {
-                // Protección: No aceptamos un lote de la nube que coincida con el que acabamos de cerrar
+                
+                // 🛡️ CANDADO 2: EL CAZA-FANTASMAS REFORZADO (30 SEGUNDOS)
+                if (estados[i].activo === true && n.activo === false) {
+                   const tiempoDesdeInicio = ahora - estados[i].inicio;
+                   
+                   // Si el lote tiene menos de 30 segundos, ignoramos lo que diga la nube
+                   if (tiempoDesdeInicio < 30000) { 
+                       console.warn(`🛡️ FANTASMA DETECTADO en línea ${i + 1}. La nube intentó borrar el lote, pero el escudo lo impidió.`);
+                       return; 
+                   }
+                }
+
+                // Protección contra "revivir" lotes viejos
                 if (estados[i].activo === false && n.activo === true && n.lote === estados[i].loteAnterior) {
+                    console.log(`♻️ Evitando que lote antiguo reviva en línea ${i + 1}`);
                     return; 
                 }
 
+                // Comparación profunda de cambios
                 if (JSON.stringify(estados[i]) !== JSON.stringify(n)) {
-                    // Si se está desactivando, guardamos memoria del lote para que no reviva
+                    // Si se está desactivando (Terminar lote), guardamos memoria
                     if (estados[i].activo === true && n.activo === false) {
                         estados[i].loteAnterior = estados[i].lote;
                     }
+                    
+                    // Solo actualizamos si no estamos en medio de una protección
                     estados[i] = n;
                     huboCambio = true;
                 }
             });
-            if (huboCambio) render();
+            
+            if (huboCambio) {
+                console.log("🔄 Cambios detectados en la nube, actualizando pizarra...");
+                render();
+            }
         }
-    } catch (e) { console.error("Error Sync:", e); }
-}
-
-        function mostrarTab(t) {
+    } catch (e) { 
+        console.error("Error Sync:", e); 
+    }
+}        function mostrarTab(t) {
             ['sec-yield', 'sec-gestion', 'sec-defectos'].forEach(id => document.getElementById(id).style.display = id.includes(t) ? 'block' : 'none');
             if (t === 'defectos') inicializarSelectoresAdmin();
             if (t === 'yield') generarReporteYield();
