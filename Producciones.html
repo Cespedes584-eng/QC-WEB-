@@ -831,21 +831,40 @@ async function sincronizarConNube() {
             renderizarListaDefectosAdmin();
         }
 
-        function generarReporteYield() {
-            const stats = {};
-            dbHistorial.forEach(r => {
-                const ins = r.inspector || "N/A";
-                if (!stats[ins]) stats[ins] = { ok: 0, fail: 0, total: 0 };
-                stats[ins].total++;
-                if (r.resultado === 'ACEPTADO') stats[ins].ok++; else stats[ins].fail++;
-            });
-            document.getElementById('yield-table-body').innerHTML = Object.keys(stats).map(k => {
-                const d = stats[k];
-                const y = ((d.ok / d.total) * 100).toFixed(1);
-                return `<tr><td>${k}</td><td>${d.ok}</td><td>${d.fail}</td><td>${d.total}</td><td>${y}%</td></tr>`;
-            }).join('');
-        }
+      // Agregamos (datos) para que la función sea flexible
+function generarReporteYield(datos = dbHistorial) {
+    const stats = {};
+    
+    // Ahora usamos "datos" en lugar de "dbHistorial" fijo
+    datos.forEach(r => {
+        const ins = r.inspector || "N/A";
+        if (!stats[ins]) stats[ins] = { ok: 0, fail: 0, total: 0 };
+        stats[ins].total++;
+        if (r.resultado === 'ACEPTADO') stats[ins].ok++; else stats[ins].fail++;
+    });
 
+    document.getElementById('yield-table-body').innerHTML = Object.keys(stats).map(k => {
+        const d = stats[k];
+        const y = ((d.ok / d.total) * 100).toFixed(1);
+        return `<tr><td>${k}</td><td>${d.ok}</td><td>${d.fail}</td><td>${d.total}</td><td>${y}%</td></tr>`;
+    }).join('');
+}
+function filtrarPorFecha(rango) {
+    const hoy = new Date().toLocaleDateString();
+    const spanRango = document.getElementById('rango-actual');
+    
+    let filtrados;
+    if (rango === 'hoy') {
+        filtrados = dbHistorial.filter(r => r.fecha === hoy);
+        if (spanRango) spanRango.innerText = "📍 Viendo: Hoy";
+    } else {
+        filtrados = dbHistorial;
+        if (spanRango) spanRango.innerText = "📍 Viendo: Todo";
+    }
+
+    // Le enviamos los datos filtrados a la función que dibuja la tabla
+    generarReporteYield(filtrados);
+}
         function generarGestionLotes() {
             const tbody = document.getElementById('gestion-table-body');
             tbody.innerHTML = [...dbHistorial].reverse().slice(0, 50).map((r, i) => `
