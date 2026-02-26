@@ -569,9 +569,12 @@
             pausaSincro = false;
         }
 
-       async function iniciarLote() {
+ async function iniciarLote() {
     const inputLote = document.getElementById('r-lote');
     if (!inputLote.value.trim()) return alert("⚠️ Ingrese el número de Lote");
+    
+    // 🛡️ PASO 1: BLOQUEO DE SEGURIDAD (Caza-fantasmas)
+    pausaSincro = true; 
     
     const idx = document.getElementById('r-linea').value;
     const btn = document.querySelector("#modal-reg .btn-main");
@@ -593,25 +596,31 @@
         productoActivo: (document.getElementById('contenedor-hibrida').style.display === 'block') ? document.getElementById('r-producto-especifico').value : lineasArr[idx]
     };
 
-    // CAMBIO CRÍTICO: Registramos localmente PRIMERO para que no se duplique
+    // 🛡️ PASO 2: REGISTRO LOCAL INMEDIATO
     Object.assign(s, datosInicio);
     render();
     cerrarModal('modal-reg');
     inputLote.value = "";
 
     try {
-        // Enviamos a la nube de fondo
-        fetch(SHEETS_URL, { 
+        // Enviamos a la nube
+        await fetch(SHEETS_URL, { 
             method: 'POST', 
             mode: 'no-cors', 
             body: JSON.stringify({ action: 'save_pizarra', estados: estados }) 
         });
-        console.log("✅ Intento de sincronización enviado");
+        console.log("✅ Lote sincronizado con la nube");
     } catch (e) {
-        console.log("Aviso: Error de red, pero el lote inició localmente.");
+        console.log("Aviso: Error de red, pero el lote se mantiene local.");
     } finally {
         btn.disabled = false;
         btn.innerText = "INICIAR INSPECCIÓN";
+        
+        // 🛡️ PASO 3: TIEMPO DE GRACIA
+        // Esperamos 5 segundos antes de permitir que la nube actualice nuestra pantalla
+        setTimeout(() => { 
+            pausaSincro = false; 
+        }, 5000); 
     }
 }
 async function finalizarLote(ok) {
