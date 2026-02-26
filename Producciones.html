@@ -618,15 +618,15 @@ async function finalizarLote(ok) {
     const s = estados[indexSel];
     if (!s || !s.activo) return;
 
+    // 1. BLOQUEO VISUAL INMEDIATO
     const btn = document.querySelector(ok ? "#modal-fin .btn-main" : "#modal-rechazos .btn-main");
-    
-    // 1. Bloqueo inmediato
     btn.disabled = true;
-    btn.innerText = "⌛ GUARDANDO...";
+    btn.innerText = "⌛ PROCESANDO...";
     pausaSincro = true; 
 
     const ahora = new Date();
-    const horaFin = ahora.getHours().toString().padStart(2, '0') + ':' + ahora.getMinutes().toString().padStart(2, '0');
+    const horaFin = ahora.getHours().toString().padStart(2, '0') + ':' + 
+                    ahora.getMinutes().toString().padStart(2, '0');
 
     const registro = {
         action: 'add', 
@@ -644,35 +644,45 @@ async function finalizarLote(ok) {
         detalle: ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ")
     };
 
-    // 2. LIMPIEZA LOCAL INMEDIATA (Para que no se duplique ni siga el tiempo)
-    s.loteAnterior = s.lote;
+    // --- 2. LIMPIEZA LOCAL INSTANTÁNEA ---
+    // Esto hace que la tarjeta se ponga en blanco inmediatamente
     s.activo = false; 
+    s.loteAnterior = s.lote;
     s.lote = "";
     s.inicio = null;
     s.tiempo = "00:00:00";
     
+    // Guardamos en el historial del navegador para que aparezca en las tablas
     dbHistorial.push(registro);
-    render(); 
+    
+    // Cerramos todo y dibujamos la pantalla vacía
     cerrarModal('modal-fin');
     cerrarModal('modal-rechazos');
+    render(); 
 
-    // 3. ENVÍO A GOOGLE (Sin esperar respuesta bloqueante)
-    try {
-        fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) });
-        fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'save_pizarra', estados: estados }) });
-        
-        console.log("✅ Peticiones de guardado enviadas a Google");
-    } catch (e) {
-        alert("⚠️ Error de conexión. Es posible que el lote no se haya guardado en el Excel, pero se guardó en el historial local.");
-    } finally {
-        // Liberamos la sincronización después de 5 segundos para asegurar que Google procesó
-        setTimeout(() => { 
-            pausaSincro = false; 
-            btn.disabled = false;
-            btn.innerText = ok ? "ACEPTAR" : "GUARDAR RECHAZO";
-        }, 5000);
-    }
-}     
+    // --- 3. ENVÍO A GOOGLE (EN SEGUNDO PLANO) ---
+    // Quitamos el 'await' para que no se quede trabado esperando
+    fetch(SHEETS_URL, { 
+        method: 'POST', 
+        mode: 'no-cors', 
+        body: JSON.stringify(registro) 
+    }).catch(e => console.error("Error enviando historial:", e));
+
+    fetch(SHEETS_URL, { 
+        method: 'POST', 
+        mode: 'no-cors', 
+        body: JSON.stringify({ 
+            action: 'save_pizarra', 
+            estados: estados,
+            lastUpdateBy: s.inspector
+        }) 
+    }).catch(e => console.error("Error enviando pizarra:", e));
+
+    // Desbloqueamos la sincronización automática después de unos segundos
+    setTimeout(() => { 
+        pausaSincro = false; 
+    }, 4000);
+}
    function verificarHibrida() {
     const idx = document.getElementById('r-linea').value;
     const nom = lineasArr[idx];
