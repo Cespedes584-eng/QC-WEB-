@@ -247,66 +247,79 @@ let pausaSincro = false; // Este es nuestro "Escudo"
         return `${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
     }
 
-    function render() {
-        const cont = { wait: document.getElementById('list-wait'), run: document.getElementById('list-run'), done: document.getElementById('list-done') };
-        const count = { wait: 0, run: 0, done: 0 };
-        Object.values(cont).forEach(c => c.innerHTML = "");
+   function render() {
+    const cont = { 
+        wait: document.getElementById('list-wait'), 
+        run: document.getElementById('list-run'), 
+        done: document.getElementById('list-done') 
+    };
+    const count = { wait: 0, run: 0, done: 0 };
+    
+    // Limpiamos las listas antes de dibujar
+    Object.values(cont).forEach(c => c.innerHTML = "");
+    
+    const selDate = document.getElementById('main-date-filter').value;
+    const searchInput = document.getElementById('main-search');
+    const searchText = searchInput ? searchInput.value.toLowerCase() : ""; 
+    
+    let topB = 0, topP = 0;
+
+    // Usamos el índice original (i) para que los botones de "Iniciar" funcionen siempre
+    db.forEach((l, i) => {
+        // 1. Filtro por Fecha
+        if (l.date !== selDate) return;
+
+        // 2. Filtro por Buscador (Número de lote)
+        if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
+
+        const isFinalizado = (l.st === 'done');
+        if(isFinalizado) { topB++; topP += parseInt(l.pg || 0); }
         
-        const selDate = document.getElementById('main-date-filter').value;
-        let topB = 0, topP = 0;
+        // Generamos la tarjeta usando "i" como el ID real en la base de datos
+        const card = `
+        <div class="card" style="position: relative;">
+            ${isFinalizado ? (() => {
+                let h = l.hFin || '--:--';
+                if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
+                else if (h.length > 8) h = h.substring(0, 5);
+                return `<div style="position: absolute; top: 10px; right: 15px; background: #f0f4f1; color: #468e5d; padding: 4px 8px; border-radius: 6px; font-size: 0.85em; font-weight: bold; border: 1px solid #d1e2d4;">🕒 ${h}</div>`;
+            })() : ''}
 
-        const searchText = document.getElementById('main-search').value.toLowerCase(); // Captura lo que escribes
+            <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
+            <div style="font-size:0.75em; color:#666; margin-bottom:8px;">
+                ${l.line} | <b style="color:var(--blue);">${l.user}</b>
+            </div>
 
-[...db].reverse().forEach((l) => {
-    // Si el ID del lote NO contiene el texto buscado, ignoramos esta tarjeta
-    if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
+            ${isFinalizado 
+                ? `<span class="status-final" style="margin: 10px 0; display: block;">FINALIZADO</span>` 
+                : `<span class="timer-big" id="live-${i}">00:00</span>`
+            }
 
-            const isFinalizado = (l.st === 'done');
-            if(isFinalizado) { topB++; topP += parseInt(l.pg || 0); }
-            
-const card = `
-            <div class="card" style="position: relative;">
-                ${isFinalizado ? (() => {
-                    let h = l.hFin || '--:--';
-                    if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
-                    else if (h.length > 8) h = h.substring(0, 5);
-                    return `<div style="position: absolute; top: 10px; right: 15px; background: #f0f4f1; color: #468e5d; padding: 4px 8px; border-radius: 6px; font-size: 0.85em; font-weight: bold; border: 1px solid #d1e2d4;">🕒 ${h}</div>`;
-                })() : ''}
+            <div class="timer-grid-3" id="grid-${i}">
+                <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
+                <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
+                <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
+            </div>
 
-                <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
-                <div style="font-size:0.75em; color:#666; margin-bottom:8px;">
-                    ${l.line} | <b style="color:var(--blue);" id="user-card-${originalIdx}">${l.user}</b>
-                </div>
+            ${l.st === 'wait' ? `<button class="btn" style="background:var(--green); color:white" onclick="changeSt(${i},'rev')">INICIAR</button>` : 
+              l.st === 'rev' ? `<button class="btn" style="background:#f39c12; color:white; margin-bottom:5px;" onclick="changeSt(${i},'corr')">CORRECCIÓN</button><button class="btn" style="background:var(--dark); color:white" onclick="openFin(${i})">FINALIZAR</button>` : 
+              l.st === 'corr' ? `<button class="btn" style="background:var(--green); color:white" onclick="changeSt(${i},'rev')">REANUDAR</button>` : 
+              `<div style="text-align:center; font-weight:bold; color:var(--green); padding-top:5px;">PÁGINAS: ${l.pg}</div>`}
+        </div>`;
+        
+        // Insertamos en la columna correspondiente
+        if (l.st === 'wait') { cont.wait.insertAdjacentHTML('afterbegin', card); count.wait++; }
+        else if (l.st === 'done') { cont.done.insertAdjacentHTML('afterbegin', card); count.done++; }
+        else { cont.run.insertAdjacentHTML('afterbegin', card); count.run++; }
+    });
 
-                ${isFinalizado 
-                    ? `<span class="status-final" style="margin: 10px 0; display: block;">FINALIZADO</span>` 
-                    : `<span class="timer-big" id="live-${originalIdx}">00:00</span>`
-                }
-
-                <div class="timer-grid-3" id="grid-${originalIdx}">
-                    <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
-                    <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
-                    <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
-                </div>
-
-                ${l.st === 'wait' ? `<button class="btn" style="background:var(--green); color:white" onclick="changeSt(${originalIdx},'rev')">INICIAR</button>` : 
-                  l.st === 'rev' ? `<button class="btn" style="background:#f39c12; color:white; margin-bottom:5px;" onclick="changeSt(${originalIdx},'corr')">CORRECCIÓN</button><button class="btn" style="background:var(--dark); color:white" onclick="openFin(${originalIdx})">FINALIZAR</button>` : 
-                  l.st === 'corr' ? `<button class="btn" style="background:var(--green); color:white" onclick="changeSt(${originalIdx},'rev')">REANUDAR</button>` : 
-                  `<div style="text-align:center; font-weight:bold; color:var(--green); padding-top:5px;">PÁGINAS: ${l.pg}</div>`}
-            </div>`;
-            
-            if (l.st === 'wait') { cont.wait.innerHTML += card; count.wait++; }
-            else if (l.st === 'done') { cont.done.innerHTML += card; count.done++; }
-            else { cont.run.innerHTML += card; count.run++; }
-        });
-
-        document.getElementById('top-brs').innerText = topB; 
-        document.getElementById('top-pags').innerText = topP;
-        document.getElementById('c-wait').innerText = count.wait; 
-        document.getElementById('c-run').innerText = count.run; 
-        document.getElementById('c-done').innerText = count.done;
-    }
-
+    // Actualizamos contadores superiores
+    document.getElementById('top-brs').innerText = topB; 
+    document.getElementById('top-pags').innerText = topP;
+    document.getElementById('c-wait').innerText = count.wait; 
+    document.getElementById('c-run').innerText = count.run; 
+    document.getElementById('c-done').innerText = count.done;
+}
     async function changeSt(i, s) { 
         const ahora = Date.now();
         const lote = db[i];
