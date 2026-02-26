@@ -62,7 +62,9 @@
         <div class="stat-card"><span>PÁGINAS TOTALES</span><div class="stat-value" id="top-pags">0</div></div>
         <div class="stat-card" style="border-left-color: var(--blue);"><span>HISTORIAL</span><br><input type="date" id="main-date-filter" onchange="render()" style="border:none; font-weight:bold; font-size:1.1em; cursor:pointer;"></div>
     </div>
-
+<div style="padding: 0 15px;">
+    <input type="text" id="main-search" oninput="render()" placeholder="🔍 Buscar por Lote # ..." class="search-bar">
+</div>
     <div class="workspace">
         <div class="col"><div class="col-header">ESPERA <span id="c-wait">0</span></div><div id="list-wait" class="list"></div></div>
         <div class="col"><div class="col-header" style="background:var(--green)">PROCESANDO <span id="c-run">0</span></div><div id="list-run" class="list"></div></div>
@@ -129,7 +131,8 @@
     const SCRIPT_URL ="https://script.google.com/macros/s/AKfycbz1rIk8kPJR_Te_sfD_Q18qz2KM0TnT4Vu1duQAiSaTOW2ydmOxx_IPFjA27BmNAKXb0g/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
     let db = []; 
-    let tempIdx = null;
+let tempIdx = null;
+let pausaSincro = false; // Este es nuestro "Escudo"
 
     async function init() {
         const sesionEstandar = localStorage.getItem('qc_session');
@@ -157,7 +160,8 @@
     }
 
     async function refreshData() {
-        try {
+    if (pausaSincro) return; // Si el escudo está activo, salimos de la función sin hacer nada
+    try {
             const response = await fetch(SCRIPT_URL);
             const data = await response.json();
             
@@ -251,9 +255,11 @@
         const selDate = document.getElementById('main-date-filter').value;
         let topB = 0, topP = 0;
 
-        [...db].reverse().forEach((l) => {
-            const originalIdx = db.indexOf(l);
-            if (l.date !== selDate) return; 
+        const searchText = document.getElementById('main-search').value.toLowerCase(); // Captura lo que escribes
+
+[...db].reverse().forEach((l) => {
+    // Si el ID del lote NO contiene el texto buscado, ignoramos esta tarjeta
+    if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
 
             const isFinalizado = (l.st === 'done');
             if(isFinalizado) { topB++; topP += parseInt(l.pg || 0); }
@@ -325,19 +331,32 @@ const card = `
         await refreshData(); 
     }
 
-    async function save() { 
-        localStorage.setItem('qc_final_v88', JSON.stringify(db)); 
-        render(); 
-        try { 
-            await fetch(SCRIPT_URL, { 
-                method: 'POST', 
-                mode: 'no-cors', 
-                body: JSON.stringify(db) 
-            });
-        } catch (e) { 
-            console.error("Error de conexión", e); 
-        }
+   async function save() { 
+    // 1. Guardar en memoria del navegador y dibujar en pantalla de inmediato
+    localStorage.setItem('qc_final_v88', JSON.stringify(db)); 
+    render(); 
+
+    // 2. ACTIVAR ESCUDO: Bloqueamos entradas de la nube para evitar "Lotes Fantasmas"
+    pausaSincro = true;
+    console.log("🛡️ Escudo activado...");
+
+    try { 
+        // 3. ENVIAR Y OLVIDAR: No usamos 'await' para que no se trabe el código
+        fetch(SCRIPT_URL, { 
+            method: 'POST', 
+            mode: 'no-cors', 
+            body: JSON.stringify(db) 
+        });
+    } catch (e) { 
+        console.error("Error de conexión", e); 
     }
+
+    // 4. TEMPORIZADOR: En 8 segundos bajamos el escudo
+    setTimeout(() => {
+        pausaSincro = false;
+        console.log("🔓 Escudo desactivado. Volviendo a escuchar a la nube.");
+    }, 8000); 
+}
 
     function renderAdmin() {
         const b = document.getElementById('adm-body'); 
@@ -411,7 +430,6 @@ const card = `
         document.getElementById('new-id').value = "";
         hideModal('modal-new');
         await save();
-        await refreshData();
     }
 
     function openFin(i) {
@@ -447,7 +465,6 @@ async function confirmFinish() {
     
     // 2. Enviamos a la base de datos
     await save();
-    await refreshData();
 }
     setInterval(tick, 1000); 
     setInterval(refreshData, 30000); 
