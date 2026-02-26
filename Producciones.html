@@ -576,15 +576,12 @@
     const idx = document.getElementById('r-linea').value;
     const btn = document.querySelector("#modal-reg .btn-main");
     
-    // Bloqueo de seguridad
     btn.disabled = true;
-    const textoOriginal = btn.innerText;
-    btn.innerText = "⏳ REGISTRANDO EN NUBE...";
+    btn.innerText = "⏳ REGISTRANDO...";
 
     const ahora = new Date();
     const s = estados[idx];
     
-    // Guardamos los datos que vamos a enviar
     const datosInicio = {
         activo: true,
         lote: inputLote.value.trim(),
@@ -596,38 +593,34 @@
         productoActivo: (document.getElementById('contenedor-hibrida').style.display === 'block') ? document.getElementById('r-producto-especifico').value : lineasArr[idx]
     };
 
+    // CAMBIO CRÍTICO: Registramos localmente PRIMERO para que no se duplique
+    Object.assign(s, datosInicio);
+    render();
+    cerrarModal('modal-reg');
+    inputLote.value = "";
+
     try {
-        // ACTUALIZACIÓN: Primero avisamos a la nube
-        const copiaParaNube = [...estados];
-        copiaParaNube[idx] = datosInicio;
-        
-        await fetch(SHEETS_URL, { 
+        // Enviamos a la nube de fondo
+        fetch(SHEETS_URL, { 
             method: 'POST', 
             mode: 'no-cors', 
-            body: JSON.stringify({ action: 'save_pizarra', estados: copiaParaNube }) 
+            body: JSON.stringify({ action: 'save_pizarra', estados: estados }) 
         });
-
-        // Solo si la red no dio error, actualizamos la pantalla local
-        Object.assign(s, datosInicio);
-        inputLote.value = "";
-        cerrarModal('modal-reg');
-        render();
-        console.log("✅ Lote iniciado y sincronizado");
+        console.log("✅ Intento de sincronización enviado");
     } catch (e) {
-        alert("❌ ERROR DE RED: No se pudo registrar el inicio. Verifique su internet.");
+        console.log("Aviso: Error de red, pero el lote inició localmente.");
     } finally {
         btn.disabled = false;
-        btn.innerText = textoOriginal;
+        btn.innerText = "INICIAR INSPECCIÓN";
     }
 }
 async function finalizarLote(ok) {
     const s = estados[indexSel];
     if (!s || !s.activo) return;
 
-    // Identificar qué botón bloqueamos según si es Aceptado o Rechazo
     const btn = document.querySelector(ok ? "#modal-fin .btn-main" : "#modal-rechazos .btn-main");
-    const textoOriginal = btn.innerText;
     
+    // 1. Bloqueo inmediato
     btn.disabled = true;
     btn.innerText = "⌛ GUARDANDO...";
     pausaSincro = true; 
@@ -651,35 +644,35 @@ async function finalizarLote(ok) {
         detalle: ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ")
     };
 
-    try {
-        // ENVIAMOS EL HISTORIAL Y LA PIZARRA ACTUALIZADA
-        // Usamos Promise.all para que ambos se intenten guardar antes de limpiar la pantalla
-        await Promise.all([
-            fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) }),
-            guardarEstadoPizarraEnNube() 
-        ]);
-        
-        // RECIÉN AQUÍ, si la red respondió, borramos los datos de la pantalla
-        s.loteAnterior = s.lote;
-        s.activo = false; 
-        s.lote = "";
-        s.inicio = null;
-        s.tiempo = "00:00:00";
+    // 2. LIMPIEZA LOCAL INMEDIATA (Para que no se duplique ni siga el tiempo)
+    s.loteAnterior = s.lote;
+    s.activo = false; 
+    s.lote = "";
+    s.inicio = null;
+    s.tiempo = "00:00:00";
+    
+    dbHistorial.push(registro);
+    render(); 
+    cerrarModal('modal-fin');
+    cerrarModal('modal-rechazos');
 
-        dbHistorial.push(registro);
-        cerrarModal('modal-fin');
-        cerrarModal('modal-rechazos');
-        render(); 
-        alert("✅ Lote finalizado con éxito.");
+    // 3. ENVÍO A GOOGLE (Sin esperar respuesta bloqueante)
+    try {
+        fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) });
+        fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'save_pizarra', estados: estados }) });
+        
+        console.log("✅ Peticiones de guardado enviadas a Google");
     } catch (e) {
-        alert("❌ ERROR AL GUARDAR: El servidor no respondió. El lote NO se borró de la pizarra para que intente de nuevo.");
+        alert("⚠️ Error de conexión. Es posible que el lote no se haya guardado en el Excel, pero se guardó en el historial local.");
     } finally {
-        btn.disabled = false;
-        btn.innerText = textoOriginal;
-        setTimeout(() => { pausaSincro = false; }, 3000);
+        // Liberamos la sincronización después de 5 segundos para asegurar que Google procesó
+        setTimeout(() => { 
+            pausaSincro = false; 
+            btn.disabled = false;
+            btn.innerText = ok ? "ACEPTAR" : "GUARDAR RECHAZO";
+        }, 5000);
     }
-}
-     
+}     
    function verificarHibrida() {
     const idx = document.getElementById('r-linea').value;
     const nom = lineasArr[idx];
