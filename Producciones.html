@@ -1036,6 +1036,9 @@ function filtrarLoteHistorialIndividual() {
 // Filtro para la pestaña de Administración
 // --- FUNCIONES DE FILTRO ---
 
+// --- SUSTITUYE DESDE AQUÍ HACIA ABAJO ---
+
+// Filtro para la pestaña de Administración
 function filtrarLotesAdmin() {
     const busqueda = document.getElementById('input-busqueda').value.toLowerCase();
     const filas = document.querySelectorAll('#gestion-table-body tr');
@@ -1046,8 +1049,11 @@ function filtrarLotesAdmin() {
     });
 }
 
+// Filtro para el Historial de cada línea
 function filtrarLoteHistorialIndividual() {
-    const busqueda = document.getElementById('busqueda-lote-historial').value.toLowerCase();
+    const input = document.getElementById('busqueda-lote-historial');
+    if (!input) return;
+    const busqueda = input.value.toLowerCase();
     const filas = document.querySelectorAll('#hist-linea-body tr');
 
     filas.forEach(fila => {
@@ -1056,6 +1062,7 @@ function filtrarLoteHistorialIndividual() {
     });
 }
 
+// Función para los botones de "Hoy" y "Todo"
 function filtrarPorFecha(rango) {
     const hoy = new Date().toLocaleDateString('es-ES');
     const spanRango = document.getElementById('rango-actual');
@@ -1066,8 +1073,9 @@ function filtrarPorFecha(rango) {
 
     generarReporteYield(filtrados);
 }
+}
 
-// --- CIERRE DEL DOCUMENTO ---
+// Cierre definitivo del script y del HTML
 </script>
 </body>
 </html>
