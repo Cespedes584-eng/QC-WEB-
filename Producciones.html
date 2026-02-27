@@ -585,7 +585,7 @@
     const inputLote = document.getElementById('r-lote');
     if (!inputLote.value.trim()) return alert("⚠️ Ingrese el número de Lote");
     
-    // 🛡️ PASO 1: BLOQUEO DE SEGURIDAD (Caza-fantasmas)
+    // 🛡️ BLOQUEO: Evita que cualquier entrada de la nube sobreescriba esto ahora mismo
     pausaSincro = true; 
     
     const idx = document.getElementById('r-linea').value;
@@ -600,7 +600,7 @@
     const datosInicio = {
         activo: true,
         lote: inputLote.value.trim(),
-        inicio: ahora.getTime(),
+        inicio: ahora.getTime(), // Importante para la "Regla de Oro"
         horaInicioReal: `${ahora.getHours().toString().padStart(2, '0')}:${ahora.getMinutes().toString().padStart(2, '0')}`,
         inspector: document.getElementById('r-inspector').value,
         proceso: document.getElementById('r-proceso').value,
@@ -608,31 +608,29 @@
         productoActivo: (document.getElementById('contenedor-hibrida').style.display === 'block') ? document.getElementById('r-producto-especifico').value : lineasArr[idx]
     };
 
-    // 🛡️ PASO 2: REGISTRO LOCAL INMEDIATO
+    // 🛡️ REGISTRO LOCAL: El inspector ve el cambio al instante
     Object.assign(s, datosInicio);
-    render();
+    render(); 
     cerrarModal('modal-reg');
     inputLote.value = "";
 
     try {
-        // Enviamos a la nube
         await fetch(SHEETS_URL, { 
             method: 'POST', 
             mode: 'no-cors', 
             body: JSON.stringify({ action: 'save_pizarra', estados: estados }) 
         });
-        console.log("✅ Lote sincronizado con la nube");
+        console.log("✅ Petición enviada a Sheets.");
     } catch (e) {
-        console.log("Aviso: Error de red, pero el lote se mantiene local.");
+        console.warn("⚠️ Error de red, pero el lote sigue activo localmente.");
     } finally {
         btn.disabled = false;
         btn.innerText = "INICIAR INSPECCIÓN";
         
-        // Aumentamos a 10 segundos porque Google Sheets 
-        // a veces tiene picos de lentitud
+        // Esperamos 10 segundos para dar tiempo a que la API de Google se actualice
         setTimeout(() => { 
             pausaSincro = false; 
-            console.log("🛡️ Escudo desactivado, sincronización normal reactivada.");
+            console.log("🛡️ Escudo liberado.");
         }, 10000); 
     }
 }
@@ -741,7 +739,6 @@ async function finalizarLote(ok) {
 }
 
 async function sincronizarConNube() {
-    // 🛡️ CANDADO 1: Si hay pausa manual o un modal abierto, no tocar nada.
     if (pausaSincro || document.querySelector('.modal[style*="block"]')) return;
 
     try {
@@ -751,49 +748,44 @@ async function sincronizarConNube() {
         if (data.historial) dbHistorial = data.historial;
         if (data.pizarra) {
             let huboCambio = false;
-            const ahora = new Date().getTime();
 
             data.pizarra.forEach((n, i) => {
-                
-                // 🛡️ CANDADO 2: EL CAZA-FANTASMAS REFORZADO (30 SEGUNDOS)
-                if (estados[i].activo === true && n.activo === false) {
-                   const tiempoDesdeInicio = ahora - estados[i].inicio;
-                   
-                   // Si el lote tiene menos de 30 segundos, ignoramos lo que diga la nube
-                   if (tiempoDesdeInicio < 30000) { 
-                       console.warn(`🛡️ FANTASMA DETECTADO en línea ${i + 1}. La nube intentó borrar el lote, pero el escudo lo impidió.`);
-                       return; 
-                   }
+                const local = estados[i];
+                const nube = n;
+
+                // 🛡️ REGLA MAESTRA: Si yo tengo un lote iniciado, IGNORO si la nube viene vacía.
+                // Esto evita que el lote desaparezca mientras Sheets procesa el guardado.
+                if (local.activo === true && nube.activo === false) {
+                    return; // No hacemos nada, mantenemos el lote local
                 }
 
-                // Protección contra "revivir" lotes viejos
-                if (estados[i].activo === false && n.activo === true && n.lote === estados[i].loteAnterior) {
-                    console.log(`♻️ Evitando que lote antiguo reviva en línea ${i + 1}`);
-                    return; 
+                // 🛡️ REGLA ANTI-ZOMBIE: Si la nube trae un lote que yo ya terminé
+                if (local.activo === false && nube.activo === true && nube.lote === local.loteAnterior) {
+                    return; // No revivimos lotes muertos
                 }
 
-                // Comparación profunda de cambios
-                if (JSON.stringify(estados[i]) !== JSON.stringify(n)) {
-                    // Si se está desactivando (Terminar lote), guardamos memoria
-                    if (estados[i].activo === true && n.activo === false) {
-                        estados[i].loteAnterior = estados[i].lote;
+                // Si hay un cambio real (ejemplo: otro inspector cambió algo o es un lote nuevo real)
+                if (JSON.stringify(local) !== JSON.stringify(nube)) {
+                    // Si la nube efectivamente confirma que se cerró un lote
+                    if (local.activo === true && nube.activo === false) {
+                        local.loteAnterior = local.lote;
                     }
                     
-                    // Solo actualizamos si no estamos en medio de una protección
-                    estados[i] = n;
+                    estados[i] = nube;
                     huboCambio = true;
                 }
             });
             
             if (huboCambio) {
-                console.log("🔄 Cambios detectados en la nube, actualizando pizarra...");
+                console.log("🔄 Pizarra sincronizada con cambios externos.");
                 render();
             }
         }
     } catch (e) { 
         console.error("Error Sync:", e); 
     }
-}        function mostrarTab(t) {
+}
+        function mostrarTab(t) {
             ['sec-yield', 'sec-gestion', 'sec-defectos'].forEach(id => document.getElementById(id).style.display = id.includes(t) ? 'block' : 'none');
             if (t === 'defectos') inicializarSelectoresAdmin();
             if (t === 'yield') generarReporteYield();
