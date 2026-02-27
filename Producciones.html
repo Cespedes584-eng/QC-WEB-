@@ -434,7 +434,7 @@
 
     <script>
         let pausaSincro = false;
-        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbzk_cbDzbt5pI1WejFaD_7LIx5Itf8TyjBvjypBGPM9BhRt_w4GvXIUGRKbrwoAFY5D/exec";
+        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbyH79if_IK0jpp2y4LDFrBfDyy2hVqC_ekT5ek3weqcUtPSvHAWYHpXTkCO8FGpyngl/exec";
         const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
 
         let catalogoDefectos = JSON.parse(localStorage.getItem('qc_catalogo_v2')) || {};
@@ -608,12 +608,6 @@
         productoActivo: (document.getElementById('contenedor-hibrida').style.display === 'block') ? document.getElementById('r-producto-especifico').value : lineasArr[idx]
     };
 
-    // 🛡️ REGISTRO LOCAL: El inspector ve el cambio al instante
-    Object.assign(s, datosInicio);
-    render(); 
-    cerrarModal('modal-reg');
-    inputLote.value = "";
-
     try {
         await fetch(SHEETS_URL, { 
             method: 'POST', 
@@ -638,10 +632,12 @@ async function finalizarLote(ok) {
     const s = estados[indexSel];
     if (!s || !s.activo) return;
 
-    // 1. BLOQUEO VISUAL INMEDIATO
+    // 1. BLOQUEO VISUAL Y DE SYNC
     const btn = document.querySelector(ok ? "#modal-fin .btn-main" : "#modal-rechazos .btn-main");
-    btn.disabled = true;
-    btn.innerText = "⌛ PROCESANDO...";
+    if(btn) {
+        btn.disabled = true;
+        btn.innerText = "⌛ GUARDANDO...";
+    }
     pausaSincro = true; 
 
     const ahora = new Date();
@@ -651,7 +647,7 @@ async function finalizarLote(ok) {
     const registro = {
         action: 'add', 
         fecha: ahora.toLocaleDateString('es-ES'), 
-        horaFin: horaFin,
+        horaFin: horaFin, // Nueva columna
         hora: s.horaInicioReal,
         linea: lineasArr[indexSel], 
         producto: s.productoActivo, 
@@ -664,44 +660,41 @@ async function finalizarLote(ok) {
         detalle: ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ")
     };
 
-    // --- 2. LIMPIEZA LOCAL INSTANTÁNEA ---
-    // Esto hace que la tarjeta se ponga en blanco inmediatamente
-    s.activo = false; 
-    s.loteAnterior = s.lote;
-    s.lote = "";
-    s.inicio = null;
-    s.tiempo = "00:00:00";
-    
-    // Guardamos en el historial del navegador para que aparezca en las tablas
-    dbHistorial.push(registro);
-    
-    // Cerramos todo y dibujamos la pantalla vacía
-    cerrarModal('modal-fin');
-    cerrarModal('modal-rechazos');
-    render(); 
+   
 
-    // --- 3. ENVÍO A GOOGLE (EN SEGUNDO PLANO) ---
-    // Quitamos el 'await' para que no se quede trabado esperando
-    fetch(SHEETS_URL, { 
-        method: 'POST', 
-        mode: 'no-cors', 
-        body: JSON.stringify(registro) 
-    }).catch(e => console.error("Error enviando historial:", e));
+    // --- 3. ENVÍO SECUENCIAL (Para no chocar en la nube) ---
+    try {
+        // Primero: Guardamos en el Historial
+        await fetch(SHEETS_URL, { 
+            method: 'POST', 
+            mode: 'no-cors', 
+            body: JSON.stringify(registro) 
+        });
 
-    fetch(SHEETS_URL, { 
-        method: 'POST', 
-        mode: 'no-cors', 
-        body: JSON.stringify({ 
-            action: 'save_pizarra', 
-            estados: estados,
-            lastUpdateBy: s.inspector
-        }) 
-    }).catch(e => console.error("Error enviando pizarra:", e));
-
-    // Desbloqueamos la sincronización automática después de unos segundos
-    setTimeout(() => { 
-        pausaSincro = false; 
-    }, 4000);
+        // Segundo: Limpiamos la Pizarra en el Excel
+        await fetch(SHEETS_URL, { 
+            method: 'POST', 
+            mode: 'no-cors', 
+            body: JSON.stringify({ 
+                action: 'save_pizarra', 
+                estados: estados 
+                // Quitamos lastUpdateBy para evitar el filtro que nos bloqueaba
+            }) 
+        });
+        
+        console.log("✅ Historial y Pizarra sincronizados.");
+    } catch (e) {
+        console.error("❌ Error en la sincronización final:", e);
+    } finally {
+        // Esperamos 8 segundos para que el servidor de Google respire
+        setTimeout(() => { 
+            pausaSincro = false; 
+            if(btn) {
+                btn.disabled = false;
+                btn.innerText = ok ? "ACEPTAR" : "CONFIRMAR RECHAZO";
+            }
+        }, 8000);
+    }
 }
    function verificarHibrida() {
     const idx = document.getElementById('r-linea').value;
@@ -736,9 +729,21 @@ async function finalizarLote(ok) {
     
     // Ejecutar una vez al abrir para resetear el estado
     selAnsi.style.display = (selProceso.value === "Pre-Empaque") ? "none" : "block";
+// Lógica para ocultar ANSI si es Pre-Empaque
+    selProceso.onchange = function() {
+        if (this.value === "Pre-Empaque") {
+            selAnsi.style.display = "none";
+        } else {
+            selAnsi.style.display = "block";
+        }
+    };
+    
+    // Resetear el estado al abrir el modal
+    selAnsi.style.display = (selProceso.value === "Pre-Empaque") ? "none" : "block";
 }
 
 async function sincronizarConNube() {
+    // 1. No sincronizar si estamos operando o hay un modal abierto
     if (pausaSincro || document.querySelector('.modal[style*="block"]')) return;
 
     try {
@@ -750,36 +755,39 @@ async function sincronizarConNube() {
             let huboCambio = false;
             const ahora = new Date().getTime();
 
-            data.pizarra.forEach((n, i) => {
+            data.pizarra.forEach((nube, i) => {
                 const local = estados[i];
-                const nube = n;
 
-                // 1. SI LA NUBE TRAE UN LOTE NUEVO O DIFERENTE:
-                // Aceptamos el cambio de inmediato (Tiempo real)
+                // --- PROTECCIÓN 1: EL CAZA-ZOMBIES ---
+                // Si la nube trae un lote que nosotros ACABAMOS de finalizar, lo ignoramos.
+                if (!local.activo && nube.activo && nube.lote === local.loteAnterior) {
+                    console.log(`🛡️ Evitado lote zombie: ${nube.lote}`);
+                    return; 
+                }
+
+                // --- PROTECCIÓN 2: REGLA DE ORO ---
+                // Si nosotros tenemos un lote activo, ignoramos si la nube viene vacía.
+                // Subimos la protección a 2 horas (7200000 ms) para seguridad total.
+                if (local.activo && !nube.activo) {
+                    const tiempoTranscurrido = ahora - local.inicio;
+                    if (tiempoTranscurrido < 7200000) return; 
+                }
+
+                // --- PROTECCIÓN 3: CAMBIO DE LOTE REAL ---
+                // Si la nube trae un lote realmente nuevo (distinto al local)
                 if (nube.activo && nube.lote !== local.lote) {
                     estados[i] = nube;
                     huboCambio = true;
                     return;
                 }
 
-                // 2. SI LA NUBE DICE QUE ESTÁ VACÍO PERO TÚ TIENES UN LOTE:
-                if (local.activo && !nube.activo) {
-                    // ¿Es un error de lentitud o finalizaron de verdad?
-                    // Si el lote local tiene menos de 60 segundos, protegemos (escudo)
-                    // Si tiene más de 60 segundos y la nube sigue diciendo vacío, 
-                    // asumimos que alguien lo finalizó en otra PC y actualizamos.
-                    const tiempoTranscurrido = ahora - local.inicio;
-                    
-                    if (tiempoTranscurrido > 60000) { 
-                        local.loteAnterior = local.lote;
-                        estados[i] = nube;
-                        huboCambio = true;
-                    }
-                    return; 
-                }
-
-                // 3. COMPARACIÓN ESTÁNDAR (Si hay cambios en inspector, proceso, etc.)
+                // --- COMPARACIÓN ESTÁNDAR ---
+                // Si hay cambios en inspector, proceso, tiempos, etc.
                 if (JSON.stringify(local) !== JSON.stringify(nube)) {
+                    // Si la nube nos dice que se desactivó (otro usuario lo cerró)
+                    if (local.activo && !nube.activo) {
+                        local.loteAnterior = local.lote;
+                    }
                     estados[i] = nube;
                     huboCambio = true;
                 }
@@ -835,7 +843,7 @@ async function sincronizarConNube() {
 function generarReporteYield(datos = dbHistorial) {
     const stats = {};
     
-    // Ahora usamos "datos" en lugar de "dbHistorial" fijo
+    // Usamos "datos" (que pueden ser los de hoy o todos)
     datos.forEach(r => {
         const ins = r.inspector || "N/A";
         if (!stats[ins]) stats[ins] = { ok: 0, fail: 0, total: 0 };
@@ -845,7 +853,7 @@ function generarReporteYield(datos = dbHistorial) {
 
     document.getElementById('yield-table-body').innerHTML = Object.keys(stats).map(k => {
         const d = stats[k];
-        const y = ((d.ok / d.total) * 100).toFixed(1);
+        const y = d.total > 0 ? ((d.ok / d.total) * 100).toFixed(1) : "0.0";
         return `<tr><td>${k}</td><td>${d.ok}</td><td>${d.fail}</td><td>${d.total}</td><td>${y}%</td></tr>`;
     }).join('');
 }
@@ -957,7 +965,7 @@ function exportarHistorialIndividual() {
 
     filtrados.forEach(r => {
         // Usamos punto y coma para que Excel lo abra correctamente
-        csv += `${r.fecha};${r.hora || '--:--'};${r.horaFin || '--:--'};${r.linea};${r.producto || ''};${r.inspector};${r.lote};${r.proceso};${r.ansi};${r.resultado};${r.tiempo};${r.detalle}\n`;
+       csv += `${r.fecha};${r.hora || '--:--'};${r.horaFin || '--:--'};${r.linea};${r.producto || ''};${r.inspector};${r.lote};${r.proceso};${r.ansi};${r.resultado};${r.tiempo};${r.detalle}\n`;
     });
 
     // 4. Descarga del archivo
@@ -1016,7 +1024,40 @@ function filtrarLoteHistorialIndividual() {
             fila.style.display = "none";
         }
     });
+// Filtro para la pestaña de Administración
+function filtrarLotesAdmin() {
+    const busqueda = document.getElementById('input-busqueda').value.toLowerCase();
+    const filas = document.querySelectorAll('#gestion-table-body tr');
+
+    filas.forEach(fila => {
+        const textoLote = fila.cells[0].textContent.toLowerCase();
+        fila.style.display = textoLote.includes(busqueda) ? "" : "none";
+    });
 }
+
+// Filtro para el Historial de cada línea
+function filtrarLoteHistorialIndividual() {
+    const busqueda = document.getElementById('busqueda-lote-historial').value.toLowerCase();
+    const filas = document.querySelectorAll('#hist-linea-body tr');
+
+    filas.forEach(fila => {
+        const textoLote = fila.cells[1].textContent.toLowerCase();
+        fila.style.display = textoLote.includes(busqueda) ? "" : "none";
+    });
+}
+
+// Función para los botones de "Hoy" y "Todo"
+function filtrarPorFecha(rango) {
+    const hoy = new Date().toLocaleDateString('es-ES');
+    const spanRango = document.getElementById('rango-actual');
+    
+    let filtrados = (rango === 'hoy') ? dbHistorial.filter(r => r.fecha === hoy) : dbHistorial;
+    
+    if (spanRango) spanRango.innerText = (rango === 'hoy') ? "📍 Viendo: Hoy" : "📍 Viendo: Todo";
+
+    generarReporteYield(filtrados);
+}
+
 </script>
 </body>
 </html>
