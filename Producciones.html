@@ -653,10 +653,11 @@ async function finalizarLote(ok) {
     const horaFin = ahora.getHours().toString().padStart(2, '0') + ':' + 
                     ahora.getMinutes().toString().padStart(2, '0');
 
+    // Construimos el registro para el Historial
     const registro = {
         action: 'add', 
         fecha: ahora.toLocaleDateString('es-ES'), 
-        horaFin: horaFin, // Nueva columna
+        horaFin: horaFin,
         hora: s.horaInicioReal,
         linea: lineasArr[indexSel], 
         producto: s.productoActivo, 
@@ -669,40 +670,46 @@ async function finalizarLote(ok) {
         detalle: ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ")
     };
 
-   
+    // Actualizamos estado local inmediatamente para dar fluidez
+    const loteFinalizado = s.lote;
+    estados[indexSel].activo = false;
+    estados[indexSel].loteAnterior = loteFinalizado;
+    
+    render(); // Dibujamos el cambio (la tarjeta se pone gris/limpia)
+    cerrarModal(ok ? 'modal-fin' : 'modal-rechazos');
 
-    // --- 3. ENVÍO SECUENCIAL (Para no chocar en la nube) ---
+    // 2. ENVÍO A LA NUBE (Sin bloquear al usuario)
     try {
-        // Primero: Guardamos en el Historial
-        await fetch(SHEETS_URL, { 
+        // Guardar en Historial
+        fetch(SHEETS_URL, { 
             method: 'POST', 
             mode: 'no-cors', 
             body: JSON.stringify(registro) 
         });
 
-        // Segundo: Limpiamos la Pizarra en el Excel
-        await fetch(SHEETS_URL, { 
+        // Limpiar Pizarra en la nube
+        fetch(SHEETS_URL, { 
             method: 'POST', 
             mode: 'no-cors', 
             body: JSON.stringify({ 
                 action: 'save_pizarra', 
                 estados: estados 
-                // Quitamos lastUpdateBy para evitar el filtro que nos bloqueaba
             }) 
         });
         
-        console.log("✅ Historial y Pizarra sincronizados.");
+        console.log("✅ Datos enviados a la nube.");
     } catch (e) {
-        console.error("❌ Error en la sincronización final:", e);
+        console.error("❌ Error enviando datos:", e);
     } finally {
-        // Esperamos 8 segundos para que el servidor de Google respire
+        // Liberamos el sistema después de un tiempo de gracia para que Google procese
         setTimeout(() => { 
             pausaSincro = false; 
             if(btn) {
                 btn.disabled = false;
                 btn.innerText = ok ? "ACEPTAR" : "CONFIRMAR RECHAZO";
             }
-        }, 8000);
+            console.log("🛡️ Sincronización reanudada.");
+        }, 5000); // 5 segundos de escudo
     }
 }
    function verificarHibrida() {
