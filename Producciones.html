@@ -449,35 +449,38 @@
             fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
         }
 
-        function inicializarSistema() {
-            const sesion = localStorage.getItem('qc_session');
-            if (sesion) {
-                const data = JSON.parse(sesion);
-                document.getElementById('user-display').innerText = `👤 ${data.name}`;
-                document.getElementById('r-inspector').value = data.name.toUpperCase();
-                if (data.isAdmin) document.getElementById('btn-admin-access').style.display = 'inline-block';
-            }
+       function inicializarSistema() {
+    const sesion = localStorage.getItem('qc_session');
+    if (sesion) {
+        const data = JSON.parse(sesion);
+        document.getElementById('user-display').innerText = `👤 ${data.name}`;
+        document.getElementById('r-inspector').value = data.name.toUpperCase();
+        if (data.isAdmin) document.getElementById('btn-admin-access').style.display = 'inline-block';
+    }
 
-            const fechaHoy = new Date().toLocaleDateString();
-            const ultimaFecha = localStorage.getItem('qc_ultima_fecha');
-            const localRespaldo = localStorage.getItem('qc_v13_respaldo');
+    // REGLA DE ORO: Siempre empezamos con el array limpio de la memoria local
+    // pero permitimos que la sincronización con la nube lo llene.
+    estados = lineasArr.map(nom => ({ 
+        activo: false, 
+        lote: '', 
+        inspector: '', 
+        inicio: null, 
+        horaInicioReal: '', 
+        tiempo: '00:00', 
+        productoActivo: nom.split(" / ")[0].trim(), 
+        productoOriginal: nom, 
+        proceso: 'Final', 
+        ansi: 'Normal' 
+    }));
 
-            if (ultimaFecha !== fechaHoy) {
-                localStorage.removeItem('qc_v13_respaldo');
-                localStorage.setItem('qc_ultima_fecha', fechaHoy);
-                estados = lineasArr.map(nom => ({ activo: false, lote: '', inspector: '', inicio: null, horaInicioReal: '', tiempo: '00:00', productoActivo: nom.split(" / ")[0].trim(), productoOriginal: nom, proceso: 'Final', ansi: 'Normal' }));
-            } else {
-                estados = localRespaldo ? JSON.parse(localRespaldo) : lineasArr.map(nom => ({ activo: false, lote: '', inspector: '', inicio: null, horaInicioReal: '', tiempo: '00:00', productoActivo: nom.split(" / ")[0].trim(), productoOriginal: nom, proceso: 'Final', ansi: 'Normal' }));
-            }
+    const selL = document.getElementById('r-linea');
+    selL.innerHTML = lineasArr.map((n, i) => `<option value="${i}">${n}</option>`).join('');
 
-            const selL = document.getElementById('r-linea');
-            selL.innerHTML = lineasArr.map((n, i) => `<option value="${i}">${n}</option>`).join('');
-
-            cargarHistorialNube();
-            render();
-            setInterval(tick, 1000);
-            setInterval(sincronizarConNube, 3000);
-        }
+    cargarHistorialNube();
+    render();
+    setInterval(tick, 1000);
+    setInterval(sincronizarConNube, 3000);
+}
 
         async function cargarHistorialNube() {
             try {
@@ -581,7 +584,7 @@
             pausaSincro = false;
         }
 
- async function iniciarLote() {
+async function iniciarLote() {
     const inputLote = document.getElementById('r-lote');
     if (!inputLote.value.trim()) return alert("⚠️ Ingrese el número de Lote");
     
@@ -595,18 +598,23 @@
     btn.innerText = "⏳ REGISTRANDO...";
 
     const ahora = new Date();
-    const s = estados[idx];
     
     const datosInicio = {
         activo: true,
         lote: inputLote.value.trim(),
-        inicio: ahora.getTime(), // Importante para la "Regla de Oro"
+        inicio: ahora.getTime(), 
         horaInicioReal: `${ahora.getHours().toString().padStart(2, '0')}:${ahora.getMinutes().toString().padStart(2, '0')}`,
         inspector: document.getElementById('r-inspector').value,
         proceso: document.getElementById('r-proceso').value,
         ansi: document.getElementById('r-ansi').value,
         productoActivo: (document.getElementById('contenedor-hibrida').style.display === 'block') ? document.getElementById('r-producto-especifico').value : lineasArr[idx]
     };
+
+    // --- 🔑 LÍNEAS CORREGIDAS ---
+    estados[idx] = datosInicio; // 1. Guardamos los datos en el array local
+    render();                  // 2. Dibujamos el cambio en la pantalla inmediatamente
+    cerrarModal('modal-reg');  // 3. Cerramos el modal para que el usuario vea el cambio
+    // ----------------------------
 
     try {
         await fetch(SHEETS_URL, { 
@@ -620,6 +628,7 @@
     } finally {
         btn.disabled = false;
         btn.innerText = "INICIAR INSPECCIÓN";
+        inputLote.value = ""; // Limpiamos el input para la próxima
         
         // Esperamos 10 segundos para dar tiempo a que la API de Google se actualice
         setTimeout(() => { 
@@ -816,7 +825,7 @@ async function sincronizarConNube() {
         function renderizarListaDefectosAdmin() {
             const l = document.getElementById('admin-def-linea').value;
             const p = document.getElementById('admin-def-proceso').value;
-            const lista = (catalogoDefectos[l] && clogoDefectos[l][p]) ? catalogoDefectos[l][p] : [];
+           const lista = (catalogoDefectos[l] && catalogoDefectos[l][p]) ? catalogoDefectos[l][p] : [];
             document.getElementById('lista-defectos-configurados-tabla').innerHTML = lista.map((d, i) => `<tr><td>${d}</td><td><button onclick="eliminarDefecto('${l}','${p}',${i})">🗑️</button></td></tr>`).join('');
         }
 
