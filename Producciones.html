@@ -748,36 +748,44 @@ async function sincronizarConNube() {
         if (data.historial) dbHistorial = data.historial;
         if (data.pizarra) {
             let huboCambio = false;
+            const ahora = new Date().getTime();
 
             data.pizarra.forEach((n, i) => {
                 const local = estados[i];
                 const nube = n;
 
-                // 🛡️ REGLA MAESTRA: Si yo tengo un lote iniciado, IGNORO si la nube viene vacía.
-                // Esto evita que el lote desaparezca mientras Sheets procesa el guardado.
-                if (local.activo === true && nube.activo === false) {
-                    return; // No hacemos nada, mantenemos el lote local
+                // 1. SI LA NUBE TRAE UN LOTE NUEVO O DIFERENTE:
+                // Aceptamos el cambio de inmediato (Tiempo real)
+                if (nube.activo && nube.lote !== local.lote) {
+                    estados[i] = nube;
+                    huboCambio = true;
+                    return;
                 }
 
-                // 🛡️ REGLA ANTI-ZOMBIE: Si la nube trae un lote que yo ya terminé
-                if (local.activo === false && nube.activo === true && nube.lote === local.loteAnterior) {
-                    return; // No revivimos lotes muertos
-                }
-
-                // Si hay un cambio real (ejemplo: otro inspector cambió algo o es un lote nuevo real)
-                if (JSON.stringify(local) !== JSON.stringify(nube)) {
-                    // Si la nube efectivamente confirma que se cerró un lote
-                    if (local.activo === true && nube.activo === false) {
-                        local.loteAnterior = local.lote;
-                    }
+                // 2. SI LA NUBE DICE QUE ESTÁ VACÍO PERO TÚ TIENES UN LOTE:
+                if (local.activo && !nube.activo) {
+                    // ¿Es un error de lentitud o finalizaron de verdad?
+                    // Si el lote local tiene menos de 60 segundos, protegemos (escudo)
+                    // Si tiene más de 60 segundos y la nube sigue diciendo vacío, 
+                    // asumimos que alguien lo finalizó en otra PC y actualizamos.
+                    const tiempoTranscurrido = ahora - local.inicio;
                     
+                    if (tiempoTranscurrido > 60000) { 
+                        local.loteAnterior = local.lote;
+                        estados[i] = nube;
+                        huboCambio = true;
+                    }
+                    return; 
+                }
+
+                // 3. COMPARACIÓN ESTÁNDAR (Si hay cambios en inspector, proceso, etc.)
+                if (JSON.stringify(local) !== JSON.stringify(nube)) {
                     estados[i] = nube;
                     huboCambio = true;
                 }
             });
             
             if (huboCambio) {
-                console.log("🔄 Pizarra sincronizada con cambios externos.");
                 render();
             }
         }
