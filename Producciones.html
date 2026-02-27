@@ -434,7 +434,7 @@
 
     <script>
         let pausaSincro = false;
-        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbxnLzB9-TLZ1Wr8268_DnRAyu61nPavtZ0bhBgjinVbOuIyxLXQrHI0j9n9L0RMGTXi/exec";
+        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbxlN3JVDcMsnhkgRVLtArDrQXTflxzz-xrxw1XuV5Hk0Gvp48-SroyM13wUOpdssV8O/exec";
         const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
 
         let catalogoDefectos = JSON.parse(localStorage.getItem('qc_catalogo_v2')) || {};
@@ -1002,15 +1002,20 @@ async function guardarEstadoPizarraEnNube() {
         
         console.log("Sincronizando pizarra con la nube...");
         
-        return await fetch(SHEETS_URL, { 
+        // Eliminamos el 'return await' y usamos una promesa limpia
+        // El secreto es usar 'text/plain' para que Google no bloquee por seguridad (CORS)
+        return fetch(SHEETS_URL, { 
             method: 'POST', 
             mode: 'no-cors', 
+            headers: {
+                'Content-Type': 'text/plain' // Cambiamos esto para evitar el error rojo de CORS
+            },
             body: JSON.stringify(payload) 
         });
     } catch (error) {
         console.error("Error crítico en guardarEstadoPizarraEnNube:", error);
     }
-} 
+}
 function filtrarLotesAdmin() {
     const busqueda = document.getElementById('input-busqueda').value.toLowerCase();
     const filas = document.querySelectorAll('#gestion-table-body tr');
