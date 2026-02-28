@@ -434,7 +434,7 @@
 
     <script>
         let pausaSincro = false;
-        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbz2mV9GhvV8g3wPSpv30yXmJ5IKqCJ2JaoD_zfgrx6KTFTgCeklifpulG0seT27_sm6/exec";
+        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbxDosirBpegHxcE2dlpgiV5tznIK1o69CTOvurjW2kGuZNtIc6TwX_QE1eaxPrkCHJl/exec";
         const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
 
         let catalogoDefectos = JSON.parse(localStorage.getItem('qc_catalogo_v2')) || {};
@@ -773,52 +773,59 @@ async function sincronizarConNube() {
         const res = await fetch(SHEETS_URL);
         const data = await res.json();
         
-        if (data.historial) dbHistorial = data.historial;
+        // --- SINCRONIZAR HISTORIAL ---
+        if (data.historial) {
+            dbHistorial = data.historial;
+        }
+
+        // --- SINCRONIZAR PIZARRA ---
         if (data.pizarra) {
             let huboCambio = false;
             const ahora = new Date().getTime();
 
             data.pizarra.forEach((nube, i) => {
+                // Aseguramos que estados[i] exista para evitar errores de lectura
+                if (!estados[i]) {
+                    estados[i] = { activo: false, lote: "" };
+                }
+                
                 const local = estados[i];
 
-                // --- PROTECCIÓN 1: EL CAZA-ZOMBIES ---
-                // Si la nube trae un lote que nosotros ACABAMOS de finalizar, lo ignoramos.
-              
-
-                // --- PROTECCIÓN 2: REGLA DE ORO ---
-                // Si nosotros tenemos un lote activo, ignoramos si la nube viene vacía.
-                // Subimos la protección a 2 horas (7200000 ms) para seguridad total.
+                // --- PROTECCIÓN 1: REGLA DE ORO (Mantenida) ---
+                // Si nosotros tenemos un lote activo local, ignoramos si la nube viene vacía (evita borrados accidentales)
                 if (local.activo && !nube.activo) {
-                    const tiempoTranscurrido = ahora - local.inicio;
-                    if (tiempoTranscurrido < 7200000) return; 
+                    const tiempoTranscurrido = ahora - (local.inicio || ahora);
+                    if (tiempoTranscurrido < 7200000) return; // 2 horas de escudo
                 }
 
-                // --- PROTECCIÓN 3: CAMBIO DE LOTE REAL ---
-                // Si la nube trae un lote realmente nuevo (distinto al local)
-                if (nube.activo && nube.lote !== local.lote) {
+                // --- PROTECCIÓN 2: CARGA INICIAL Y CAMBIOS REALES ---
+                // Si la nube tiene un lote y es diferente al local, o el estado activo cambió
+                if (nube.lote !== local.lote || nube.activo !== local.activo) {
+                    // Si el cambio es que se desactivó, guardamos rastro del lote anterior
+                    if (local.activo && !nube.activo) {
+                        nube.loteAnterior = local.lote;
+                    }
+                    
                     estados[i] = nube;
                     huboCambio = true;
                     return;
                 }
 
-                // --- COMPARACIÓN ESTÁNDAR ---
-                // Si hay cambios en inspector, proceso, tiempos, etc.
+                // --- COMPARACIÓN POR DETALLES (Inspector, Proceso, etc.) ---
+                // Si algo interno cambió (ej. corrigieron el nombre del inspector en el Excel)
                 if (JSON.stringify(local) !== JSON.stringify(nube)) {
-                    // Si la nube nos dice que se desactivó (otro usuario lo cerró)
-                    if (local.activo && !nube.activo) {
-                        local.loteAnterior = local.lote;
-                    }
                     estados[i] = nube;
                     huboCambio = true;
                 }
             });
             
             if (huboCambio) {
+                console.log("📡 Pizarra actualizada desde la nube");
                 render();
             }
         }
     } catch (e) { 
-        console.error("Error Sync:", e); 
+        console.error("❌ Error Sync:", e); 
     }
 }
         function mostrarTab(t) {
