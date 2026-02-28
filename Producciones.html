@@ -434,7 +434,7 @@
 
     <script>
         let pausaSincro = false;
-        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbw8vgjKOnJ4_BwWb3otOUlDYYxpru-nERzv9rlwMfxPkH4y-INFUFi4CDiqI2Ggl1gK/exec";
+        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbw_fVP141Zb2B1MBkJ1jbgtrGy95X9jxClsmAn3juYIC-pCjznEq2qaqxMLqvrbri8o/exec";
         const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
 
         let catalogoDefectos = JSON.parse(localStorage.getItem('qc_catalogo_v2')) || {};
@@ -655,26 +655,32 @@ async function finalizarLote(ok) {
         btn.innerText = "⌛ GUARDANDO...";
     }
     
-    // 🛡️ Activamos el escudo para que la sincronización automática no moleste
     pausaSincro = true; 
 
     const ahora = new Date();
+    
+    // --- MEJORA: Formateo de Fecha Manual para evitar errores de zona horaria ---
+    const dia = ahora.getDate().toString().padStart(2, '0');
+    const mes = (ahora.getMonth() + 1).toString().padStart(2, '0');
+    const anio = ahora.getFullYear();
+    const fechaLimpia = `${dia}/${mes}/${anio}`;
+
     const horaFin = ahora.getHours().toString().padStart(2, '0') + ':' + 
                     ahora.getMinutes().toString().padStart(2, '0');
 
     // Construimos el registro para el Historial
     const registro = {
         action: 'add', 
-        fecha: ahora.toLocaleDateString('es-ES'), 
-        horaFin: horaFin,
+        fecha: fechaLimpia,  // Enviamos la fecha ya formateada como texto
+        horaFin: horaFin,    // HH:mm
         hora: s.horaInicioReal,
         linea: lineasArr[indexSel], 
         producto: s.productoActivo, 
         inspector: s.inspector,
-        lote: "'" + s.lote, 
+        lote: s.lote,        // El apóstrofe lo pondremos en el Apps Script para mayor seguridad
         proceso: s.proceso, 
         ansi: s.ansi, 
-        tiempo: s.tiempo.toString(), // Forzamos texto para evitar el error de fecha 1899
+        tiempo: String(s.tiempo), // Forzamos a String aquí también
         resultado: ok ? "ACEPTADO" : "RECHAZADO", 
         detalle: ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ")
     };
@@ -682,13 +688,12 @@ async function finalizarLote(ok) {
     // --- LIMPIEZA LOCAL PROFUNDA ---
     const loteFinalizado = s.lote;
     
-    // Reseteamos la línea en la memoria de la App antes de enviar a la nube
     estados[indexSel] = {
-        productoOriginal: s.productoOriginal, // Mantenemos el nombre de la línea
+        productoOriginal: s.productoOriginal, 
         activo: false,
         lote: "",
         loteAnterior: loteFinalizado,
-        ultimoCierreReal: ahora.getTime(), // Guardamos el milisegundo exacto del cierre
+        ultimoCierreReal: ahora.getTime(), 
         inspector: "",
         tiempo: "00:00",
         productoActivo: "",
@@ -696,10 +701,10 @@ async function finalizarLote(ok) {
         ansi: ""
     };
     
-    render(); // La tarjeta se limpia visualmente de inmediato
+    render(); 
     cerrarModal(ok ? 'modal-fin' : 'modal-rechazos');
 
-    // 2. ENVÍO COORDINADO (Usando await para asegurar orden)
+    // 2. ENVÍO COORDINADO
     try {
         console.log("📤 Enviando historial...");
         await fetch(SHEETS_URL, { 
@@ -721,16 +726,14 @@ async function finalizarLote(ok) {
         console.log("✅ Proceso completado con éxito.");
     } catch (e) {
         console.error("❌ Error de comunicación:", e);
-        alert("Hubo un problema al guardar. Por favor revisa el Excel.");
     } finally {
-        // Aumentamos el tiempo de gracia a 15 segundos para darle respiro a Google
         setTimeout(() => { 
             pausaSincro = false; 
             if(btn) {
                 btn.disabled = false;
                 btn.innerText = ok ? "ACEPTAR" : "CONFIRMAR RECHAZO";
             }
-            console.log("🛡️ Escudo liberado. Sincronización reanudada.");
+            console.log("🛡️ Escudo liberado.");
         }, 15000); 
     }
 }
