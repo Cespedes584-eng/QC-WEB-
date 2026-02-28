@@ -434,7 +434,7 @@
 
     <script>
         let pausaSincro = false;
-        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbwFhoPABlZzt6UCdKMxJ-npAqOC0S0KDDAXsthfT2TJgQDPomea95R3IhJ7xR0aZxFd/exec";
+        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbz2mV9GhvV8g3wPSpv30yXmJ5IKqCJ2JaoD_zfgrx6KTFTgCeklifpulG0seT27_sm6/exec";
         const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
 
         let catalogoDefectos = JSON.parse(localStorage.getItem('qc_catalogo_v2')) || {};
@@ -588,7 +588,7 @@ async function iniciarLote() {
     const inputLote = document.getElementById('r-lote');
     if (!inputLote.value.trim()) return alert("⚠️ Ingrese el número de Lote");
     
-    // 🛡️ BLOQUEO: Evita que cualquier entrada de la nube sobreescriba esto ahora mismo
+    // 🛡️ BLOQUEO: Evita interferencias de la nube mientras registramos
     pausaSincro = true; 
     
     const idx = document.getElementById('r-linea').value;
@@ -610,27 +610,34 @@ async function iniciarLote() {
         productoActivo: (document.getElementById('contenedor-hibrida').style.display === 'block') ? document.getElementById('r-producto-especifico').value : lineasArr[idx]
     };
 
-    // --- 🔑 LÍNEAS CORREGIDAS ---
-    estados[idx] = datosInicio; // 1. Guardamos los datos en el array local
-    render();                  // 2. Dibujamos el cambio en la pantalla inmediatamente
-    cerrarModal('modal-reg');  // 3. Cerramos el modal para que el usuario vea el cambio
-    // ----------------------------
+    // Actualización visual inmediata
+    estados[idx] = datosInicio; 
+    render();                   
+    cerrarModal('modal-reg');  
 
     try {
+        // --- CAMBIO CLAVE AQUÍ ---
         await fetch(SHEETS_URL, { 
             method: 'POST', 
             mode: 'no-cors', 
-            body: JSON.stringify({ action: 'save_pizarra', estados: estados }) 
+            headers: {
+                'Content-Type': 'text/plain' // Esto evita errores de CORS en Google
+            },
+            body: JSON.stringify({ 
+                action: 'save_pizarra', 
+                estados: estados 
+            }) 
         });
-        console.log("✅ Petición enviada a Sheets.");
+        console.log("✅ Datos sincronizados con la nube.");
     } catch (e) {
-        console.warn("⚠️ Error de red, pero el lote sigue activo localmente.");
+        console.warn("⚠️ Error de red, el lote se guardó solo localmente.");
     } finally {
+        // Restaurar botón
         btn.disabled = false;
         btn.innerText = "INICIAR INSPECCIÓN";
-        inputLote.value = ""; // Limpiamos el input para la próxima
+        inputLote.value = ""; 
         
-        // Esperamos 10 segundos para dar tiempo a que la API de Google se actualice
+        // Mantener el escudo de sincronización por 10 seg para evitar "saltos" de datos
         setTimeout(() => { 
             pausaSincro = false; 
             console.log("🛡️ Escudo liberado.");
@@ -776,10 +783,7 @@ async function sincronizarConNube() {
 
                 // --- PROTECCIÓN 1: EL CAZA-ZOMBIES ---
                 // Si la nube trae un lote que nosotros ACABAMOS de finalizar, lo ignoramos.
-                if (!local.activo && nube.activo && nube.lote === local.loteAnterior) {
-                    console.log(`🛡️ Evitado lote zombie: ${nube.lote}`);
-                    return; 
-                }
+              
 
                 // --- PROTECCIÓN 2: REGLA DE ORO ---
                 // Si nosotros tenemos un lote activo, ignoramos si la nube viene vacía.
