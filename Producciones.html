@@ -434,7 +434,7 @@
 
     <script>
         let pausaSincro = false;
-        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbxDosirBpegHxcE2dlpgiV5tznIK1o69CTOvurjW2kGuZNtIc6TwX_QE1eaxPrkCHJl/exec";
+        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbw8vgjKOnJ4_BwWb3otOUlDYYxpru-nERzv9rlwMfxPkH4y-INFUFi4CDiqI2Ggl1gK/exec";
         const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
 
         let catalogoDefectos = JSON.parse(localStorage.getItem('qc_catalogo_v2')) || {};
@@ -654,6 +654,8 @@ async function finalizarLote(ok) {
         btn.disabled = true;
         btn.innerText = "⌛ GUARDANDO...";
     }
+    
+    // 🛡️ Activamos el escudo para que la sincronización automática no moleste
     pausaSincro = true; 
 
     const ahora = new Date();
@@ -672,30 +674,42 @@ async function finalizarLote(ok) {
         lote: "'" + s.lote, 
         proceso: s.proceso, 
         ansi: s.ansi, 
-        tiempo: s.tiempo,
+        tiempo: s.tiempo.toString(), // Forzamos texto para evitar el error de fecha 1899
         resultado: ok ? "ACEPTADO" : "RECHAZADO", 
         detalle: ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ")
     };
 
-    // Actualizamos estado local inmediatamente para dar fluidez
+    // --- LIMPIEZA LOCAL PROFUNDA ---
     const loteFinalizado = s.lote;
-    estados[indexSel].activo = false;
-    estados[indexSel].loteAnterior = loteFinalizado;
     
-    render(); // Dibujamos el cambio (la tarjeta se pone gris/limpia)
+    // Reseteamos la línea en la memoria de la App antes de enviar a la nube
+    estados[indexSel] = {
+        productoOriginal: s.productoOriginal, // Mantenemos el nombre de la línea
+        activo: false,
+        lote: "",
+        loteAnterior: loteFinalizado,
+        ultimoCierreReal: ahora.getTime(), // Guardamos el milisegundo exacto del cierre
+        inspector: "",
+        tiempo: "00:00",
+        productoActivo: "",
+        proceso: "",
+        ansi: ""
+    };
+    
+    render(); // La tarjeta se limpia visualmente de inmediato
     cerrarModal(ok ? 'modal-fin' : 'modal-rechazos');
 
-    // 2. ENVÍO A LA NUBE (Sin bloquear al usuario)
+    // 2. ENVÍO COORDINADO (Usando await para asegurar orden)
     try {
-        // Guardar en Historial
-        fetch(SHEETS_URL, { 
+        console.log("📤 Enviando historial...");
+        await fetch(SHEETS_URL, { 
             method: 'POST', 
             mode: 'no-cors', 
             body: JSON.stringify(registro) 
         });
 
-        // Limpiar Pizarra en la nube
-        fetch(SHEETS_URL, { 
+        console.log("📤 Limpiando pizarra en la nube...");
+        await fetch(SHEETS_URL, { 
             method: 'POST', 
             mode: 'no-cors', 
             body: JSON.stringify({ 
@@ -704,19 +718,20 @@ async function finalizarLote(ok) {
             }) 
         });
         
-        console.log("✅ Datos enviados a la nube.");
+        console.log("✅ Proceso completado con éxito.");
     } catch (e) {
-        console.error("❌ Error enviando datos:", e);
+        console.error("❌ Error de comunicación:", e);
+        alert("Hubo un problema al guardar. Por favor revisa el Excel.");
     } finally {
-        // Liberamos el sistema después de un tiempo de gracia para que Google procese
+        // Aumentamos el tiempo de gracia a 15 segundos para darle respiro a Google
         setTimeout(() => { 
             pausaSincro = false; 
             if(btn) {
                 btn.disabled = false;
                 btn.innerText = ok ? "ACEPTAR" : "CONFIRMAR RECHAZO";
             }
-            console.log("🛡️ Sincronización reanudada.");
-        }, 5000); // 5 segundos de escudo
+            console.log("🛡️ Escudo liberado. Sincronización reanudada.");
+        }, 15000); 
     }
 }
    function verificarHibrida() {
