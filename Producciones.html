@@ -788,35 +788,35 @@ async function sincronizarConNube() {
         const res = await fetch(SHEETS_URL);
         const data = await res.json();
         
-        // --- SINCRONIZAR HISTORIAL ---
         if (data.historial) {
             dbHistorial = data.historial;
         }
 
-        // --- SINCRONIZAR PIZARRA ---
         if (data.pizarra) {
             let huboCambio = false;
             const ahora = new Date().getTime();
 
             data.pizarra.forEach((nube, i) => {
-                // Aseguramos que estados[i] exista para evitar errores de lectura
                 if (!estados[i]) {
                     estados[i] = { activo: false, lote: "" };
                 }
                 
                 const local = estados[i];
 
-                // --- PROTECCIÓN 1: REGLA DE ORO (Mantenida) ---
-                // Si nosotros tenemos un lote activo local, ignoramos si la nube viene vacía (evita borrados accidentales)
-                if (local.activo && !nube.activo) {
-                    const tiempoTranscurrido = ahora - (local.inicio || ahora);
-                    if (tiempoTranscurrido < 7200000) return; // 2 horas de escudo
+                // --- PROTECCIÓN ACTUALIZADA ---
+                // Si la nube dice que está vacío (activo: false)
+                if (!nube.activo && local.activo) {
+                    // Solo mantenemos el bloqueo si el lote local es "joven" (menos de 30 seg)
+                    // Esto da tiempo a que el servidor procese tu propio envío.
+                    // Pero si ya pasó ese tiempo, aceptamos que la nube manda (el lote terminó).
+                    const tiempoTranscurrido = ahora - (local.ultimoCierreReal || 0);
+                    if (pausaSincro && tiempoTranscurrido < 15000) return; 
                 }
 
-                // --- PROTECCIÓN 2: CARGA INICIAL Y CAMBIOS REALES ---
-                // Si la nube tiene un lote y es diferente al local, o el estado activo cambió
+                // --- DETECTAR CAMBIOS REALES ---
+                // Si el lote cambió, o el estado activo/inactivo cambió
                 if (nube.lote !== local.lote || nube.activo !== local.activo) {
-                    // Si el cambio es que se desactivó, guardamos rastro del lote anterior
+                    // Si se desactivó en la nube, guardamos rastro para el render
                     if (local.activo && !nube.activo) {
                         nube.loteAnterior = local.lote;
                     }
@@ -826,8 +826,7 @@ async function sincronizarConNube() {
                     return;
                 }
 
-                // --- COMPARACIÓN POR DETALLES (Inspector, Proceso, etc.) ---
-                // Si algo interno cambió (ej. corrigieron el nombre del inspector en el Excel)
+                // --- COMPARACIÓN POR DETALLES ---
                 if (JSON.stringify(local) !== JSON.stringify(nube)) {
                     estados[i] = nube;
                     huboCambio = true;
@@ -835,7 +834,7 @@ async function sincronizarConNube() {
             });
             
             if (huboCambio) {
-                console.log("📡 Pizarra actualizada desde la nube");
+                console.log("📡 Pizarra sincronizada con el servidor");
                 render();
             }
         }
