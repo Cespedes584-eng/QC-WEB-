@@ -543,39 +543,58 @@
     let conteo = { ta: 0, ra: 0, tb: 0, rb: 0 };
     const ahora = new Date();
     
-    const dia = ahora.getDate();
-    const mes = ahora.getMonth() + 1;
-    const anio = ahora.getFullYear();
-    const hoyConCero = `${dia.toString().padStart(2, '0')}/${mes.toString().padStart(2, '0')}/${anio}`;
-    const hoySinCero = `${dia}/${mes}/${anio}`;
-    
-    // Función interna para limpiar nombres (quita espacios, tildes y lo pasa a mayúsculas)
+    // Obtenemos día, mes y año actuales para comparar
+    const hoyDia = ahora.getDate();
+    const hoyMes = ahora.getMonth();
+    const hoyAnio = ahora.getFullYear();
+
     const limpiarTexto = (t) => String(t || "").trim().toUpperCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
     const nombreBuscado = limpiarTexto(nombreLinea);
 
     dbHistorial.forEach(r => {
-        const fechaR = String(r.fecha || "").trim();
-        const lineaR = limpiarTexto(r.linea);
+        // --- NUEVA LÓGICA DE FECHA ---
+        // Intentamos crear un objeto fecha desde lo que venga (ISO o DD/MM/YYYY)
+        let fechaR;
+        if (String(r.fecha).includes("-")) {
+            fechaR = new Date(r.fecha); // Para formato 2026-02-28T...
+        } else {
+            const partes = String(r.fecha).split('/');
+            fechaR = new Date(partes[2], partes[1] - 1, partes[0]); // Para formato 28/02/2026
+        }
 
-        if (lineaR === nombreBuscado && (fechaR === hoyConCero || fechaR === hoySinCero)) {
+        const esHoy = fechaR.getDate() === hoyDia && 
+                      fechaR.getMonth() === hoyMes && 
+                      fechaR.getFullYear() === hoyAnio;
+
+        if (limpiarTexto(r.linea) === nombreBuscado && esHoy) {
             
-            let horaString = String(r.horaFin || r.hora || "00:00");
-            let partes = horaString.split(':');
-            let hrs = parseInt(partes[0]) || 0;
-            let mins = parseInt(partes[1]) || 0;
-            let minutosTotales = (hrs * 60) + mins;
+            // --- NUEVA LÓGICA DE HORA ---
+            let hrs = 0;
+            let mins = 0;
+            let horaStr = String(r.horaFin || r.hora || "");
 
-            // Turno A: 06:00 a 15:29 (930 min)
-            let esTurnoA = (minutosTotales >= 360 && minutosTotales < 930);
+            if (horaStr.includes("T")) {
+                // Si viene como 1899-12-30T23:27..., extraemos la hora real del texto
+                // porque el objeto Date fallaría por la zona horaria
+                const tiempoCercano = horaStr.split("T")[1];
+                hrs = parseInt(tiempoCercano.split(":")[0]);
+                mins = parseInt(tiempoCercano.split(":")[1]);
+            } else {
+                const partesH = horaStr.split(':');
+                hrs = parseInt(partesH[0]) || 0;
+                mins = parseInt(partesH[1]) || 0;
+            }
+
+            let minutosTotales = (hrs * 60) + mins;
+            let esTurnoA = (minutosTotales >= 360 && minutosTotales < 930); // 6:00 AM a 3:30 PM
             
             const res = limpiarTexto(r.resultado);
-
             if (res === "ACEPTADO") {
-                if (esTurnoA) { conteo.ta++; } else { conteo.tb++; }
+                if (esTurnoA) conteo.ta++; else conteo.tb++;
             } else {
-                if (esTurnoA) { conteo.ra++; } else { conteo.rb++; }
+                if (esTurnoA) conteo.ra++; else conteo.rb++;
             }
         }
     });
