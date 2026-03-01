@@ -507,8 +507,11 @@
                 <div style="flex:1; text-align:center; border-right: 1px solid #eee;">
                     TA: <span style="color: #28a745; font-weight: bold;">${turnos.ta}</span> / <span style="color: #dc3545; font-weight: bold;">${turnos.ra}</span>
                 </div>
-                <div style="flex:1; text-align:center;">
-                    TB: <span style="color: #28a745; font-weight: bold;">${turnos.ta}</span> / <span style="color: #dc3545; font-weight: bold;">${turnos.rb}</span>
+                // Busca esta parte exacta en tu render y cámbiala:
+<div style="flex:1; text-align:center;">
+    TB: <span style="color: #28a745; font-weight: bold;">${turnos.tb}</span> / <span style="color: #dc3545; font-weight: bold;">${turnos.rb}</span>
+</div>
+</span>
                 </div>
             </div>
 
@@ -538,72 +541,48 @@
 
     localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
 }
-
-    function obtenerConteosTurnos(nombreLinea) {
+function obtenerConteosTurnos(nombreLinea) {
     let conteo = { ta: 0, ra: 0, tb: 0, rb: 0 };
     const ahora = new Date();
     
-    // Obtenemos día, mes y año actuales para comparar uno a uno
-    const hoyD = ahora.getDate();
-    const hoyM = ahora.getMonth();
-    const hoyA = ahora.getFullYear();
+    // Formato Hoy: "28/02/2026"
+    const hoy = ahora.getDate().toString().padStart(2, '0') + '/' + 
+                (ahora.getMonth() + 1).toString().padStart(2, '0') + '/' + 
+                ahora.getFullYear();
 
-    // Limpiador de texto para nombres de línea y resultados
-    const limpiar = (t) => String(t || "").trim().toUpperCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
+    // Limpiador de texto para nombres
+    const limpiar = (t) => String(t || "").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const nombreBuscado = limpiar(nombreLinea);
 
     dbHistorial.forEach(r => {
-        // --- CONVERSIÓN DE FECHA SEGURA ---
-        let fechaR;
-        if (String(r.fecha).includes("-")) {
-            // Maneja formato ISO: 2026-02-28T...
-            fechaR = new Date(r.fecha);
-        } else {
-            // Maneja formato manual: 28/02/2026
-            const p = String(r.fecha).split('/');
-            fechaR = new Date(p[2], p[1] - 1, p[0]);
+        // --- CONVERSIÓN DE FECHA DE GOOGLE A TEXTO ---
+        let fechaR = String(r.fecha || "");
+        if (fechaR.includes("-")) { // Si viene "2026-02-28..."
+            const partes = fechaR.split("T")[0].split("-");
+            fechaR = `${partes[2]}/${partes[1]}/${partes[0]}`;
         }
 
-        // Verificamos si es hoy comparando día, mes y año
-        const esHoy = fechaR.getDate() === hoyD && 
-                      fechaR.getMonth() === hoyM && 
-                      fechaR.getFullYear() === hoyA;
-
-        if (limpiar(r.linea) === nombreBuscado && esHoy) {
-            
-            // --- EXTRACCIÓN DE HORA SEGURA ---
-            let hrs = 0;
-            let mins = 0;
+        if (limpiar(r.linea) === nombreBuscado && fechaR === hoy) {
+            // --- HORA ---
             let horaStr = String(r.horaFin || r.hora || "00:00");
-
-            if (horaStr.includes("T")) {
-                // Extrae de formato ISO (ej. 1899-12-30T19:25...)
-                const tiempoRaw = horaStr.split("T")[1];
-                hrs = parseInt(tiempoRaw.split(":")[0]);
-                mins = parseInt(tiempoRaw.split(":")[1]);
-            } else {
-                // Extrae de formato HH:mm
-                const pH = horaStr.split(':');
-                hrs = parseInt(pH[0]) || 0;
-                mins = parseInt(pH[1]) || 0;
-            }
-
-            const minutosTotales = (hrs * 60) + mins;
-            const esTurnoA = (minutosTotales >= 360 && minutosTotales < 930); // 6:00 a 15:30
+            if (horaStr.includes("T")) horaStr = horaStr.split("T")[1];
             
+            const hrs = parseInt(horaStr.split(":")[0]) || 0;
+            const mins = parseInt(horaStr.split(":")[1]) || 0;
+            const minTotales = (hrs * 60) + mins;
+
+            const esTA = (minTotales >= 360 && minTotales < 930); // 6:00 a 15:30
             const resultado = limpiar(r.resultado);
+
             if (resultado === "ACEPTADO") {
-                if (esTurnoA) conteo.ta++; else conteo.tb++;
+                if (esTA) conteo.ta++; else conteo.tb++;
             } else {
-                if (esTurnoA) conteo.ra++; else conteo.rb++;
+                if (esTA) conteo.ra++; else conteo.rb++;
             }
         }
     });
     return conteo;
 }
-
         function tick() {
             estados.forEach((s, i) => {
                 if (s.activo) {
