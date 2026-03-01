@@ -46,6 +46,57 @@
         color: white;
     }
 
+    /* --- BOTONES DEL HEADER (Volver y Excel) --- */
+    .btn-back {
+        background: #ffffff !important;
+        color: #333 !important;
+        border: 1px solid #ddd !important;
+        padding: 8px 15px !important;
+        border-radius: 6px !important;
+        font-weight: bold !important;
+        cursor: pointer !important;
+        font-size: 0.85em !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 5px;
+        transition: all 0.2s ease !important;
+    }
+
+    .btn-back:hover {
+        background: #f0f0f0 !important;
+        transform: translateY(-1px);
+    }
+
+    .btn-excel-header {
+        background: #1d6f42 !important; /* Verde Excel */
+        color: white !important;
+        border: none !important;
+        padding: 8px 15px !important;
+        border-radius: 6px !important;
+        font-weight: bold !important;
+        cursor: pointer !important;
+        font-size: 0.85em !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 5px;
+        transition: all 0.2s ease !important;
+    }
+
+    .btn-excel-header:hover {
+        background: #155a35 !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    #reloj {
+        background: rgba(255,255,255,0.1);
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-family: monospace;
+        color: #fff;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+
     /* --- GRID DE TARJETAS --- */
     .grid-container {
         display: grid;
@@ -64,14 +115,13 @@
         flex-direction: column;
         overflow: hidden;
         box-shadow: var(--card-shadow);
-        /* Efecto Hover Suave */
         transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
     }
 
     .card:hover {
-        transform: translateY(-5px); /* Eleva la tarjeta */
-        box-shadow: 0 10px 20px rgba(0,0,0,0.15); /* Sombra profunda */
-        border-color: var(--primary-green); /* Resalta el borde */
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+        border-color: var(--primary-green);
     }
 
     .card.inspeccionando { border: 2px solid var(--primary-green); }
@@ -200,10 +250,10 @@
     /* --- ESTILO BOTÓN HISTORIAL (Blanco/Verde) --- */
     .btn-historial-v3 {
         width: 100% !important;
-        background: #ffffff !important; /* Fondo Blanco */
-        color: #468e5d !important;    /* Texto Verde */
+        background: #ffffff !important;
+        color: #468e5d !important;
         border: none !important;
-        border-top: 1px solid #eee !important; /* Línea gris arriba */
+        border-top: 1px solid #eee !important;
         padding: 15px 0 !important;
         font-weight: bold !important;
         cursor: pointer !important;
@@ -220,13 +270,11 @@
         background: #fcfcfc !important;
     }
 
-    /* Contenedor especial para el botón sin espacios laterales */
     .card-footer-clean {
         margin-top: auto !important;
         padding: 0 !important; 
     }
 </style>
-
 </head>
 
 <body onload="inicializarSistema()">
