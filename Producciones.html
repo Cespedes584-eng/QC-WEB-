@@ -496,6 +496,7 @@
     if (!p) return;
 
     p.innerHTML = estados.map((s, i) => {
+        // Obtenemos los conteos (Aceptados y Rechazados por turno)
         const turnos = obtenerConteosTurnos(lineasArr[i]);
         const tituloCard = s.activo ? s.productoActivo : lineasArr[i];
         
@@ -503,9 +504,13 @@
         <div class="card ${s.activo ? 'inspeccionando' : ''}">
             <div class="card-header">${tituloCard}</div>
             
-            <div style="display: flex; background: #f8f9fa; font-size: 0.8em; padding: 5px; border-bottom: 1px solid #eee;">
-                <div style="flex:1; text-align:center;">A: ${turnos.ta}</div>
-                <div style="flex:1; text-align:center;">B: ${turnos.tb}</div>
+            <div style="display: flex; background: #24303c; color: white; font-size: 0.75em; padding: 6px 2px; border-bottom: 2px solid #28a745;">
+                <div style="flex:1; text-align:center; border-right: 1px solid #444;">
+                    T-A: <b style="color:#81c784;">${turnos.ta}</b> | <b style="color:#ff8a80;">${turnos.ra}</b>
+                </div>
+                <div style="flex:1; text-align:center;">
+                    T-B: <b style="color:#81c784;">${turnos.tb}</b> | <b style="color:#ff8a80;">${turnos.rb}</b>
+                </div>
             </div>
 
             <div class="card-body" style="min-height: 120px; display: flex; flex-direction: column; justify-content: center;">
@@ -535,26 +540,31 @@
     localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
 }
 
-        function obtenerConteosTurnos(nombreLinea) {
-    let conteo = { ta: 0, tb: 0 };
-    const hoy = new Date().toLocaleDateString();
+     function obtenerConteosTurnos(nombreLinea) {
+    let conteo = { ta: 0, ra: 0, tb: 0, rb: 0 };
+    const ahora = new Date();
+    const hoy = ahora.getDate().toString().padStart(2, '0') + '/' + 
+                 (ahora.getMonth() + 1).toString().padStart(2, '0') + '/' + 
+                 ahora.getFullYear();
     
     dbHistorial.forEach(r => {
-        if (r.linea === nombreLinea && r.fecha === hoy) {
-            // 1. Extraemos hora y minutos
-            const partes = r.hora ? r.hora.split(':') : ["0", "0"];
-            const hrs = parseInt(partes[0]);
-            const mins = parseInt(partes[1]);
-            
-            // 2. Convertimos todo a "minutos del día" para comparar exacto
-            const minutosTotales = (hrs * 60) + mins;
-            
-            // 3. El corte es a las 15:30 (que son 930 minutos)
-            // Turno A: de 06:00 (360 min) hasta las 15:29 (929 min)
-            if (minutosTotales >= 360 && minutosTotales < 930) {
-                conteo.ta++;
+        const fechaRegistro = String(r.fecha).trim();
+
+        if (r.linea === nombreLinea && fechaRegistro === hoy) {
+            // Extraer hora y minutos de forma segura
+            let horaString = String(r.horaFin || r.hora || "00:00");
+            let partes = horaString.split(':');
+            let hrs = parseInt(partes[0]);
+            let mins = parseInt(partes[1] || 0);
+            let minutosTotales = (hrs * 60) + mins;
+
+            // Definir Turno (Corte 15:30 = 930 min)
+            let esTurnoA = (minutosTotales >= 360 && minutosTotales < 930);
+
+            if (r.resultado === "ACEPTADO") {
+                if (esTurnoA) conteo.ta++; else conteo.tb++;
             } else {
-                conteo.tb++;
+                if (esTurnoA) conteo.ra++; else conteo.rb++;
             }
         }
     });
