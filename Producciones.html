@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QC Tracker</title>
-  <style>
+ <style>
     :root {
         --bg-body: #ebedef;
         --panel-bg: #ffffff;
@@ -81,21 +81,21 @@
     }
     .fab:hover { transform: scale(1.1); }
 
-    /* --- MODALES GENERALES --- */
+    /* --- MODALES --- */
     .modal, .airport-modal { 
         display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
         background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(3px); z-index: 4000; 
     }
 
-    /* --- CUADRO DE INGRESO (MÁS ANGOSTO) --- */
+    /* Cuadro de ingreso NUEVA INSPECCIÓN (Más angosto) */
     #modal-nueva-inspeccion .modal-content {
-        max-width: 380px; /* Ancho reducido como pediste */
-        margin: 80px auto;
+        max-width: 420px !important; /* Forzamos el ancho pequeño */
+        margin: 100px auto;
     }
 
-    /* --- CUADRO DE ADMIN (ANCHO ORIGINAL) --- */
+    /* Cuadro de ADMIN (Ancho completo para ver tablas) */
     #modal-admin .modal-content {
-        max-width: 850px; /* Mantiene su ancho para ver bien las tablas */
+        max-width: 900px;
         margin: 20px auto;
     }
 
@@ -105,38 +105,52 @@
     }
     body.dark-mode .modal-content { background: #2d2d2d; color: white; }
 
-    /* Inputs y Selects */
+    /* --- BOTONES ESPECÍFICOS DE FILTRO (HOY / TODO) --- */
+    /* Usamos !important para vencer cualquier otra regla que los agrande */
+    .btn-filtro-admin {
+        background: #ebedef !important;
+        color: #333 !important;
+        border: 1px solid #ccc !important;
+        padding: 2px 8px !important;
+        font-size: 11px !important;
+        width: auto !important;
+        height: auto !important;
+        display: inline-block !important;
+        margin-right: 5px !important;
+        border-radius: 3px !important;
+        cursor: pointer !important;
+        font-weight: bold !important;
+        box-shadow: none !important;
+        transform: none !important;
+    }
+
+    .btn-filtro-admin:hover {
+        background: #d1d8d5 !important;
+    }
+
+    body.dark-mode .btn-filtro-admin {
+        background: #444 !important;
+        color: white !important;
+        border-color: #666 !important;
+    }
+
+    /* --- OTROS ELEMENTOS --- */
     input, select { 
-        width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid var(--border); 
+        width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid var(--border); 
         border-radius: 4px; box-sizing: border-box; background: var(--panel-bg); color: var(--text-dark);
     }
 
-    /* BOTONES FILTRO ADMIN (PEQUEÑOS) */
-    .filter-btn {
-        background: #455a64; color: white; border: none; padding: 4px 12px; 
-        font-size: 0.7em; border-radius: 4px; cursor: pointer; margin-right: 5px;
-        width: auto !important; display: inline-block; font-weight: bold;
-    }
-    .filter-btn:hover { background: var(--primary-green); }
-
-    /* BOTÓN INICIAR (VERDE GRANDE) */
     .btn-main { 
         background: var(--primary-green); color: white; border: none; padding: 12px 20px; 
         cursor: pointer; border-radius: 4px; font-weight: bold; width: 100%; 
     }
 
-    /* TABLAS DEL ADMIN */
     .airport-table { width: 100%; border-collapse: collapse; font-size: 0.85em; margin-top: 15px; }
     .airport-table th { background: #f1f3f5; padding: 10px; border-bottom: 2px solid var(--primary-green); color: var(--primary-dark); text-align: left; }
     .airport-table td { padding: 8px; border-bottom: 1px solid #eee; }
-    body.dark-mode .airport-table th { background: #3d3d3d; color: white; }
-
-    /* OTROS DETALLES */
+    
     #reloj { font-family: monospace; font-size: 1.1em; background: rgba(0,0,0,0.3); padding: 4px 12px; border-radius: 4px; }
     .user-info { background: rgba(255,255,255,0.1); padding: 4px 12px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); }
-    .lote-destacado { font-size: 1.4em; font-weight: 800; margin: 5px 0; color: var(--primary-dark); }
-    body.dark-mode .lote-destacado { color: white; }
-    .timer-display { font-family: monospace; font-size: 1.7em; color: var(--primary-green); font-weight: bold; margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; }
 </style>
 </head>
 
