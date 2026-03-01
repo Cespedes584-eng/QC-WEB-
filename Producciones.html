@@ -19,14 +19,13 @@
     }
 
     /* Colores cuando el modo nocturno está activo */
-   /* Cambia esto para que coincida con lo que hace tu JavaScript */
-body.dark-mode {
-    --bg-body: #1a1a1a;
-    --panel-bg: #2d2d2d;
-    --text-dark: #e0e0e0;
-    --border: #404040;
-    --primary-dark: #000000;
-}
+    body.dark-mode {
+        --bg-body: #1a1a1a;
+        --panel-bg: #2d2d2d;
+        --text-dark: #e0e0e0;
+        --border: #404040;
+        --primary-dark: #000000;
+    }
 
     body {
         background-color: var(--bg-body);
@@ -55,6 +54,7 @@ body.dark-mode {
         padding: 20px;
     }
 
+    /* --- TARJETAS CON HOVER EFFECT --- */
     .card {
         background: var(--panel-bg);
         border: 1px solid var(--border);
@@ -64,6 +64,14 @@ body.dark-mode {
         flex-direction: column;
         overflow: hidden;
         box-shadow: var(--card-shadow);
+        /* Efecto Hover Suave */
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .card:hover {
+        transform: translateY(-5px); /* Eleva la tarjeta */
+        box-shadow: 0 10px 20px rgba(0,0,0,0.15); /* Sombra profunda */
+        border-color: var(--primary-green); /* Resalta el borde */
     }
 
     .card.inspeccionando { border: 2px solid var(--primary-green); }
@@ -77,9 +85,16 @@ body.dark-mode {
         text-transform: uppercase;
     }
 
-    .card-body { padding: 15px; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; text-align: center; }
+    .card-body { 
+        padding: 15px; 
+        flex-grow: 1; 
+        display: flex; 
+        flex-direction: column; 
+        justify-content: center; 
+        text-align: center; 
+    }
 
-    /* --- MODALES (Medidas del código original: 500px) --- */
+    /* --- MODALES --- */
     .modal {
         display: none;
         position: fixed;
@@ -90,10 +105,10 @@ body.dark-mode {
     }
 
     .modal-content {
-        background: var(--panel-bg); /* Cambia con el modo nocturno */
+        background: var(--panel-bg);
         color: var(--text-dark);
         width: 90%;
-        max-width: 500px; 
+        max-width: 500px;  
         margin: 50px auto;
         padding: 25px;
         border-radius: 8px;
@@ -113,7 +128,7 @@ body.dark-mode {
         color: var(--text-dark);
     }
 
-    /* --- BOTONES PRINCIPALES (Como Iniciar Inspección) --- */
+    /* --- BOTONES PRINCIPALES --- */
     .btn-main {
         background: var(--primary-green);
         color: white;
@@ -129,7 +144,7 @@ body.dark-mode {
 
     .btn-main:hover { opacity: 0.9; }
 
-    /* --- BOTONES DE FILTRO (Hoy / Todo) --- */
+    /* --- BOTONES DE FILTRO --- */
     #sec-yield button {
         width: auto !important;
         padding: 8px 20px;
@@ -181,32 +196,37 @@ body.dark-mode {
         cursor: pointer;
         z-index: 1000;
     }
-/* Estilo para el botón de historial según la imagen */
-.btn-historial-v3 {
-    width: 100%;
-    background: #ffffff !important; /* Fondo blanco puro */
-    color: #468e5d !important;    /* El color verde de tu tema */
-    border: none;
-    border-top: 1px solid #eee;    /* Línea divisoria sutil arriba */
-    padding: 12px;
-    font-weight: bold;
-    cursor: pointer;
-    border-radius: 0 0 8px 8px;    /* Redondeo solo en las esquinas de abajo */
-    display: block;
-    text-align: center;
-    transition: background 0.2s;
-}
 
-.btn-historial-v3:hover {
-    background: #f9f9f9 !important;
-}
+    /* --- ESTILO BOTÓN HISTORIAL (Blanco/Verde) --- */
+    .btn-historial-v3 {
+        width: 100% !important;
+        background: #ffffff !important; /* Fondo Blanco */
+        color: #468e5d !important;    /* Texto Verde */
+        border: none !important;
+        border-top: 1px solid #eee !important; /* Línea gris arriba */
+        padding: 15px 0 !important;
+        font-weight: bold !important;
+        cursor: pointer !important;
+        display: block !important;
+        text-align: center !important;
+        border-radius: 0 0 8px 8px !important;
+        font-size: 0.9em !important;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin: 0 !important;
+    }
 
-/* Contenedor sin padding para que el botón pegue a los bordes */
-.footer-historial {
-    margin-top: auto;
-    padding: 0 !important; 
-}
+    .btn-historial-v3:hover {
+        background: #fcfcfc !important;
+    }
+
+    /* Contenedor especial para el botón sin espacios laterales */
+    .card-footer-clean {
+        margin-top: auto !important;
+        padding: 0 !important; 
+    }
 </style>
+
 </head>
 
 <body onload="inicializarSistema()">
