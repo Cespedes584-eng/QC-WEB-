@@ -466,7 +466,7 @@
             } catch (e) { console.error("Error historial", e); }
         }
 
-  function render() {
+ function render() {
     const p = document.getElementById('pizarra');
     if (!p) return;
 
@@ -477,7 +477,7 @@
         return `
         <div class="card ${s.activo ? 'inspeccionando' : ''}">
             <div class="card-header">${tituloCard}</div>
-          <div style="display: flex; background: #f8f9fa; font-size: 0.8em; padding: 5px; border-bottom: 1px solid #eee;">
+            <div style="display: flex; background: #f8f9fa; font-size: 0.8em; padding: 5px; border-bottom: 1px solid #eee;">
                 <div style="flex:1; text-align:center; border-right: 1px solid #eee;">
                     TA: <span style="color: #28a745; font-weight: bold;">${turnos.ta}</span> / <span style="color: #dc3545; font-weight: bold;">${turnos.ra}</span>
                 </div>
@@ -501,10 +501,10 @@
                 `}
             </div>
 
-            <div class="card-footer">
+            <div class="${s.activo ? '' : 'card-footer-clean'}">
                 ${s.activo ? 
-                    `<button class="btn-card btn-terminar" onclick="prepararFin(${i})">TERMINAR</button>` : 
-                    `<button class="btn-card btn-historial" onclick="abrirHistorialIndividual(${i})">HISTORIAL</button>`
+                    `<div style="padding:10px;"><button class="btn-main" onclick="prepararFin(${i})">TERMINAR</button></div>` : 
+                    `<button class="btn-historial-v3" onclick="abrirHistorialIndividual(${i})">HISTORIAL</button>`
                 }
             </div>
         </div>`;
