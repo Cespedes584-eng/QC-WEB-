@@ -543,55 +543,58 @@
     let conteo = { ta: 0, ra: 0, tb: 0, rb: 0 };
     const ahora = new Date();
     
-    // Obtenemos día, mes y año actuales para comparar
-    const hoyDia = ahora.getDate();
-    const hoyMes = ahora.getMonth();
-    const hoyAnio = ahora.getFullYear();
+    // Obtenemos día, mes y año actuales para comparar uno a uno
+    const hoyD = ahora.getDate();
+    const hoyM = ahora.getMonth();
+    const hoyA = ahora.getFullYear();
 
-    const limpiarTexto = (t) => String(t || "").trim().toUpperCase()
+    // Limpiador de texto para nombres de línea y resultados
+    const limpiar = (t) => String(t || "").trim().toUpperCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-    const nombreBuscado = limpiarTexto(nombreLinea);
+    const nombreBuscado = limpiar(nombreLinea);
 
     dbHistorial.forEach(r => {
-        // --- NUEVA LÓGICA DE FECHA ---
-        // Intentamos crear un objeto fecha desde lo que venga (ISO o DD/MM/YYYY)
+        // --- CONVERSIÓN DE FECHA SEGURA ---
         let fechaR;
         if (String(r.fecha).includes("-")) {
-            fechaR = new Date(r.fecha); // Para formato 2026-02-28T...
+            // Maneja formato ISO: 2026-02-28T...
+            fechaR = new Date(r.fecha);
         } else {
-            const partes = String(r.fecha).split('/');
-            fechaR = new Date(partes[2], partes[1] - 1, partes[0]); // Para formato 28/02/2026
+            // Maneja formato manual: 28/02/2026
+            const p = String(r.fecha).split('/');
+            fechaR = new Date(p[2], p[1] - 1, p[0]);
         }
 
-        const esHoy = fechaR.getDate() === hoyDia && 
-                      fechaR.getMonth() === hoyMes && 
-                      fechaR.getFullYear() === hoyAnio;
+        // Verificamos si es hoy comparando día, mes y año
+        const esHoy = fechaR.getDate() === hoyD && 
+                      fechaR.getMonth() === hoyM && 
+                      fechaR.getFullYear() === hoyA;
 
-        if (limpiarTexto(r.linea) === nombreBuscado && esHoy) {
+        if (limpiar(r.linea) === nombreBuscado && esHoy) {
             
-            // --- NUEVA LÓGICA DE HORA ---
+            // --- EXTRACCIÓN DE HORA SEGURA ---
             let hrs = 0;
             let mins = 0;
-            let horaStr = String(r.horaFin || r.hora || "");
+            let horaStr = String(r.horaFin || r.hora || "00:00");
 
             if (horaStr.includes("T")) {
-                // Si viene como 1899-12-30T23:27..., extraemos la hora real del texto
-                // porque el objeto Date fallaría por la zona horaria
-                const tiempoCercano = horaStr.split("T")[1];
-                hrs = parseInt(tiempoCercano.split(":")[0]);
-                mins = parseInt(tiempoCercano.split(":")[1]);
+                // Extrae de formato ISO (ej. 1899-12-30T19:25...)
+                const tiempoRaw = horaStr.split("T")[1];
+                hrs = parseInt(tiempoRaw.split(":")[0]);
+                mins = parseInt(tiempoRaw.split(":")[1]);
             } else {
-                const partesH = horaStr.split(':');
-                hrs = parseInt(partesH[0]) || 0;
-                mins = parseInt(partesH[1]) || 0;
+                // Extrae de formato HH:mm
+                const pH = horaStr.split(':');
+                hrs = parseInt(pH[0]) || 0;
+                mins = parseInt(pH[1]) || 0;
             }
 
-            let minutosTotales = (hrs * 60) + mins;
-            let esTurnoA = (minutosTotales >= 360 && minutosTotales < 930); // 6:00 AM a 3:30 PM
+            const minutosTotales = (hrs * 60) + mins;
+            const esTurnoA = (minutosTotales >= 360 && minutosTotales < 930); // 6:00 a 15:30
             
-            const res = limpiarTexto(r.resultado);
-            if (res === "ACEPTADO") {
+            const resultado = limpiar(r.resultado);
+            if (resultado === "ACEPTADO") {
                 if (esTurnoA) conteo.ta++; else conteo.tb++;
             } else {
                 if (esTurnoA) conteo.ra++; else conteo.rb++;
