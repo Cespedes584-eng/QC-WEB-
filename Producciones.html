@@ -662,6 +662,37 @@ async function iniciarLote() {
         }, 10000); 
     }
 }
+function generarDefectos() {
+    const qty = document.getElementById('rech-qty').value;
+    const contenedor = document.getElementById('contenedor-defectos');
+    const s = estados[indexSel]; // Obtenemos la info de la línea actual
+    
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+
+    // Buscamos los defectos en el catálogo según la Línea y el Proceso actual
+    const lineaActual = lineasArr[indexSel];
+    const procesoActual = s.proceso;
+    
+    // Si no hay defectos configurados para esa combinación, usamos una lista vacía
+    const listaDefectos = (catalogoDefectos[lineaActual] && catalogoDefectos[lineaActual][procesoActual]) 
+                          ? catalogoDefectos[lineaActual][procesoActual] 
+                          : [];
+
+    for (let i = 1; i <= qty; i++) {
+        const div = document.createElement('div');
+        div.style.marginBottom = "10px";
+        div.innerHTML = `
+            <label style="font-size:0.8em; color:#666;">Defecto pieza #${i}:</label>
+            <select class="m-rechazo" style="width:100%; padding:8px; border:1px solid #da3633; border-radius:4px;">
+                <option value="No especificado">-- Seleccione Defecto --</option>
+                ${listaDefectos.map(d => `<option value="${d}">${d}</option>`).join('')}
+                <option value="Otro">Otro (No en lista)</option>
+            </select>
+        `;
+        contenedor.appendChild(div);
+    }
+}
 async function finalizarLote(ok) {
     const s = estados[indexSel];
     if (!s || !s.activo) return;
