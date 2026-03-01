@@ -5,24 +5,139 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QC Tracker</title>
- /* Botones HOY y TODO pequeños sobre el texto */
-.filter-btn {
-    background: #468e5d;
-    color: white;
-    border: none;
-    padding: 4px 10px; /* Tamaño reducido */
-    font-size: 0.75em;  /* Letra pequeña */
-    border-radius: 3px;
-    cursor: pointer;
-    margin-right: 5px;
-    margin-bottom: 5px;
-    width: auto !important; /* Para que no ocupen todo el ancho */
-    display: inline-block;
-}
+  <style>
+    :root {
+        --bg-body: #ebedef;
+        --panel-bg: #ffffff;
+        --primary-dark: #24303c;
+        --primary-green: #468e5d;
+        --alert-red: #da3633;
+        --text-dark: #333333;
+        --border: #d1d8d5;
+        --card-shadow: rgba(0, 0, 0, 0.05);
+    }
 
-.filter-btn:hover {
-    background: #3d7a50;
-}
+    /* --- MODO OSCURO --- */
+    body.dark-mode {
+        --bg-body: #1a1a1a;
+        --panel-bg: #2d2d2d;
+        --text-dark: #e0e0e0;
+        --border: #444;
+        --card-shadow: rgba(0, 0, 0, 0.4);
+    }
+
+    body { 
+        background-color: var(--bg-body); 
+        color: var(--text-dark); 
+        font-family: 'Segoe UI', sans-serif; 
+        margin: 0; 
+        transition: background-color 0.3s ease; 
+    }
+
+    /* --- CABECERA Y BOTONES 3D --- */
+    .header { 
+        background: var(--primary-dark); 
+        padding: 12px 25px; 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center; 
+        border-bottom: 3px solid var(--primary-green); 
+        color: white; 
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2); 
+    }
+    
+    .btn-back, .btn-excel-header {
+        border-radius: 6px; cursor: pointer; font-weight: bold; display: flex; 
+        align-items: center; gap: 8px; padding: 8px 18px; transition: all 0.2s; 
+        border: none; color: white;
+    }
+    .btn-back { background: #546e7a; box-shadow: 0 4px #263238; }
+    .btn-excel-header { background: #2ecc71; box-shadow: 0 4px #1e8449; }
+    .btn-back:active, .btn-excel-header:active { transform: translateY(3px); box-shadow: 0 1px #232323; }
+
+    /* --- TARJETAS (CARD) --- */
+    .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; padding: 20px; }
+    .card { 
+        background: var(--panel-bg); border: 1px solid var(--border); border-radius: 8px; 
+        min-height: 320px; display: flex; flex-direction: column; overflow: hidden; 
+        box-shadow: 0 4px 6px var(--card-shadow); transition: 0.3s; position: relative; 
+    }
+    .card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15); border-color: var(--primary-green); }
+    .card-header { background: var(--primary-green); padding: 12px; font-weight: bold; text-align: center; color: white; text-transform: uppercase; }
+    .card-body { padding: 15px; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; text-align: center; }
+
+    /* --- BOTONES DE TARJETA --- */
+    .btn-card { border: none; padding: 12px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.3s; }
+    .btn-terminar { background: #2e7d32; color: #fff; }
+    .btn-historial { background: var(--panel-bg); color: var(--primary-green); border-top: 1px solid var(--border); }
+    body.dark-mode .btn-historial { background: #3d3d3d; color: #8bc34a; border-top: 1px solid #555; }
+
+    /* --- BOTÓN FLOTANTE (+) --- */
+    .fab { 
+        position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; 
+        background: var(--primary-green); border-radius: 50%; display: flex; 
+        justify-content: center; align-items: center; font-size: 35px; color: white; 
+        cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); z-index: 1000; transition: 0.3s; 
+    }
+    .fab:hover { transform: scale(1.1); }
+
+    /* --- MODALES GENERALES --- */
+    .modal, .airport-modal { 
+        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+        background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(3px); z-index: 4000; 
+    }
+
+    /* --- CUADRO DE INGRESO (MÁS ANGOSTO) --- */
+    #modal-nueva-inspeccion .modal-content {
+        max-width: 380px; /* Ancho reducido como pediste */
+        margin: 80px auto;
+    }
+
+    /* --- CUADRO DE ADMIN (ANCHO ORIGINAL) --- */
+    #modal-admin .modal-content {
+        max-width: 850px; /* Mantiene su ancho para ver bien las tablas */
+        margin: 20px auto;
+    }
+
+    .modal-content { 
+        background: white; padding: 25px; border-radius: 8px; position: relative; 
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3); 
+    }
+    body.dark-mode .modal-content { background: #2d2d2d; color: white; }
+
+    /* Inputs y Selects */
+    input, select { 
+        width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid var(--border); 
+        border-radius: 4px; box-sizing: border-box; background: var(--panel-bg); color: var(--text-dark);
+    }
+
+    /* BOTONES FILTRO ADMIN (PEQUEÑOS) */
+    .filter-btn {
+        background: #455a64; color: white; border: none; padding: 4px 12px; 
+        font-size: 0.7em; border-radius: 4px; cursor: pointer; margin-right: 5px;
+        width: auto !important; display: inline-block; font-weight: bold;
+    }
+    .filter-btn:hover { background: var(--primary-green); }
+
+    /* BOTÓN INICIAR (VERDE GRANDE) */
+    .btn-main { 
+        background: var(--primary-green); color: white; border: none; padding: 12px 20px; 
+        cursor: pointer; border-radius: 4px; font-weight: bold; width: 100%; 
+    }
+
+    /* TABLAS DEL ADMIN */
+    .airport-table { width: 100%; border-collapse: collapse; font-size: 0.85em; margin-top: 15px; }
+    .airport-table th { background: #f1f3f5; padding: 10px; border-bottom: 2px solid var(--primary-green); color: var(--primary-dark); text-align: left; }
+    .airport-table td { padding: 8px; border-bottom: 1px solid #eee; }
+    body.dark-mode .airport-table th { background: #3d3d3d; color: white; }
+
+    /* OTROS DETALLES */
+    #reloj { font-family: monospace; font-size: 1.1em; background: rgba(0,0,0,0.3); padding: 4px 12px; border-radius: 4px; }
+    .user-info { background: rgba(255,255,255,0.1); padding: 4px 12px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); }
+    .lote-destacado { font-size: 1.4em; font-weight: 800; margin: 5px 0; color: var(--primary-dark); }
+    body.dark-mode .lote-destacado { color: white; }
+    .timer-display { font-family: monospace; font-size: 1.7em; color: var(--primary-green); font-weight: bold; margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; }
+</style>
 </head>
 
 <body onload="inicializarSistema()">
