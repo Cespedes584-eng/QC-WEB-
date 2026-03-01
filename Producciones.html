@@ -5,9 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QC Tracker</title>
-    <style>
+  <style>
     :root {
-        /* Paleta unificada */
         --bg-body: #ebedef;
         --panel-bg: #ffffff;
         --primary-dark: #24303c;
@@ -27,28 +26,61 @@
         --card-shadow: rgba(0, 0, 0, 0.4);
     }
 
-    body.dark-mode .modal-content {
-        background: #2d2d2d;
+    body.dark-mode .modal-content { background: #2d2d2d; color: white; }
+    body.dark-mode .airport-table th { background: #3d3d3d; color: white; }
+    body.dark-mode .airport-table td { border-bottom: 1px solid #444; }
+    body.dark-mode .lote-destacado { color: #ffffff; }
+    body.dark-mode .badge-info span { background: #3d3d3d; border: 1px solid #555; color: #8bc34a; }
+
+    /* --- BOTONES DE CABECERA (VOLVER Y EXCEL) --- */
+    .btn-back, .btn-excel-header {
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 18px;
+        transition: all 0.2s ease;
+        border: none;
+        box-shadow: 0 4px #2c3e50; /* Sombra que simula grosor de botón */
         color: white;
     }
 
-    body.dark-mode .airport-table th {
-        background: #3d3d3d;
-        color: white;
+    .btn-back {
+        background: linear-gradient(180deg, #546e7a, #455a64);
+        box-shadow: 0 4px #263238;
     }
 
-    body.dark-mode .airport-table td {
-        border-bottom: 1px solid #444;
+    .btn-excel-header {
+        background: linear-gradient(180deg, #2ecc71, #27ae60);
+        box-shadow: 0 4px #1e8449;
     }
 
-    body.dark-mode .lote-destacado {
-        color: #ffffff;
+    /* Efecto Hover (Cuando pasas el mouse) */
+    .btn-back:hover, .btn-excel-header:hover {
+        filter: brightness(1.1);
+        transform: translateY(-1px);
+        box-shadow: 0 5px #263238;
     }
 
-    body.dark-mode .badge-info span {
-        background: #3d3d3d;
-        border: 1px solid #555;
-        color: #8bc34a;
+    /* EFECTO PULSACIÓN (Cuando haces clic) */
+    .btn-back:active, .btn-excel-header:active {
+        transform: translateY(3px); /* Baja el botón */
+        box-shadow: 0 1px #263238; /* La sombra se encoge */
+    }
+
+    /* Ajustes específicos para Modo Oscuro */
+    body.dark-mode .btn-back {
+        background: linear-gradient(180deg, #37474f, #263238);
+        box-shadow: 0 4px #101518;
+    }
+    body.dark-mode .btn-excel-header {
+        background: linear-gradient(180deg, #1e8449, #145a32);
+        box-shadow: 0 4px #0a2d19;
+    }
+    body.dark-mode .btn-back:active, body.dark-mode .btn-excel-header:active {
+        box-shadow: 0 1px #000;
     }
 
     body {
@@ -77,7 +109,6 @@
         padding: 20px;
     }
 
-    /* --- MEJORA: TARJETAS CON ELEVACIÓN (Punto 2) --- */
     .card {
         background: var(--panel-bg);
         border: 1px solid var(--border);
@@ -96,9 +127,7 @@
         box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
     }
 
-    .card.inspeccionando {
-        border: 2px solid var(--primary-green);
-    }
+    .card.inspeccionando { border: 2px solid var(--primary-green); }
 
     .card-header {
         background: var(--primary-green);
@@ -110,15 +139,6 @@
         letter-spacing: 1px;
     }
 
-    .card-body {
-        padding: 15px;
-        flex-grow: 1;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        text-align: center;
-    }
-
     .lote-destacado {
         font-size: 1.4em;
         font-weight: 800;
@@ -126,18 +146,8 @@
         color: var(--primary-dark);
     }
 
-    .badge-info {
-        font-size: 0.75em;
-        margin-bottom: 8px;
-        color: var(--primary-green);
-    }
-
-    .badge-info span {
-        background: #f0f4f1;
-        padding: 2px 6px;
-        border-radius: 4px;
-        border: 1px solid #d1d8d5;
-    }
+    .badge-info { font-size: 0.75em; margin-bottom: 8px; color: var(--primary-green); }
+    .badge-info span { background: #f0f4f1; padding: 2px 6px; border-radius: 4px; border: 1px solid #d1d8d5; }
 
     .timer-display {
         font-family: monospace;
@@ -147,26 +157,6 @@
         margin-top: 10px;
         border-top: 1px solid #eee;
         padding-top: 10px;
-    }
-
-    .btn-card {
-        border: none;
-        padding: 12px;
-        cursor: pointer;
-        font-weight: bold;
-        width: 100%;
-        transition: 0.3s;
-    }
-
-    .btn-terminar {
-        background: #2e7d32;
-        color: #fff;
-    }
-
-    .btn-historial {
-        background: var(--panel-bg);
-        color: var(--primary-green);
-        border-top: 1px solid var(--border);
     }
 
     .btn-main {
@@ -179,14 +169,8 @@
         font-weight: bold;
     }
 
-    /* --- MEJORA: RESALTADO RECHAZOS (Punto 3) --- */
-    .fila-rechazo {
-        background-color: #fff5f5 !important;
-    }
-    
-    body.dark-mode .fila-rechazo {
-        background-color: #4a1c1c !important;
-    }
+    .fila-rechazo { background-color: #fff5f5 !important; }
+    body.dark-mode .fila-rechazo { background-color: #4a1c1c !important; }
 
     .modal, .airport-modal {
         display: none;
@@ -211,55 +195,6 @@
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
     }
 
-    .airport-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.8em;
-        margin-top: 10px;
-    }
-
-    .airport-table th {
-        background: #f1f3f5;
-        padding: 10px;
-        border-bottom: 2px solid var(--primary-green);
-        color: var(--primary-dark);
-    }
-
-    .airport-table td {
-        padding: 8px;
-        border-bottom: 1px solid #eee;
-        text-align: center;
-    }
-
-    input, select {
-        width: 100%;
-        padding: 10px;
-        margin-bottom: 12px;
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        box-sizing: border-box;
-        background: var(--panel-bg);
-        color: var(--text-dark);
-    }
-
-    .fab {
-        position: fixed;
-        bottom: 30px;
-        right: 30px;
-        width: 60px;
-        height: 60px;
-        background: var(--primary-green);
-        border-radius: 50%;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        font-size: 35px;
-        color: white;
-        cursor: pointer;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        transition: 0.3s;
-    }
-
     #reloj {
         font-family: monospace;
         font-size: 1.1em;
@@ -269,6 +204,7 @@
         border-radius: 4px;
         border: 1px solid rgba(255, 255, 255, 0.1);
     }
+    body.dark-mode #reloj { color: #ffd54f; border: 1px solid #ffd54f55; }
 </style>
 </head>
 
