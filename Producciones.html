@@ -5,75 +5,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QC Tracker</title>
-  <style>
-    :root {
-        --bg-body: #ebedef;
-        --panel-bg: #ffffff;
-        --primary-dark: #24303c;
-        --primary-green: #468e5d;
-        --alert-red: #da3633;
-        --text-dark: #333333;
-        --border: #d1d8d5;
-        --card-shadow: rgba(0, 0, 0, 0.05);
-    }
+ /* Botones HOY y TODO pequeños sobre el texto */
+.filter-btn {
+    background: #468e5d;
+    color: white;
+    border: none;
+    padding: 4px 10px; /* Tamaño reducido */
+    font-size: 0.75em;  /* Letra pequeña */
+    border-radius: 3px;
+    cursor: pointer;
+    margin-right: 5px;
+    margin-bottom: 5px;
+    width: auto !important; /* Para que no ocupen todo el ancho */
+    display: inline-block;
+}
 
-    /* --- MODO OSCURO --- */
-    body.dark-mode {
-        --bg-body: #1a1a1a;
-        --panel-bg: #2d2d2d;
-        --text-dark: #e0e0e0;
-        --border: #444;
-        --card-shadow: rgba(0, 0, 0, 0.4);
-    }
-
-    body { background-color: var(--bg-body); color: var(--text-dark); font-family: 'Segoe UI', sans-serif; margin: 0; transition: background-color 0.3s ease; }
-
-    /* --- CABECERA Y BOTONES 3D (LO QUE QUERÍAS MEJORAR) --- */
-    .header { background: var(--primary-dark); padding: 12px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--primary-green); color: white; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
-    
-    .btn-back, .btn-excel-header {
-        border-radius: 6px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 8px; padding: 8px 18px; transition: all 0.2s; border: none; color: white;
-    }
-    .btn-back { background: #546e7a; box-shadow: 0 4px #263238; }
-    .btn-excel-header { background: #2ecc71; box-shadow: 0 4px #1e8449; }
-    .btn-back:active, .btn-excel-header:active { transform: translateY(3px); box-shadow: 0 1px #232323; }
-
-    /* --- TARJETAS (RESTAURADO EL HOVER) --- */
-    .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; padding: 20px; }
-    .card { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 8px; min-height: 320px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 6px var(--card-shadow); transition: 0.3s; position: relative; }
-    .card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15); border-color: var(--primary-green); }
-    .card-header { background: var(--primary-green); padding: 12px; font-weight: bold; text-align: center; color: white; text-transform: uppercase; }
-    .card-body { padding: 15px; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; text-align: center; }
-
-    /* --- BOTONES DE TARJETA --- */
-    .btn-card { border: none; padding: 12px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.3s; }
-    .btn-terminar { background: #2e7d32; color: #fff; }
-    .btn-historial { background: var(--panel-bg); color: var(--primary-green); border-top: 1px solid var(--border); }
-    body.dark-mode .btn-historial { background: #3d3d3d; color: #8bc34a; border-top: 1px solid #555; }
-
-    /* --- BOTÓN FLOTANTE (+) --- */
-    .fab { position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; background: var(--primary-green); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 35px; color: white; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); z-index: 1000; transition: 0.3s; }
-    .fab:hover { transform: scale(1.1); }
-
-    /* --- ADMIN Y MODALES (RESTAURADO) --- */
-    .modal, .airport-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(3px); z-index: 4000; }
-    .modal-content { background: white; width: 90%; max-width: 800px; margin: 30px auto; padding: 25px; border-radius: 8px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
-    
-    /* Input de ingreso (RESTAURADO COMO ANTES) */
-    .modal-content input, .modal-content select {
-        width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; display: inline-block;
-    }
-    .btn-main { background: var(--primary-green); color: white; border: none; padding: 12px 20px; cursor: pointer; border-radius: 4px; font-weight: bold; width: 100%; }
-
-    /* Estilo original de tablas del Admin */
-    .airport-table { width: 100%; border-collapse: collapse; font-size: 0.9em; margin-top: 15px; }
-    .airport-table th { background: #f1f3f5; padding: 12px; border-bottom: 2px solid var(--primary-green); color: var(--primary-dark); text-align: left; }
-    .airport-table td { padding: 10px; border-bottom: 1px solid #eee; }
-
-    /* RELOJ Y USUARIO */
-    #reloj { font-family: monospace; font-size: 1.1em; background: rgba(0,0,0,0.3); padding: 4px 12px; border-radius: 4px; }
-    .user-info { background: rgba(255,255,255,0.1); padding: 4px 12px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); }
-</style>
+.filter-btn:hover {
+    background: #3d7a50;
+}
 </head>
 
 <body onload="inicializarSistema()">
