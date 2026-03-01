@@ -542,27 +542,38 @@
      function obtenerConteosTurnos(nombreLinea) {
     let conteo = { ta: 0, ra: 0, tb: 0, rb: 0 };
     const ahora = new Date();
-    const hoy = ahora.getDate().toString().padStart(2, '0') + '/' + 
-                 (ahora.getMonth() + 1).toString().padStart(2, '0') + '/' + 
-                 ahora.getFullYear();
+    
+    // Formatos posibles de hoy para comparar (ej: "28/02/2026" y "28/2/2026")
+    const dia = ahora.getDate();
+    const mes = ahora.getMonth() + 1;
+    const anio = ahora.getFullYear();
+    const hoyConCero = `${dia.toString().padStart(2, '0')}/${mes.toString().padStart(2, '0')}/${anio}`;
+    const hoySinCero = `${dia}/${mes}/${anio}`;
     
     dbHistorial.forEach(r => {
-        const fechaRegistro = String(r.fecha).trim();
+        // Normalizar fecha del registro: eliminar espacios y asegurar que sea String
+        const fechaR = String(r.fecha || "").trim();
+        const lineaR = String(r.linea || "").trim();
 
-        if (r.linea === nombreLinea && fechaRegistro === hoy) {
+        // Si la línea coincide Y la fecha es hoy (en cualquiera de los dos formatos)
+        if (lineaR === nombreLinea && (fechaR === hoyConCero || fechaR === hoySinCero)) {
+            
             // Extraer hora y minutos de forma segura
             let horaString = String(r.horaFin || r.hora || "00:00");
             let partes = horaString.split(':');
-            let hrs = parseInt(partes[0]);
-            let mins = parseInt(partes[1] || 0);
+            let hrs = parseInt(partes[0]) || 0;
+            let mins = parseInt(partes[1]) || 0;
             let minutosTotales = (hrs * 60) + mins;
 
-            // Definir Turno (Corte 15:30 = 930 min)
+            // Turno A: 06:00 a 15:29 (930 min)
             let esTurnoA = (minutosTotales >= 360 && minutosTotales < 930);
+            
+            // Comparamos resultado ignorando mayúsculas
+            const res = String(r.resultado || "").toUpperCase();
 
-            if (r.resultado === "ACEPTADO") {
+            if (res === "ACEPTADO") {
                 if (esTurnoA) conteo.ta++; else conteo.tb++;
-            } else {
+            } else if (res === "RECHAZADO") {
                 if (esTurnoA) conteo.ra++; else conteo.rb++;
             }
         }
