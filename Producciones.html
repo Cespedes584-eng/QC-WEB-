@@ -271,7 +271,7 @@
         <div style="display:flex; align-items:center; gap:15px;">
             <button class="btn-back" onclick="location.href='index.html'">🏠 VOLVER</button>
             <button id="btn-admin-access" class="btn-main" style="background:#5c6bc0; display: none;" onclick="abrirAdmin()">⚙️ ADMIN</button>
-            <span style="font-weight: 800; color: white; font-size: 1.2em; letter-spacing: 1px;">QC TRACKER V13.8</span>
+            <span style="font-weight: 800; color: white; font-size: 1.2em; letter-spacing: 1px;">QC</span>
         </div>
         <div style="display:flex; gap:15px; align-items:center;">
             <div id="user-display" class="user-info">USUARIO</div>
@@ -387,14 +387,17 @@
     </div>
 
     <div id="modal-rechazos" class="modal">
-        <div class="modal-content">
-            <h3 style="color:var(--alert-red);">Defectos Detectados</h3>
-            <label>Piezas rechazadas:</label>
-            <input type="number" id="rech-qty" value="1" min="1" onchange="generarDefectos()">
-            <div id="contenedor-defectos"></div>
-            <button class="btn-main" style="background:var(--alert-red); width:100%;" onclick="finalizarLote(false)">GUARDAR RECHAZO</button>
-        </div>
+    <div class="modal-content">
+        <button style="position:absolute; top:10px; right:15px; font-size:22px; border:none; background:none; cursor:pointer; color:#888;" 
+                onclick="cerrarModal('modal-rechazos')">×</button>
+        
+        <h3 style="color:var(--alert-red);">Defectos Detectados</h3>
+        <label>Piezas rechazadas:</label>
+        <input type="number" id="rech-qty" value="1" min="1" oninput="generarDefectos()" onchange="generarDefectos()">
+        <div id="contenedor-defectos"></div>
+        <button class="btn-main" style="background:var(--alert-red); width:100%;" onclick="finalizarLote(false)">GUARDAR RECHAZO</button>
     </div>
+</div>
 
     <div id="modal-defecto-admin" class="modal">
         <div class="modal-content">
@@ -665,29 +668,27 @@ async function iniciarLote() {
 function generarDefectos() {
     const qty = document.getElementById('rech-qty').value;
     const contenedor = document.getElementById('contenedor-defectos');
-    const s = estados[indexSel]; // Obtenemos la info de la línea actual
+    const s = estados[indexSel];
     
     if (!contenedor) return;
     contenedor.innerHTML = "";
 
-    // Buscamos los defectos en el catálogo según la Línea y el Proceso actual
     const lineaActual = lineasArr[indexSel];
     const procesoActual = s.proceso;
     
-    // Si no hay defectos configurados para esa combinación, usamos una lista vacía
+    // Obtenemos los defectos configurados en Admin
     const listaDefectos = (catalogoDefectos[lineaActual] && catalogoDefectos[lineaActual][procesoActual]) 
                           ? catalogoDefectos[lineaActual][procesoActual] 
                           : [];
 
     for (let i = 1; i <= qty; i++) {
         const div = document.createElement('div');
-        div.style.marginBottom = "10px";
+        div.style.cssText = "margin-bottom:12px; padding:8px; border-left:4px solid var(--alert-red); background:#fff5f5;";
         div.innerHTML = `
-            <label style="font-size:0.8em; color:#666;">Defecto pieza #${i}:</label>
-            <select class="m-rechazo" style="width:100%; padding:8px; border:1px solid #da3633; border-radius:4px;">
-                <option value="No especificado">-- Seleccione Defecto --</option>
+            <label style="font-size:0.75em; font-weight:bold; color:#555; display:block; margin-bottom:4px;">PIEZA #${i}</label>
+            <select class="m-rechazo" required style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px; font-size:0.9em;">
+                <option value="">-- Seleccione el Defecto --</option>
                 ${listaDefectos.map(d => `<option value="${d}">${d}</option>`).join('')}
-                <option value="Otro">Otro (No en lista)</option>
             </select>
         `;
         contenedor.appendChild(div);
