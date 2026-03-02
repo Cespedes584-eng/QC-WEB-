@@ -846,41 +846,50 @@ async function finalizarLote(ok) {
         }, 15000); 
     }
 }
-function verificarHibrida() {
-    const idx = document.getElementById('r-linea').value;
-    const nom = lineasArr[idx];
-    const cont = document.getElementById('contenedor-hibrida');
-    const selProceso = document.getElementById('r-proceso');
-    const selAnsi = document.getElementById('r-ansi');
-    // Buscamos el contenedor padre para ocultar también el título "Nivel ANSI"
-    const contenedorPadreAnsi = selAnsi.parentElement; 
+ function verificarHibrida() {
+    const idx = document.getElementById('r-linea').value;
+    const nom = lineasArr[idx];
+    const cont = document.getElementById('contenedor-hibrida');
+    const selProceso = document.getElementById('r-proceso');
+    const selAnsi = document.getElementById('r-ansi');
 
-    // 1. Lógica de productos híbridos
-    if (nom.includes(" / ")) {
-        document.getElementById('r-producto-especifico').innerHTML = nom.split(" / ").map(p => `<option value="${p.trim()}">${p.trim()}</option>`).join('');
-        cont.style.display = 'block';
-    } else {
-        cont.style.display = 'none';
-    }
+    // 1. Lógica de productos híbridos (tu código actual)
+    if (nom.includes(" / ")) {
+        document.getElementById('r-producto-especifico').innerHTML = nom.split(" / ").map(p => `<option value="${p.trim()}">${p.trim()}</option>`).join('');
+        cont.style.display = 'block';
+    } else {
+        cont.style.display = 'none';
+    }
 
-    // 2. Lógica de procesos (Generación de opciones)
-    let opciones = `<option value="Shaft">Shaft</option><option value="Final">Final</option><option value="HubBonding">Hub Bonding</option><option value="Pre-Empaque">Pre-Empaque</option>`;
-    if (nom.toUpperCase().includes("SCEPTER")) opciones += `<option value="Guidewire">Guidewire</option>`;
-    selProceso.innerHTML = opciones;
+    // 2. Lógica de procesos (tu código actual)
+    let opciones = `<option value="Shaft">Shaft</option><option value="Final">Final</option><option value="HubBonding">Hub Bonding</option><option value="Pre-Empaque">Pre-Empaque</option>`;
+    if (nom.toUpperCase().includes("SCEPTER")) opciones += `<option value="Guidewire">Guidewire</option>`;
+    selProceso.innerHTML = opciones;
 
-    // 3. Lógica ANSI (Ocultar/Mostrar de forma inteligente)
-    const actualizarVisibilidadAnsi = () => {
-        if (selProceso.value === "Pre-Empaque") {
-            contenedorPadreAnsi.style.display = "none"; // Oculta todo el bloque
-            selAnsi.value = "N/A"; // Asigna valor por defecto para la base de datos
-        } else {
-            contenedorPadreAnsi.style.display = "block"; // Muestra todo el bloque
-        }
-    };
-
-    // Asignamos el evento y lo ejecutamos de inmediato para el estado inicial
-    selProceso.onchange = actualizarVisibilidadAnsi;
-    actualizarVisibilidadAnsi();
+    // --- NUEVO: Lógica para ocultar ANSI si es Pre-Empaque ---
+    // Agregamos un listener para cuando cambien el proceso manualmente
+    selProceso.onchange = function() {
+        if (this.value === "Pre-Empaque") {
+            selAnsi.style.display = "none";
+            // Opcional: podrías poner una etiqueta que diga "No aplica"
+        } else {
+            selAnsi.style.display = "block";
+        }
+    };
+    
+    // Ejecutar una vez al abrir para resetear el estado
+    selAnsi.style.display = (selProceso.value === "Pre-Empaque") ? "none" : "block";
+// Lógica para ocultar ANSI si es Pre-Empaque
+    selProceso.onchange = function() {
+        if (this.value === "Pre-Empaque") {
+            selAnsi.style.display = "none";
+        } else {
+            selAnsi.style.display = "block";
+        }
+    };
+    
+    // Resetear el estado al abrir el modal
+    selAnsi.style.display = (selProceso.value === "Pre-Empaque") ? "none" : "block";
 }
 async function sincronizarConNube() {
     // 1. No sincronizar si estamos operando o hay un modal abierto
