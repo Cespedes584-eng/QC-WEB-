@@ -105,44 +105,70 @@
         padding: 20px;
     }
 
-    /* --- TARJETAS CON HOVER EFFECT --- */
-    .card {
-        background: var(--panel-bg);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        min-height: 320px;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        box-shadow: var(--card-shadow);
-        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-    }
+   /* --- NUEVAS TARJETAS MODERNAS --- */
+.card {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px; /* Bordes más redondeados */
+    min-height: 320px;
+    display: flex;
+    flex-direction: column; /* Clave para empujar el botón al final */
+    overflow: hidden;
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
 
-    .card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.15);
-        border-color: var(--primary-green);
-    }
+.card:hover {
+    transform: translateY(-8px); /* Elevación más pronunciada */
+    box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+    border-color: var(--primary-green);
+}
 
-    .card.inspeccionando { border: 2px solid var(--primary-green); }
+.card.inspeccionando { 
+    border: 2px solid var(--primary-green); 
+}
 
-    .card-header {
-        background: var(--primary-green);
-        padding: 12px;
-        font-weight: bold;
-        text-align: center;
-        color: white;
-        text-transform: uppercase;
-    }
+.card-header {
+    background: var(--primary-green);
+    padding: 12px;
+    font-weight: bold;
+    text-align: center;
+    color: white;
+    text-transform: uppercase;
+    font-size: 0.9em;
+    letter-spacing: 1px;
+}
 
-    .card-body { 
-        padding: 15px; 
-        flex-grow: 1; 
-        display: flex; 
-        flex-direction: column; 
-        justify-content: center; 
-        text-align: center; 
-    }
+.card-body { 
+    padding: 20px; 
+    flex-grow: 1; /* Esto obliga al contenido a ocupar el espacio y empujar el footer */
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center; 
+    text-align: center; 
+}
+
+/* --- CLASES NUEVAS PARA LOS BOTONES SÓLIDOS --- */
+.card-footer-clean {
+    margin-top: auto; /* Empuja siempre al borde inferior */
+    padding: 0;
+}
+
+.btn-block {
+    width: 100%;
+    border: none;
+    padding: 15px 0; /* Botón más alto y táctil */
+    font-weight: bold;
+    cursor: pointer;
+    text-transform: uppercase;
+    font-size: 0.85em;
+    display: block;
+    transition: background 0.2s;
+}
+
+.btn-block:active {
+    filter: brightness(0.9);
+}
 
     /* --- MODALES --- */
     .modal {
@@ -526,34 +552,46 @@
         return `
         <div class="card ${s.activo ? 'inspeccionando' : ''}">
             <div class="card-header">${tituloCard}</div>
-            <div style="display: flex; background: #f8f9fa; font-size: 0.8em; padding: 5px; border-bottom: 1px solid #eee;">
-                <div style="flex:1; text-align:center; border-right: 1px solid #eee;">
-                    TA: <span style="color: #28a745; font-weight: bold;">${turnos.ta}</span> / <span style="color: #dc3545; font-weight: bold;">${turnos.ra}</span>
+            
+            <div style="display: flex; background: rgba(0,0,0,0.03); font-size: 0.75em; padding: 6px; border-bottom: 1px solid rgba(0,0,0,0.05);">
+                <div style="flex:1; text-align:center; border-right: 1px solid rgba(0,0,0,0.1);">
+                    TA: <span style="color:#28a745; font-weight:bold;">${turnos.ta}</span> / <span style="color:#dc3545; font-weight:bold;">${turnos.ra}</span>
                 </div>
                 <div style="flex:1; text-align:center;">
-                    TB: <span style="color: #28a745; font-weight: bold;">${turnos.tb}</span> / <span style="color: #dc3545; font-weight: bold;">${turnos.rb}</span>
+                    TB: <span style="color:#28a745; font-weight:bold;">${turnos.tb}</span> / <span style="color:#dc3545; font-weight:bold;">${turnos.rb}</span>
                 </div>
             </div>
 
-            <div class="card-body" style="min-height: 120px; display: flex; flex-direction: column; justify-content: center;">
+            <div class="card-body">
                 ${s.activo ? `
-                    <div>👤 ${s.inspector}</div>
-                    <div class="lote-destacado">${s.lote}</div>
-                    <div class="badge-info">
-                        <span>${s.proceso}</span> • <span>${s.ansi}</span>
+                    <div style="font-size:0.85em; color:#777; margin-bottom:4px;">👤 ${s.inspector}</div>
+                    <div style="font-size:1.7em; font-weight:800; color:var(--text-dark); margin-bottom:8px;">${s.lote}</div>
+                    
+                    <div id="t-${i}" style="font-family:monospace; font-size:1.4em; font-weight:bold; color:var(--primary-green); background: rgba(70, 142, 93, 0.1); padding: 5px 10px; border-radius: 6px; display: inline-block;">
+                        ${document.getElementById(`t-${i}`) ? document.getElementById(`t-${i}`).innerText : s.tiempo}
                     </div>
-                   <div class="timer-display" id="t-${i}">${document.getElementById(`t-${i}`) ? document.getElementById(`t-${i}`).innerText : s.tiempo}</div>
+
+                    <div style="margin-top:12px;">
+                        <span style="background:var(--primary-green); color:white; padding:4px 10px; border-radius:20px; font-size:0.75em; font-weight:bold;">
+                            ${s.proceso} ${s.ansi !== 'N/A' ? '• ' + s.ansi : ''}
+                        </span>
+                    </div>
                 ` : `
-                    <div style="text-align: center; color: #ccc; font-weight: bold; font-size: 1.2em; letter-spacing: 2px; padding: 20px 0;">
-                        DISPONIBLE
+                    <div style="opacity: 0.3; filter: grayscale(1);">
+                        <div style="font-size: 2.5em; margin-bottom: 5px;">📋</div>
+                        <div style="font-weight: bold; letter-spacing: 2px; font-size: 0.8em;">LÍNEA DISPONIBLE</div>
                     </div>
                 `}
             </div>
 
-            <div class="${s.activo ? '' : 'card-footer-clean'}">
+            <div class="card-footer-clean">
                 ${s.activo ? 
-                    `<div style="padding:10px;"><button class="btn-main" onclick="prepararFin(${i})">TERMINAR</button></div>` : 
-                    `<button class="btn-historial-v3" onclick="abrirHistorialIndividual(${i})">HISTORIAL</button>`
+                    `<button class="btn-block" style="background:var(--primary-green); color:white;" onclick="prepararFin(${i})">
+                        FINALIZAR INSPECCIÓN
+                    </button>` : 
+                    `<button class="btn-block" style="background:#ffffff; color:var(--primary-green); border-top:1px solid #eee;" onclick="abrirHistorialIndividual(${i})">
+                        VER HISTORIAL
+                    </button>`
                 }
             </div>
         </div>`;
@@ -808,14 +846,16 @@ async function finalizarLote(ok) {
         }, 15000); 
     }
 }
-   function verificarHibrida() {
+function verificarHibrida() {
     const idx = document.getElementById('r-linea').value;
     const nom = lineasArr[idx];
     const cont = document.getElementById('contenedor-hibrida');
     const selProceso = document.getElementById('r-proceso');
     const selAnsi = document.getElementById('r-ansi');
+    // Buscamos el contenedor padre para ocultar también el título "Nivel ANSI"
+    const contenedorPadreAnsi = selAnsi.parentElement; 
 
-    // 1. Lógica de productos híbridos (tu código actual)
+    // 1. Lógica de productos híbridos
     if (nom.includes(" / ")) {
         document.getElementById('r-producto-especifico').innerHTML = nom.split(" / ").map(p => `<option value="${p.trim()}">${p.trim()}</option>`).join('');
         cont.style.display = 'block';
@@ -823,37 +863,25 @@ async function finalizarLote(ok) {
         cont.style.display = 'none';
     }
 
-    // 2. Lógica de procesos (tu código actual)
+    // 2. Lógica de procesos (Generación de opciones)
     let opciones = `<option value="Shaft">Shaft</option><option value="Final">Final</option><option value="HubBonding">Hub Bonding</option><option value="Pre-Empaque">Pre-Empaque</option>`;
     if (nom.toUpperCase().includes("SCEPTER")) opciones += `<option value="Guidewire">Guidewire</option>`;
     selProceso.innerHTML = opciones;
 
-    // --- NUEVO: Lógica para ocultar ANSI si es Pre-Empaque ---
-    // Agregamos un listener para cuando cambien el proceso manualmente
-    selProceso.onchange = function() {
-        if (this.value === "Pre-Empaque") {
-            selAnsi.style.display = "none";
-            // Opcional: podrías poner una etiqueta que diga "No aplica"
+    // 3. Lógica ANSI (Ocultar/Mostrar de forma inteligente)
+    const actualizarVisibilidadAnsi = () => {
+        if (selProceso.value === "Pre-Empaque") {
+            contenedorPadreAnsi.style.display = "none"; // Oculta todo el bloque
+            selAnsi.value = "N/A"; // Asigna valor por defecto para la base de datos
         } else {
-            selAnsi.style.display = "block";
+            contenedorPadreAnsi.style.display = "block"; // Muestra todo el bloque
         }
     };
-    
-    // Ejecutar una vez al abrir para resetear el estado
-    selAnsi.style.display = (selProceso.value === "Pre-Empaque") ? "none" : "block";
-// Lógica para ocultar ANSI si es Pre-Empaque
-    selProceso.onchange = function() {
-        if (this.value === "Pre-Empaque") {
-            selAnsi.style.display = "none";
-        } else {
-            selAnsi.style.display = "block";
-        }
-    };
-    
-    // Resetear el estado al abrir el modal
-    selAnsi.style.display = (selProceso.value === "Pre-Empaque") ? "none" : "block";
-}
 
+    // Asignamos el evento y lo ejecutamos de inmediato para el estado inicial
+    selProceso.onchange = actualizarVisibilidadAnsi;
+    actualizarVisibilidadAnsi();
+}
 async function sincronizarConNube() {
     // 1. No sincronizar si estamos operando o hay un modal abierto
     if (pausaSincro || document.querySelector('.modal[style*="block"]')) return;
