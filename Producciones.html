@@ -6,17 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QC Tracker</title>
 <style>
-    /* --- VARIABLES Y BASE --- */
+    /* --- VARIABLES DE COLOR (Soportan ambos modos) --- */
     :root {
         --bg-body: #ebedef;
         --panel-bg: #ffffff;
         --primary-dark: #24303c;
         --primary-green: #468e5d;
+        --alert-red: #da3633;
         --text-dark: #333333;
         --border: #d1d8d5;
         --card-shadow: rgba(0, 0, 0, 0.05);
     }
 
+    /* Colores cuando el modo nocturno está activo */
     body.dark-mode {
         --bg-body: #1a1a1a;
         --panel-bg: #2d2d2d;
@@ -33,7 +35,7 @@
         transition: background 0.3s, color 0.3s;
     }
 
-    /* --- HEADER Y BOTONES DE NAVEGACIÓN --- */
+    /* --- CABECERA --- */
     .header {
         background: var(--primary-dark);
         padding: 12px 25px;
@@ -44,30 +46,58 @@
         color: white;
     }
 
+    /* --- BOTONES DEL HEADER (Volver y Excel) --- */
     .btn-back {
         background: #ffffff !important;
         color: #333 !important;
         border: 1px solid #ddd !important;
         padding: 8px 15px !important;
         border-radius: 6px !important;
-        font-weight: bold;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
+        font-weight: bold !important;
+        cursor: pointer !important;
+        font-size: 0.85em !important;
+        display: flex !important;
+        align-items: center !important;
         gap: 5px;
+        transition: all 0.2s ease !important;
+    }
+
+    .btn-back:hover {
+        background: #f0f0f0 !important;
+        transform: translateY(-1px);
     }
 
     .btn-excel-header {
-        background: #1d6f42 !important;
+        background: #1d6f42 !important; /* Verde Excel */
         color: white !important;
-        border: none;
-        padding: 8px 15px;
-        border-radius: 6px;
-        font-weight: bold;
-        cursor: pointer;
+        border: none !important;
+        padding: 8px 15px !important;
+        border-radius: 6px !important;
+        font-weight: bold !important;
+        cursor: pointer !important;
+        font-size: 0.85em !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 5px;
+        transition: all 0.2s ease !important;
     }
 
-    /* --- GRID Y TARJETAS (Efecto Resaltado) --- */
+    .btn-excel-header:hover {
+        background: #155a35 !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    #reloj {
+        background: rgba(255,255,255,0.1);
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-family: monospace;
+        color: #fff;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    /* --- GRID DE TARJETAS --- */
     .grid-container {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -75,6 +105,7 @@
         padding: 20px;
     }
 
+    /* --- TARJETAS CON HOVER EFFECT --- */
     .card {
         background: var(--panel-bg);
         border: 1px solid var(--border);
@@ -84,12 +115,13 @@
         flex-direction: column;
         overflow: hidden;
         box-shadow: var(--card-shadow);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
     }
 
     .card:hover {
         transform: translateY(-5px);
         box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+        border-color: var(--primary-green);
     }
 
     .card.inspeccionando { border: 2px solid var(--primary-green); }
@@ -112,60 +144,138 @@
         text-align: center; 
     }
 
-    /* --- BOTONES SÓLIDOS DE TARJETA (Ancho Completo) --- */
-    .card-footer-full {
-        margin-top: auto;
-        padding: 0 !important;
-    }
-
-    .btn-block {
-        width: 100% !important;
-        border: none !important;
-        padding: 15px 0 !important;
-        font-weight: bold !important;
-        cursor: pointer;
-        text-transform: uppercase;
-        font-size: 0.9em;
-    }
-
-    .btn-terminar-solid { background: var(--primary-green) !important; color: white !important; }
-    .btn-historial-solid { background: #6c757d !important; color: white !important; }
-
-    /* --- MODALES (Admin y Lotes) --- */
+    /* --- MODALES --- */
     .modal {
         display: none;
         position: fixed;
-        z-index: 9999;
-        left: 0; top: 0;
+        top: 0; left: 0;
         width: 100%; height: 100%;
-        background-color: rgba(0,0,0,0.6);
-        backdrop-filter: blur(3px);
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 4000;
     }
 
     .modal-content {
-        background-color: var(--panel-bg);
-        margin: 5% auto;
-        padding: 25px;
-        border-radius: 12px;
+        background: var(--panel-bg);
+        color: var(--text-dark);
         width: 90%;
-        max-width: 600px;
-        box-shadow: 0 5px 30px rgba(0,0,0,0.3);
+        max-width: 500px;  
+        margin: 50px auto;
+        padding: 25px;
+        border-radius: 8px;
+        position: relative;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
 
-    /* --- BOTÓN INGRESAR LOTE (Corregido) --- */
-    .btn-ingresar-lote {
-        background-color: var(--primary-green) !important;
-        color: white !important;
+    /* --- FORMULARIOS --- */
+    input, select {
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 12px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        box-sizing: border-box;
+        background: var(--panel-bg);
+        color: var(--text-dark);
+    }
+
+    /* --- BOTONES PRINCIPALES --- */
+    .btn-main {
+        background: var(--primary-green);
+        color: white;
         border: none;
-        padding: 12px 20px;
-        border-radius: 8px;
+        padding: 12px;
+        cursor: pointer;
+        border-radius: 4px;
         font-weight: bold;
         width: 100%;
+        display: block;
+        transition: 0.2s;
+    }
+
+    .btn-main:hover { opacity: 0.9; }
+
+    /* --- BOTONES DE FILTRO --- */
+    #sec-yield button {
+        width: auto !important;
+        padding: 8px 20px;
+        margin-right: 5px;
+        display: inline-block;
+        font-size: 0.85em;
+    }
+
+    /* --- TABLAS AIRPORT --- */
+    .airport-modal {
+        display: none;
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: rgba(0,0,0,0.9);
+        z-index: 5000;
+    }
+
+    .airport-table {
+        width: 100%;
+        border-collapse: collapse;
         margin-top: 15px;
+        color: var(--text-dark);
+    }
+
+    .airport-table th {
+        background: var(--primary-dark);
+        color: white;
+        padding: 10px;
+        border-bottom: 2px solid var(--primary-green);
+    }
+
+    .airport-table td {
+        padding: 8px;
+        border-bottom: 1px solid var(--border);
+        text-align: center;
+    }
+
+    /* Botón flotante */
+    .fab {
+        position: fixed;
+        bottom: 30px; right: 30px;
+        width: 60px; height: 60px;
+        background: var(--primary-green);
+        border-radius: 50%;
+        display: flex;
+        justify-content: center; align-items: center;
+        font-size: 30px; color: white;
         cursor: pointer;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        z-index: 1000;
+    }
+
+    /* --- ESTILO BOTÓN HISTORIAL (Blanco/Verde) --- */
+    .btn-historial-v3 {
+        width: 100% !important;
+        background: #ffffff !important;
+        color: #468e5d !important;
+        border: none !important;
+        border-top: 1px solid #eee !important;
+        padding: 15px 0 !important;
+        font-weight: bold !important;
+        cursor: pointer !important;
+        display: block !important;
+        text-align: center !important;
+        border-radius: 0 0 8px 8px !important;
+        font-size: 0.9em !important;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin: 0 !important;
+    }
+
+    .btn-historial-v3:hover {
+        background: #fcfcfc !important;
+    }
+
+    .card-footer-clean {
+        margin-top: auto !important;
+        padding: 0 !important; 
     }
 </style>
+
 </head>
 
 <body onload="inicializarSistema()">
