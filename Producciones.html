@@ -301,6 +301,26 @@ body.dark-mode {
         margin-top: auto !important;
         padding: 0 !important; 
     }
+/* AJUSTES PARA QUITAR PESO VISUAL EN MODO OSCURO */
+body.dark-mode .card-header {
+    background: rgba(70, 142, 93, 0.2) !important; /* Verde muy sutil y transparente */
+    color: var(--primary-green) !important;
+    border-bottom: 1px solid var(--border);
+}
+
+body.dark-mode .btn-historial-v3, 
+body.dark-mode .btn-block {
+    background: transparent !important; /* Quita el bloque blanco pesado */
+    color: var(--primary-green) !important;
+    border: 1px solid rgba(70, 142, 93, 0.4) !important;
+    margin: 10px !important; /* Lo hace flotar dentro de la tarjeta */
+    width: calc(100% - 20px) !important;
+    border-radius: 8px !important;
+}
+
+body.dark-mode .btn-historial-v3:hover {
+    background: rgba(70, 142, 93, 0.1) !important;
+}
 </style>
 
 </head>
