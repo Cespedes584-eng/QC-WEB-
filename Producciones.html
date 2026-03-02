@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QC Tracker</title>
 <style>
-    /* --- VARIABLES DE COLOR (Soportan ambos modos) --- */
+    /* --- VARIABLES DE COLOR --- */
     :root {
         --bg-body: #ebedef;
         --panel-bg: #ffffff;
@@ -18,7 +18,6 @@
         --card-shadow: rgba(0, 0, 0, 0.05);
     }
 
-    /* Colores cuando el modo nocturno está activo */
     body.dark-mode {
         --bg-body: #1a1a1a;
         --panel-bg: #2d2d2d;
@@ -46,7 +45,6 @@
         color: white;
     }
 
-    /* --- BOTONES DEL HEADER (Volver y Excel) --- */
     .btn-back {
         background: #ffffff !important;
         color: #333 !important;
@@ -62,13 +60,8 @@
         transition: all 0.2s ease !important;
     }
 
-    .btn-back:hover {
-        background: #f0f0f0 !important;
-        transform: translateY(-1px);
-    }
-
     .btn-excel-header {
-        background: #1d6f42 !important; /* Verde Excel */
+        background: #1d6f42 !important;
         color: white !important;
         border: none !important;
         padding: 8px 15px !important;
@@ -80,12 +73,6 @@
         align-items: center !important;
         gap: 5px;
         transition: all 0.2s ease !important;
-    }
-
-    .btn-excel-header:hover {
-        background: #155a35 !important;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
 
     #reloj {
@@ -105,7 +92,7 @@
         padding: 20px;
     }
 
-    /* --- TARJETAS CON HOVER EFFECT --- */
+    /* --- TARJETAS --- */
     .card {
         background: var(--panel-bg);
         border: 1px solid var(--border);
@@ -115,13 +102,12 @@
         flex-direction: column;
         overflow: hidden;
         box-shadow: var(--card-shadow);
-        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
     .card:hover {
         transform: translateY(-5px);
         box-shadow: 0 10px 20px rgba(0,0,0,0.15);
-        border-color: var(--primary-green);
     }
 
     .card.inspeccionando { border: 2px solid var(--primary-green); }
@@ -144,7 +130,43 @@
         text-align: center; 
     }
 
-    /* --- MODALES --- */
+    /* --- BOTONES DE TARJETA (ESTILO BLOQUE SÓLIDO) --- */
+    .btn-block {
+        width: 100% !important;
+        border: none !important;
+        padding: 15px 0 !important;
+        font-weight: bold !important;
+        cursor: pointer !important;
+        display: block !important;
+        text-align: center !important;
+        text-transform: uppercase;
+        font-size: 0.9em;
+        letter-spacing: 1px;
+        transition: opacity 0.2s;
+        border-radius: 0 !important; /* Cuadrado para que pegue a los bordes */
+    }
+
+    .btn-terminar-solid {
+        background: var(--primary-green) !important;
+        color: white !important;
+    }
+
+    .btn-historial-solid {
+        background: #6c757d !important; /* Gris oscuro original */
+        color: white !important;
+    }
+
+    .btn-block:hover {
+        opacity: 0.9;
+    }
+
+    /* Contenedor del pie sin espacios */
+    .card-footer-full {
+        margin-top: auto;
+        padding: 0 !important;
+    }
+
+    /* --- MODALES Y OTROS --- */
     .modal {
         display: none;
         position: fixed;
@@ -164,53 +186,6 @@
         border-radius: 8px;
         position: relative;
         box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    }
-
-    /* --- FORMULARIOS --- */
-    input, select {
-        width: 100%;
-        padding: 10px;
-        margin-bottom: 12px;
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        box-sizing: border-box;
-        background: var(--panel-bg);
-        color: var(--text-dark);
-    }
-
-    /* --- BOTONES PRINCIPALES --- */
-    .btn-main {
-        background: var(--primary-green);
-        color: white;
-        border: none;
-        padding: 12px;
-        cursor: pointer;
-        border-radius: 4px;
-        font-weight: bold;
-        width: 100%;
-        display: block;
-        transition: 0.2s;
-    }
-
-    .btn-main:hover { opacity: 0.9; }
-
-    /* --- BOTONES DE FILTRO --- */
-    #sec-yield button {
-        width: auto !important;
-        padding: 8px 20px;
-        margin-right: 5px;
-        display: inline-block;
-        font-size: 0.85em;
-    }
-
-    /* --- TABLAS AIRPORT --- */
-    .airport-modal {
-        display: none;
-        position: fixed;
-        top: 0; left: 0;
-        width: 100%; height: 100%;
-        background: rgba(0,0,0,0.9);
-        z-index: 5000;
     }
 
     .airport-table {
@@ -233,7 +208,6 @@
         text-align: center;
     }
 
-    /* Botón flotante */
     .fab {
         position: fixed;
         bottom: 30px; right: 30px;
@@ -245,34 +219,6 @@
         font-size: 30px; color: white;
         cursor: pointer;
         z-index: 1000;
-    }
-
-    /* --- ESTILO BOTÓN HISTORIAL (Blanco/Verde) --- */
-    .btn-historial-v3 {
-        width: 100% !important;
-        background: #ffffff !important;
-        color: #468e5d !important;
-        border: none !important;
-        border-top: 1px solid #eee !important;
-        padding: 15px 0 !important;
-        font-weight: bold !important;
-        cursor: pointer !important;
-        display: block !important;
-        text-align: center !important;
-        border-radius: 0 0 8px 8px !important;
-        font-size: 0.9em !important;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin: 0 !important;
-    }
-
-    .btn-historial-v3:hover {
-        background: #fcfcfc !important;
-    }
-
-    .card-footer-clean {
-        margin-top: auto !important;
-        padding: 0 !important; 
     }
 </style>
 </head>
@@ -525,6 +471,7 @@
         return `
         <div class="card ${s.activo ? 'inspeccionando' : ''}">
             <div class="card-header">${tituloCard}</div>
+            
             <div style="display: flex; background: #f8f9fa; font-size: 0.8em; padding: 5px; border-bottom: 1px solid #eee;">
                 <div style="flex:1; text-align:center; border-right: 1px solid #eee;">
                     TA: <span style="color: #28a745; font-weight: bold;">${turnos.ta}</span> / <span style="color: #dc3545; font-weight: bold;">${turnos.ra}</span>
@@ -541,7 +488,7 @@
                     <div class="badge-info">
                         <span>${s.proceso}</span> • <span>${s.ansi}</span>
                     </div>
-                   <div class="timer-display" id="t-${i}">${document.getElementById(`t-${i}`) ? document.getElementById(`t-${i}`).innerText : s.tiempo}</div>
+                    <div class="timer-display" id="t-${i}">${document.getElementById(`t-${i}`) ? document.getElementById(`t-${i}`).innerText : s.tiempo}</div>
                 ` : `
                     <div style="text-align: center; color: #ccc; font-weight: bold; font-size: 1.2em; letter-spacing: 2px; padding: 20px 0;">
                         DISPONIBLE
@@ -549,10 +496,10 @@
                 `}
             </div>
 
-            <div class="${s.activo ? '' : 'card-footer-clean'}">
+            <div class="card-footer-full">
                 ${s.activo ? 
-                    `<div style="padding:10px;"><button class="btn-main" onclick="prepararFin(${i})">TERMINAR</button></div>` : 
-                    `<button class="btn-historial-v3" onclick="abrirHistorialIndividual(${i})">HISTORIAL</button>`
+                    `<button class="btn-block btn-terminar-solid" onclick="prepararFin(${i})">TERMINAR</button>` : 
+                    `<button class="btn-block btn-historial-solid" onclick="abrirHistorialIndividual(${i})">HISTORIAL</button>`
                 }
             </div>
         </div>`;
