@@ -19,14 +19,13 @@
     }
 
     /* Colores cuando el modo nocturno está activo */
-    body.dark-mode {
-        --bg-body: #1a1a1a;
-        --panel-bg: #2d2d2d;
-        --text-dark: #e0e0e0;
-        --border: #404040;
-        --primary-dark: #000000;
-    }
-
+body.dark-mode {
+    --bg-body: #121212; /* Fondo más profundo */
+    --panel-bg: rgba(45, 45, 45, 0.6); /* Fondo semi-transparente */
+    --text-dark: #e0e0e0;
+    --border: rgba(255, 255, 255, 0.1); /* Borde muy sutil */
+    --primary-dark: #000000;
+}
     body {
         background-color: var(--bg-body);
         color: var(--text-dark);
@@ -109,15 +108,17 @@
 .card {
     background: var(--panel-bg);
     border: 1px solid var(--border);
-    border-radius: 12px; /* Bordes más redondeados */
+    border-radius: 12px;
     min-height: 320px;
     display: flex;
-    flex-direction: column; /* Clave para empujar el botón al final */
+    flex-direction: column;
     overflow: hidden;
     transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
     box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    /* AÑADE ESTAS DOS LÍNEAS AQUÍ ABAJO */
+    backdrop-filter: blur(12px); 
+    -webkit-backdrop-filter: blur(12px);
 }
-
 .card:hover {
     transform: translateY(-8px); /* Elevación más pronunciada */
     box-shadow: 0 15px 30px rgba(0,0,0,0.15);
@@ -1240,6 +1241,26 @@ function toggleDarkMode() {
 if (localStorage.getItem('qc_theme') === 'dark') {
     document.body.classList.add('dark-mode');
     document.getElementById('dark-mode-toggle').innerText = "☀️";
+}
+/* AJUSTES PARA QUITAR PESO VISUAL EN MODO OSCURO */
+body.dark-mode .card-header {
+    background: rgba(70, 142, 93, 0.2) !important; /* Verde muy sutil y transparente */
+    color: var(--primary-green) !important;
+    border-bottom: 1px solid var(--border);
+}
+
+body.dark-mode .btn-historial-v3, 
+body.dark-mode .btn-block {
+    background: transparent !important; /* Quita el bloque blanco pesado */
+    color: var(--primary-green) !important;
+    border: 1px solid rgba(70, 142, 93, 0.4) !important;
+    margin: 10px !important; /* Lo hace flotar dentro de la tarjeta */
+    width: calc(100% - 20px) !important;
+    border-radius: 8px !important;
+}
+
+body.dark-mode .btn-historial-v3:hover {
+    background: rgba(70, 142, 93, 0.1) !important;
 }
 
 </script>
