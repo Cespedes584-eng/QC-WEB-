@@ -505,7 +505,7 @@ body.dark-mode .btn-historial-v3:hover {
 
     <script>
         let pausaSincro = false;
-        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbw_fVP141Zb2B1MBkJ1jbgtrGy95X9jxClsmAn3juYIC-pCjznEq2qaqxMLqvrbri8o/exec";
+        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbwnvKk4Q6qBYwHodJrTNMkoOrHX4VUNLeXa1txhah28_O0YFmJlYxAY9OCQoiYbpnS7/exec";
         const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
 
         let catalogoDefectos = JSON.parse(localStorage.getItem('qc_catalogo_v2')) || {};
@@ -689,17 +689,19 @@ async function iniciarLote() {
     const inputLote = document.getElementById('r-lote');
     if (!inputLote.value.trim()) return alert("⚠️ Ingrese el número de Lote");
     
-    // 🛡️ BLOQUEO: Evita interferencias de la nube mientras registramos
+    // 1. BLOQUEO: Pausamos la sincronización automática
     pausaSincro = true; 
     
     const idx = document.getElementById('r-linea').value;
     const btn = document.querySelector("#modal-reg .btn-main");
     
+    // 2. EFECTO VISUAL: Bloquear botón mientras validamos con Google
     btn.disabled = true;
-    btn.innerText = "⏳ REGISTRANDO...";
+    btn.innerText = "⏳ VALIDANDO CON NUBE...";
 
     const ahora = new Date();
     
+    // Preparamos el objeto con los datos del nuevo lote
     const datosInicio = {
         activo: true,
         lote: inputLote.value.trim(),
@@ -708,41 +710,61 @@ async function iniciarLote() {
         inspector: document.getElementById('r-inspector').value,
         proceso: document.getElementById('r-proceso').value,
         ansi: document.getElementById('r-ansi').value,
-        productoActivo: (document.getElementById('contenedor-hibrida').style.display === 'block') ? document.getElementById('r-producto-especifico').value : lineasArr[idx]
+        productoActivo: (document.getElementById('contenedor-hibrida').style.display === 'block') ? document.getElementById('r-producto-especifico').value : lineasArr[idx],
+        productoOriginal: lineasArr[idx], // Mantenemos el nombre original de la línea
+        tiempo: "00:00"
     };
 
-    // Actualización visual inmediata
-    estados[idx] = datosInicio; 
-    render();                   
-    cerrarModal('modal-reg');  
+    // Creamos una copia de los estados actuales para enviar la actualización completa
+    const copiaEstados = [...estados];
+    copiaEstados[idx] = datosInicio;
 
     try {
-        // --- CAMBIO CLAVE AQUÍ ---
-        await fetch(SHEETS_URL, { 
+        console.log("📤 Registrando inicio de lote en la nube...");
+
+        // 3. ENVÍO CON CONFIRMACIÓN (CORS REAL)
+        const response = await fetch(SHEETS_URL, { 
             method: 'POST', 
-            mode: 'no-cors', 
+            mode: 'cors', // <--- CAMBIO CLAVE: Ahora sí escuchamos al servidor
             headers: {
-                'Content-Type': 'text/plain' // Esto evita errores de CORS en Google
+                'Content-Type': 'text/plain' 
             },
             body: JSON.stringify({ 
                 action: 'save_pizarra', 
-                estados: estados 
+                estados: copiaEstados 
             }) 
         });
-        console.log("✅ Datos sincronizados con la nube.");
+
+        const resultado = await response.json(); // Leemos la respuesta de tu código .gs
+
+        if (resultado.status === "success") {
+            // 4. SOLO SI GOOGLE CONFIRMA ÉXITO:
+            console.log("✅ Confirmado por Google Sheets.");
+            
+            estados[idx] = datosInicio; // Actualizamos el estado real local
+            render();                   // Dibujamos el cronómetro en pantalla
+            cerrarModal('modal-reg');   // Cerramos el formulario
+            inputLote.value = "";       // Limpiamos el campo
+            
+        } else {
+            // Si el Script de Google devolvió un error (ej. hoja bloqueada)
+            throw new Error(resultado.message);
+        }
+
     } catch (e) {
-        console.warn("⚠️ Error de red, el lote se guardó solo localmente.");
+        // 5. MANEJO DE ERRORES: Si falla el internet, no se cierra el modal
+        console.error("❌ Fallo el registro:", e);
+        alert("⚠️ ERROR DE RED: El lote NO se pudo registrar en la nube. \n\nPor favor, verifique su conexión e intente de nuevo. El formulario no se cerrará para no perder los datos.");
     } finally {
-        // Restaurar botón
+        // Restaurar el botón para permitir reintentar si falló
         btn.disabled = false;
         btn.innerText = "INICIAR INSPECCIÓN";
-        inputLote.value = ""; 
         
-        // Mantener el escudo de sincronización por 10 seg para evitar "saltos" de datos
+        // Mantener el escudo de sincronización por 8 segundos para que dé tiempo a la nube de actualizarse
         setTimeout(() => { 
             pausaSincro = false; 
-            console.log("🛡️ Escudo liberado.");
-        }, 10000); 
+            console.log("🛡️ Escudo de sincronización liberado.");
+        }, 8000); 
     }
 }
 function generarDefectos() {
@@ -778,93 +800,43 @@ async function finalizarLote(ok) {
     const s = estados[indexSel];
     if (!s || !s.activo) return;
 
-    // 1. BLOQUEO VISUAL Y DE SYNC
-    const btn = document.querySelector(ok ? "#modal-fin .btn-main" : "#modal-rechazos .btn-main");
-    if(btn) {
-        btn.disabled = true;
-        btn.innerText = "⌛ GUARDANDO...";
-    }
-    
+    // BLOQUEO TOTAL DE SYNC
     pausaSincro = true; 
 
     const ahora = new Date();
-    
-    // --- MEJORA: Formateo de Fecha Manual para evitar errores de zona horaria ---
-    const dia = ahora.getDate().toString().padStart(2, '0');
-    const mes = (ahora.getMonth() + 1).toString().padStart(2, '0');
-    const anio = ahora.getFullYear();
-    const fechaLimpia = `${dia}/${mes}/${anio}`;
-
-    const horaFin = ahora.getHours().toString().padStart(2, '0') + ':' + 
-                    ahora.getMinutes().toString().padStart(2, '0');
-
-    // Construimos el registro para el Historial
     const registro = {
         action: 'add', 
-        fecha: fechaLimpia,  // Enviamos la fecha ya formateada como texto
-        horaFin: horaFin,    // HH:mm
+        fecha: ahora.toLocaleDateString('es-ES'),
+        horaFin: ahora.getHours().toString().padStart(2, '0') + ':' + ahora.getMinutes().toString().padStart(2, '0'),
         hora: s.horaInicioReal,
         linea: lineasArr[indexSel], 
-        producto: s.productoActivo, 
-        inspector: s.inspector,
-        lote: s.lote,        // El apóstrofe lo pondremos en el Apps Script para mayor seguridad
-        proceso: s.proceso, 
-        ansi: s.ansi, 
-        tiempo: String(s.tiempo), // Forzamos a String aquí también
+        lote: s.lote,
         resultado: ok ? "ACEPTADO" : "RECHAZADO", 
-        detalle: ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ")
+        // ... resto de tus campos ...
     };
 
-    // --- LIMPIEZA LOCAL PROFUNDA ---
-    const loteFinalizado = s.lote;
-    
+    // LIMPIEZA LOCAL INMEDIATA
     estados[indexSel] = {
-        productoOriginal: s.productoOriginal, 
         activo: false,
         lote: "",
-        loteAnterior: loteFinalizado,
-        ultimoCierreReal: ahora.getTime(), 
-        inspector: "",
-        tiempo: "00:00",
-        productoActivo: "",
-        proceso: "",
-        ansi: ""
+        ultimoCierreReal: ahora.getTime(), // MARCA DE SEGURIDAD
+        tiempo: "00:00"
     };
     
     render(); 
     cerrarModal(ok ? 'modal-fin' : 'modal-rechazos');
 
-    // 2. ENVÍO COORDINADO
+    // ENVÍO DOBLE (HISTORIAL Y LUEGO LIMPIAR PIZARRA)
     try {
-        console.log("📤 Enviando historial...");
-        await fetch(SHEETS_URL, { 
-            method: 'POST', 
-            mode: 'no-cors', 
-            body: JSON.stringify(registro) 
-        });
-
-        console.log("📤 Limpiando pizarra en la nube...");
-        await fetch(SHEETS_URL, { 
-            method: 'POST', 
-            mode: 'no-cors', 
-            body: JSON.stringify({ 
-                action: 'save_pizarra', 
-                estados: estados 
-            }) 
-        });
-        
-        console.log("✅ Proceso completado con éxito.");
+        await fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) });
+        await fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'save_pizarra', estados: estados }) });
+        console.log("✅ Enviado a la nube");
     } catch (e) {
-        console.error("❌ Error de comunicación:", e);
+        console.error("❌ Error de red");
     } finally {
-        setTimeout(() => { 
-            pausaSincro = false; 
-            if(btn) {
-                btn.disabled = false;
-                btn.innerText = ok ? "ACEPTAR" : "CONFIRMAR RECHAZO";
-            }
-            console.log("🛡️ Escudo liberado.");
-        }, 15000); 
+        // MANTENER BLOQUEO DE SYNC POR 15 SEGUNDOS
+        // Esto evita que el lote "vuelva a aparecer" mientras la nube procesa
+        setTimeout(() => { pausaSincro = false; }, 15000); 
     }
 }
  function verificarHibrida() {
@@ -912,66 +884,112 @@ async function finalizarLote(ok) {
     // Resetear el estado al abrir el modal
     selAnsi.style.display = (selProceso.value === "Pre-Empaque") ? "none" : "block";
 }
+// --- FUNCIÓN DE SINCRONIZACIÓN ACTUALIZADA ---
 async function sincronizarConNube() {
-    // 1. No sincronizar si estamos operando o hay un modal abierto
     if (pausaSincro || document.querySelector('.modal[style*="block"]')) return;
 
     try {
         const res = await fetch(SHEETS_URL);
         const data = await res.json();
-        
-        if (data.historial) {
-            dbHistorial = data.historial;
-        }
+        const ahora = new Date().getTime();
+
+        if (data.historial) dbHistorial = data.historial;
 
         if (data.pizarra) {
             let huboCambio = false;
-            const ahora = new Date().getTime();
-
             data.pizarra.forEach((nube, i) => {
-                if (!estados[i]) {
-                    estados[i] = { activo: false, lote: "" };
-                }
-                
+                if (!estados[i]) estados[i] = { activo: false, lote: "", ultimoCierreReal: 0 };
                 const local = estados[i];
 
-                // --- PROTECCIÓN ACTUALIZADA ---
-                // Si la nube dice que está vacío (activo: false)
-                if (!nube.activo && local.activo) {
-                    // Solo mantenemos el bloqueo si el lote local es "joven" (menos de 30 seg)
-                    // Esto da tiempo a que el servidor procese tu propio envío.
-                    // Pero si ya pasó ese tiempo, aceptamos que la nube manda (el lote terminó).
-                    const tiempoTranscurrido = ahora - (local.ultimoCierreReal || 0);
-                    if (pausaSincro && tiempoTranscurrido < 15000) return; 
+                // PROTECCIÓN: Si cerramos el lote hace poco, ignorar si la nube dice que sigue activo
+                if (nube.activo && !local.activo) {
+                    if (ahora - (local.ultimoCierreReal || 0) < 25000) return;
                 }
 
-                // --- DETECTAR CAMBIOS REALES ---
-                // Si el lote cambió, o el estado activo/inactivo cambió
-                if (nube.lote !== local.lote || nube.activo !== local.activo) {
-                    // Si se desactivó en la nube, guardamos rastro para el render
-                    if (local.activo && !nube.activo) {
-                        nube.loteAnterior = local.lote;
-                    }
-                    
-                    estados[i] = nube;
-                    huboCambio = true;
-                    return;
-                }
-
-                // --- COMPARACIÓN POR DETALLES ---
+                // DETECTAR CAMBIOS
                 if (JSON.stringify(local) !== JSON.stringify(nube)) {
+                    // Mantener el timestamp local si la nube nos desactiva
+                    if (local.activo && !nube.activo) nube.ultimoCierreReal = ahora;
+                    
                     estados[i] = nube;
                     huboCambio = true;
                 }
             });
-            
             if (huboCambio) {
-                console.log("📡 Pizarra sincronizada con el servidor");
+                console.log("📡 Pizarra sincronizada");
                 render();
             }
         }
-    } catch (e) { 
-        console.error("❌ Error Sync:", e); 
+    } catch (e) { console.error("Error Sync:", e); }
+}
+
+// --- FUNCIÓN FINALIZAR LOTE CON CONFIRMACIÓN (CORS) ---
+async function finalizarLote(ok) {
+    const s = estados[indexSel];
+    if (!s || !s.activo) return;
+
+    const btn = document.querySelector(ok ? "#modal-fin .btn-main" : "#modal-rechazos .btn-main");
+    if(btn) { btn.disabled = true; btn.innerText = "⏳ VALIDANDO..."; }
+    
+    pausaSincro = true;
+
+    const ahora = new Date();
+    const registro = {
+        action: 'add',
+        fecha: ahora.toLocaleDateString('es-ES'),
+        horaFin: ahora.getHours().toString().padStart(2, '0') + ':' + ahora.getMinutes().toString().padStart(2, '0'),
+        hora: s.horaInicioReal,
+        linea: lineasArr[indexSel],
+        producto: s.productoActivo,
+        inspector: s.inspector,
+        lote: s.lote,
+        proceso: s.proceso,
+        ansi: s.ansi,
+        tiempo: String(s.tiempo),
+        resultado: ok ? "ACEPTADO" : "RECHAZADO",
+        detalle: ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ")
+    };
+
+    try {
+        // 1. Intentar guardar historial con confirmación
+        const res = await fetch(SHEETS_URL, {
+            method: 'POST',
+            mode: 'cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(registro)
+        });
+
+        const confirmacion = await res.json();
+
+        if (confirmacion.status === "success") {
+            // 2. Si el historial se guardó, limpiamos la pizarra localmente
+            estados[indexSel] = {
+                productoOriginal: s.productoOriginal,
+                activo: false,
+                lote: "",
+                ultimoCierreReal: ahora.getTime(),
+                tiempo: "00:00"
+            };
+
+            // 3. Informar a la nube que la pizarra cambió
+            await fetch(SHEETS_URL, {
+                method: 'POST',
+                mode: 'cors',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'save_pizarra', estados: estados })
+            });
+
+            render();
+            cerrarModal(ok ? 'modal-fin' : 'modal-rechazos');
+            alert("✅ Guardado con éxito.");
+        } else {
+            throw new Error(confirmacion.message);
+        }
+    } catch (e) {
+        alert("❌ ERROR DE RED: No se pudo confirmar el guardado. El lote seguirá en pantalla para que intentes de nuevo.");
+    } finally {
+        setTimeout(() => { pausaSincro = false; }, 3000);
+        if(btn) { btn.disabled = false; btn.innerText = ok ? "ACEPTAR" : "CONFIRMAR RECHAZO"; }
     }
 }
         function mostrarTab(t) {
