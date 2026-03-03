@@ -505,7 +505,7 @@ body.dark-mode .btn-historial-v3:hover {
 
     <script>
         let pausaSincro = false;
-        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbydDlGysqBY5PpCOaap172O2c0ESnzfLSh4FbYszRcFUr5PxjqtgXpCf-ubGIADhHg3/exec";
+        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbwih_2rxYFxjj7FY3PwhhuFYNDMP-jfc8qn9iPzBtb4rSaVkQlkAYJhTmPBfEOAcayl/exec";
         const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
 
         let catalogoDefectos = JSON.parse(localStorage.getItem('qc_catalogo_v2')) || {};
@@ -809,43 +809,67 @@ async function finalizarLote(ok) {
     const s = estados[indexSel];
     if (!s || !s.activo) return;
 
-    // BLOQUEO TOTAL DE SYNC
-    pausaSincro = true; 
+    const btn = document.querySelector(ok ? "#modal-fin .btn-main" : "#modal-rechazos .btn-main");
+    if(btn) { btn.disabled = true; btn.innerText = "⏳ Guardando..."; }
+    
+    // BLOQUEO INMEDIATO: No permitimos que entre basura de la nube
+    pausaSincro = true;
 
     const ahora = new Date();
     const registro = {
-        action: 'add', 
+        action: 'finalizar_lote_seguro', 
+        filaAfectada: parseInt(indexSel) + 2, 
         fecha: ahora.toLocaleDateString('es-ES'),
         horaFin: ahora.getHours().toString().padStart(2, '0') + ':' + ahora.getMinutes().toString().padStart(2, '0'),
         hora: s.horaInicioReal,
-        linea: lineasArr[indexSel], 
+        linea: lineasArr[indexSel],
+        producto: s.productoActivo,
+        inspector: s.inspector,
         lote: s.lote,
-        resultado: ok ? "ACEPTADO" : "RECHAZADO", 
-        // ... resto de tus campos ...
+        proceso: s.proceso,
+        ansi: s.ansi,
+        tiempo: String(s.tiempo),
+        resultado: ok ? "ACEPTADO" : "RECHAZADO",
+        detalle: ok ? "OK" : Array.from(document.querySelectorAll('.m-rechazo')).map(sel => sel.value).join(", ")
     };
 
-    // LIMPIEZA LOCAL INMEDIATA
+    // LIMPIEZA LOCAL PREVENTIVA: Si la nube tarda, en tu pantalla ya desapareció
+    const respaldoAnterior = { ...estados[indexSel] };
     estados[indexSel] = {
+        productoOriginal: s.productoOriginal,
         activo: false,
         lote: "",
-        ultimoCierreReal: ahora.getTime(), // MARCA DE SEGURIDAD
+        ultimoCierreReal: ahora.getTime(),
         tiempo: "00:00"
     };
-    
-    render(); 
-    cerrarModal(ok ? 'modal-fin' : 'modal-rechazos');
+    render();
 
-    // ENVÍO DOBLE (HISTORIAL Y LUEGO LIMPIAR PIZARRA)
     try {
-        await fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(registro) });
-        await fetch(SHEETS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'save_pizarra', estados: estados }) });
-        console.log("✅ Enviado a la nube");
+        const res = await fetch(SHEETS_URL, {
+            method: 'POST',
+            mode: 'cors', // Cambiamos a cors para confirmar recepción
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(registro)
+        });
+
+        const confirmacion = await res.json();
+
+        if (confirmacion.status === "success") {
+            cerrarModal(ok ? 'modal-fin' : 'modal-rechazos');
+            console.log("✅ Éxito total en nube y local");
+        } else {
+            throw new Error(confirmacion.message);
+        }
     } catch (e) {
-        console.error("❌ Error de red");
+        console.error("Error al finalizar:", e);
+        // Si falló internet, revertimos el cambio local para no perder el lote
+        estados[indexSel] = respaldoAnterior;
+        render();
+        alert("❌ ERROR DE CONEXIÓN: No se pudo guardar en la nube. El lote sigue activo para que reintentes.");
     } finally {
-        // MANTENER BLOQUEO DE SYNC POR 15 SEGUNDOS
-        // Esto evita que el lote "vuelva a aparecer" mientras la nube procesa
-        setTimeout(() => { pausaSincro = false; }, 15000); 
+        // MANTENEMOS la pausa 8 segundos más para dejar que la nube "se enfríe"
+        setTimeout(() => { pausaSincro = false; }, 8000);
+        if(btn) { btn.disabled = false; btn.innerText = ok ? "ACEPTAR" : "CONFIRMAR RECHAZO"; }
     }
 }
  function verificarHibrida() {
@@ -895,7 +919,10 @@ async function finalizarLote(ok) {
 }
 // --- FUNCIÓN DE SINCRONIZACIÓN ACTUALIZADA ---
 async function sincronizarConNube() {
-    if (pausaSincro || document.querySelector('.modal[style*="block"]')) return;
+    // 1. BLOQUEO DE SEGURIDAD
+    // No sincronizar si: hay una pausa manual, un modal abierto (usuario escribiendo)
+    // o si la pestaña no es la visible (ahorra datos y evita conflictos en segundo plano)
+    if (pausaSincro || document.querySelector('.modal[style*="block"]') || document.hidden) return;
 
     try {
         const res = await fetch(SHEETS_URL);
@@ -906,32 +933,49 @@ async function sincronizarConNube() {
 
         if (data.pizarra) {
             let huboCambio = false;
+
             data.pizarra.forEach((nube, i) => {
-                if (!estados[i]) estados[i] = { activo: false, lote: "", ultimoCierreReal: 0 };
+                // Inicializar estado local si no existe para esa línea
+                if (!estados[i]) {
+                    estados[i] = { activo: false, lote: "", ultimoCierreReal: 0, tiempo: "00:00" };
+                }
+                
                 const local = estados[i];
 
-                // PROTECCIÓN: Si cerramos el lote hace poco, ignorar si la nube dice que sigue activo
+                // --- ESCUDO ANTI-FANTASMAS (RACE CONDITION) ---
+                // Si la nube dice que el lote está ACTIVO, pero tú localmente lo tienes INACTIVO:
                 if (nube.activo && !local.activo) {
-                    if (ahora - (local.ultimoCierreReal || 0) < 25000) return;
+                    // Si lo cerraste hace menos de 30 segundos, ignora la nube.
+                    // Esto evita que el lote "reviva" porque Google Sheets aún no procesó el borrado.
+                    const tiempoDesdeCierre = ahora - (local.ultimoCierreReal || 0);
+                    if (tiempoDesdeCierre < 30000) return; 
                 }
 
-                // DETECTAR CAMBIOS
+                // --- DETECTAR CAMBIOS REALES ---
+                // Comparamos el contenido de la nube con el local
                 if (JSON.stringify(local) !== JSON.stringify(nube)) {
-                    // Mantener el timestamp local si la nube nos desactiva
-                    if (local.activo && !nube.activo) nube.ultimoCierreReal = ahora;
                     
+                    // Si la nube nos está "apagando" un lote que teníamos activo, 
+                    // guardamos el timestamp para activar el escudo de arriba.
+                    if (local.activo && !nube.activo) {
+                        nube.ultimoCierreReal = ahora;
+                    }
+
+                    // Actualizamos el objeto local con la info fresca de la nube
                     estados[i] = nube;
                     huboCambio = true;
                 }
             });
+
             if (huboCambio) {
-                console.log("📡 Pizarra sincronizada");
-                render();
+                console.log("📡 Pizarra actualizada desde la nube");
+                render(); // Solo redibujamos si algo cambió realmente
             }
         }
-    } catch (e) { console.error("Error Sync:", e); }
+    } catch (e) { 
+        console.warn("⚠️ Error de sincronización (posible microcorte):", e); 
+    }
 }
-
 async function finalizarLote(ok) {
     const s = estados[indexSel];
     if (!s || !s.activo) return;
