@@ -622,60 +622,54 @@ function render() {
 }
 function obtenerConteosTurnos(nombreLinea) {
     let conteo = { ta: 0, ra: 0, tb: 0, rb: 0 };
-    if (!dbHistorial || dbHistorial.length === 0) return conteo;
-
     const ahora = new Date();
+    
     // Formato Hoy: "02/03/2026"
     const hoy = ahora.getDate().toString().padStart(2, '0') + '/' + 
                 (ahora.getMonth() + 1).toString().padStart(2, '0') + '/' + 
                 ahora.getFullYear();
 
-    // LIMPIEZA PROFUNDA: Esta es la clave para las líneas híbridas
-    const limpiar = (t) => {
-        return String(t || "")
-            .trim()
-            .toUpperCase()
-            .replace(/\s+/g, ' ') // Une espacios dobles en uno solo
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, ""); // Quita acentos
-    };
+    // Limpiador reforzado para nombres con "/" y espacios extra
+    const limpiar = (t) => String(t || "")
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, ' ') // <--- ESTO arregla los espacios dobles de las híbridas
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
 
     const nombreBuscado = limpiar(nombreLinea);
 
     dbHistorial.forEach(r => {
-        // 1. Normalizar Fecha del registro (de Google o de la App)
+        // --- CONVERSIÓN DE FECHA DE GOOGLE A TEXTO ---
         let fechaR = String(r.fecha || "");
-        if (fechaR.includes("-")) {
+        if (fechaR.includes("-")) { 
             const partes = fechaR.split("T")[0].split("-");
             fechaR = `${partes[2]}/${partes[1]}/${partes[0]}`;
         }
 
-        // 2. Comparación Estricta de Nombre y Fecha
-        if (limpiar(r.linea) === nombreBuscado && fechaR === hoy) {
-            
-            // 3. Obtener la hora para clasificar el turno
+        // --- NORMALIZACIÓN DE FECHA (Quita ceros molestos: 02/03 vs 2/3) ---
+        const normF = (f) => f.split('/').map(p => parseInt(p)).join('/');
+
+        if (limpiar(r.linea) === nombreBuscado && normF(fechaR) === normF(hoy)) {
+            // --- HORA ---
             let horaStr = String(r.horaFin || r.hora || "00:00");
-            if (horaStr.includes("T")) {
-                horaStr = horaStr.split("T")[1].substring(0, 5);
-            }
+            if (horaStr.includes("T")) horaStr = horaStr.split("T")[1];
             
-            const partesHora = horaStr.split(":");
-            const hrs = parseInt(partesHora[0]) || 0;
-            const mins = parseInt(partesHora[1]) || 0;
+            const partesH = horaStr.split(":");
+            const hrs = parseInt(partesH[0]) || 0;
+            const mins = parseInt(partesH[1]) || 0;
             const minTotales = (hrs * 60) + mins;
 
-            // Turno A: 06:00 (360 min) a 15:30 (930 min)
-            const esTA = (minTotales >= 360 && minTotales < 930);
+            const esTA = (minTotales >= 360 && minTotales < 930); 
             const resultado = limpiar(r.resultado);
 
             if (resultado === "ACEPTADO") {
                 if (esTA) conteo.ta++; else conteo.tb++;
-            } else if (resultado === "RECHAZADO") {
+            } else if (resultado === "RECHAZADO") { // Validamos explícitamente RECHAZADO
                 if (esTA) conteo.ra++; else conteo.rb++;
             }
         }
     });
-
     return conteo;
 }
         function tick() {
