@@ -697,7 +697,7 @@ async function iniciarLote() {
     
     // 2. EFECTO VISUAL: Bloquear botón mientras validamos con Google
     btn.disabled = true;
-    btn.innerText = "⏳ VALIDANDO CON NUBE...";
+    btn.innerText = "⏳ Guardando...";
 
     const ahora = new Date();
     
@@ -929,7 +929,7 @@ async function finalizarLote(ok) {
     if (!s || !s.activo) return;
 
     const btn = document.querySelector(ok ? "#modal-fin .btn-main" : "#modal-rechazos .btn-main");
-    if(btn) { btn.disabled = true; btn.innerText = "⏳ VALIDANDO..."; }
+    if(btn) { btn.disabled = true; btn.innerText = "⏳ Guardando..."; }
     
     pausaSincro = true;
 
@@ -981,7 +981,14 @@ async function finalizarLote(ok) {
 
             render();
             cerrarModal(ok ? 'modal-fin' : 'modal-rechazos');
-            alert("✅ Guardado con éxito.");
+            // En lugar de alert("✅ Guardado con éxito.");
+const aviso = document.createElement("div");
+aviso.innerHTML = "✅ Guardado con éxito";
+aviso.style = "position:fixed; top:20px; right:20px; background:#28a745; color:white; padding:15px; borderRadius:8px; zIndex:9999; font-weight:bold; box-shadow: 0 4px 8px rgba(0,0,0,0.2);";
+document.body.appendChild(aviso);
+
+// Se borra solo después de 3 segundos
+setTimeout(() => aviso.remove(), 3000);
         } else {
             throw new Error(confirmacion.message);
         }
