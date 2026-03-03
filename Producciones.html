@@ -505,7 +505,7 @@ body.dark-mode .btn-historial-v3:hover {
 
     <script>
         let pausaSincro = false;
-        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbwnvKk4Q6qBYwHodJrTNMkoOrHX4VUNLeXa1txhah28_O0YFmJlYxAY9OCQoiYbpnS7/exec";
+        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbydDlGysqBY5PpCOaap172O2c0ESnzfLSh4FbYszRcFUr5PxjqtgXpCf-ubGIADhHg3/exec";
         const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
 
         let catalogoDefectos = JSON.parse(localStorage.getItem('qc_catalogo_v2')) || {};
@@ -932,7 +932,6 @@ async function sincronizarConNube() {
     } catch (e) { console.error("Error Sync:", e); }
 }
 
-// --- FUNCIÓN FINALIZAR LOTE CON CONFIRMACIÓN (CORS) ---
 async function finalizarLote(ok) {
     const s = estados[indexSel];
     if (!s || !s.activo) return;
@@ -944,7 +943,9 @@ async function finalizarLote(ok) {
 
     const ahora = new Date();
     const registro = {
-        action: 'add',
+        // --- CAMBIO CLAVE: Usamos la nueva acción unificada ---
+        action: 'finalizar_lote_seguro', 
+        filaAfectada: indexSel + 2, // Le decimos exactamente qué fila de Excel limpiar
         fecha: ahora.toLocaleDateString('es-ES'),
         horaFin: ahora.getHours().toString().padStart(2, '0') + ':' + ahora.getMinutes().toString().padStart(2, '0'),
         hora: s.horaInicioReal,
@@ -960,7 +961,7 @@ async function finalizarLote(ok) {
     };
 
     try {
-        // 1. Intentar guardar historial con confirmación
+        // 1. UN SOLO VIAJE: Guarda historial y limpia la fila en Pizarra al mismo tiempo
         const res = await fetch(SHEETS_URL, {
             method: 'POST',
             mode: 'cors',
@@ -971,7 +972,7 @@ async function finalizarLote(ok) {
         const confirmacion = await res.json();
 
         if (confirmacion.status === "success") {
-            // 2. Si el historial se guardó, limpiamos la pizarra localmente
+            // 2. Limpieza local (Igual que antes)
             estados[indexSel] = {
                 productoOriginal: s.productoOriginal,
                 activo: false,
@@ -980,31 +981,25 @@ async function finalizarLote(ok) {
                 tiempo: "00:00"
             };
 
-            // 3. Informar a la nube que la pizarra cambió
-            await fetch(SHEETS_URL, {
-                method: 'POST',
-                mode: 'cors',
-                headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify({ action: 'save_pizarra', estados: estados })
-            });
-
             render();
             cerrarModal(ok ? 'modal-fin' : 'modal-rechazos');
-            // En lugar de alert("✅ Guardado con éxito.");
-const aviso = document.createElement("div");
-aviso.innerHTML = "✅ Guardado con éxito";
-aviso.style = "position:fixed; top:20px; right:20px; background:#28a745; color:white; padding:15px; borderRadius:8px; zIndex:9999; font-weight:bold; box-shadow: 0 4px 8px rgba(0,0,0,0.2);";
-document.body.appendChild(aviso);
 
-// Se borra solo después de 3 segundos
-setTimeout(() => aviso.remove(), 3000);
+            // Aviso visual de éxito
+            const aviso = document.createElement("div");
+            aviso.innerHTML = "✅ Guardado con éxito";
+            aviso.style = "position:fixed; top:20px; right:20px; background:#28a745; color:white; padding:15px; border-radius:8px; z-index:9999; font-weight:bold; box-shadow: 0 4px 8px rgba(0,0,0,0.2);";
+            document.body.appendChild(aviso);
+            setTimeout(() => aviso.remove(), 3000);
+
         } else {
             throw new Error(confirmacion.message);
         }
     } catch (e) {
+        console.error("Error al finalizar:", e);
         alert("❌ ERROR DE RED: No se pudo confirmar el guardado. El lote seguirá en pantalla para que intentes de nuevo.");
     } finally {
-        setTimeout(() => { pausaSincro = false; }, 3000);
+        // Esperamos un poco antes de volver a sincronizar para que Google asiente los datos
+        setTimeout(() => { pausaSincro = false; }, 5000);
         if(btn) { btn.disabled = false; btn.innerText = ok ? "ACEPTAR" : "CONFIRMAR RECHAZO"; }
     }
 }
