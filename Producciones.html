@@ -562,63 +562,63 @@ body.dark-mode .btn-historial-v3:hover {
             } catch (e) { console.error("Error historial", e); }
         }
 
- function render() {
-    const p = document.getElementById('pizarra');
-    if (!p) return;
+function render() {
+    const p = document.getElementById('pizarra');
+    if (!p) return;
 
-    p.innerHTML = estados.map((s, i) => {
-        const turnos = obtenerConteosTurnos(lineasArr[i]);
-        const tituloCard = s.activo ? s.productoActivo : lineasArr[i];
-        
-        return `
-        <div class="card ${s.activo ? 'inspeccionando' : ''}">
-            <div class="card-header">${tituloCard}</div>
-            
-            <div style="display: flex; background: rgba(0,0,0,0.03); font-size: 0.75em; padding: 6px; border-bottom: 1px solid rgba(0,0,0,0.05);">
-                <div style="flex:1; text-align:center; border-right: 1px solid rgba(0,0,0,0.1);">
-                    TA: <span style="color:#28a745; font-weight:bold;">${turnos.ta}</span> / <span style="color:#dc3545; font-weight:bold;">${turnos.ra}</span>
-                </div>
-                <div style="flex:1; text-align:center;">
-                    TB: <span style="color:#28a745; font-weight:bold;">${turnos.tb}</span> / <span style="color:#dc3545; font-weight:bold;">${turnos.rb}</span>
-                </div>
-            </div>
+    p.innerHTML = estados.map((s, i) => {
+        const turnos = obtenerConteosTurnos(lineasArr[i]);
+        const tituloCard = s.activo ? s.productoActivo : lineasArr[i];
+        
+        return `
+        <div class="card ${s.activo ? 'inspeccionando' : ''}">
+            <div class="card-header">${tituloCard}</div>
+            
+            <div style="display: flex; background: rgba(0,0,0,0.03); font-size: 0.75em; padding: 6px; border-bottom: 1px solid rgba(0,0,0,0.05);">
+                <div style="flex:1; text-align:center; border-right: 1px solid rgba(0,0,0,0.1);">
+                    TA: <span style="color:#28a745; font-weight:bold;">${turnos.ta}</span> / <span style="color:#dc3545; font-weight:bold;">${turnos.ra}</span>
+                </div>
+                <div style="flex:1; text-align:center;">
+                    TB: <span style="color:#28a745; font-weight:bold;">${turnos.tb}</span> / <span style="color:#dc3545; font-weight:bold;">${turnos.rb}</span>
+                </div>
+            </div>
 
-            <div class="card-body">
-                ${s.activo ? `
-                    <div style="font-size:0.85em; color:#777; margin-bottom:4px;">👤 ${s.inspector}</div>
-                    <div style="font-size:1.7em; font-weight:800; color:var(--text-dark); margin-bottom:8px;">${s.lote}</div>
-                    
-                    <div id="t-${i}" style="font-family:monospace; font-size:1.4em; font-weight:bold; color:var(--primary-green); background: rgba(70, 142, 93, 0.1); padding: 5px 10px; border-radius: 6px; display: inline-block;">
-                        ${document.getElementById(`t-${i}`) ? document.getElementById(`t-${i}`).innerText : s.tiempo}
-                    </div>
+            <div class="card-body">
+                ${s.activo ? `
+                    <div style="font-size:0.85em; color:#777; margin-bottom:4px;">👤 ${s.inspector}</div>
+                    <div style="font-size:1.7em; font-weight:800; color:var(--text-dark); margin-bottom:8px;">${s.lote}</div>
+                    
+                    <div id="t-${i}" style="font-family:monospace; font-size:1.4em; font-weight:bold; color:var(--primary-green); background: rgba(70, 142, 93, 0.1); padding: 5px 10px; border-radius: 6px; display: inline-block;">
+                        ${document.getElementById(`t-${i}`) ? document.getElementById(`t-${i}`).innerText : s.tiempo}
+                    </div>
 
-                    <div style="margin-top:12px;">
-                        <span style="background:var(--primary-green); color:white; padding:4px 10px; border-radius:20px; font-size:0.75em; font-weight:bold;">
-                            ${s.proceso} ${s.ansi !== 'N/A' ? '• ' + s.ansi : ''}
-                        </span>
-                    </div>
-                ` : `
-                    <div style="opacity: 0.3; filter: grayscale(1);">
-                        <div style="font-size: 2.5em; margin-bottom: 5px;">📋</div>
-                        <div style="font-weight: bold; letter-spacing: 2px; font-size: 0.8em;">LÍNEA DISPONIBLE</div>
-                    </div>
-                `}
-            </div>
+                    <div style="margin-top:12px;">
+                        <span style="background:var(--primary-green); color:white; padding:4px 10px; border-radius:20px; font-size:0.75em; font-weight:bold;">
+                            ${s.proceso} ${s.ansi !== 'N/A' ? '• ' + s.ansi : ''}
+                        </span>
+                    </div>
+                ` : `
+                    <div style="opacity: 0.3; filter: grayscale(1);">
+                        <div style="font-size: 2.5em; margin-bottom: 5px;">📋</div>
+                        <div style="font-weight: bold; letter-spacing: 2px; font-size: 0.8em;">LÍNEA DISPONIBLE</div>
+                    </div>
+                `}
+            </div>
 
-            <div class="card-footer-clean">
-                ${s.activo ? 
-                    `<button class="btn-block" style="background:var(--primary-green); color:white;" onclick="prepararFin(${i})">
-                        FINALIZAR INSPECCIÓN
-                    </button>` : 
-                    `<button class="btn-block" style="background:#ffffff; color:var(--primary-green); border-top:1px solid #eee;" onclick="abrirHistorialIndividual(${i})">
-                        VER HISTORIAL
-                    </button>`
-                }
-            </div>
-        </div>`;
-    }).join('');
+            <div class="card-footer-clean">
+                ${s.activo ? 
+                    `<button class="btn-block" style="background:var(--primary-green); color:white;" onclick="prepararFin(${i})">
+                        FINALIZAR INSPECCIÓN
+                    </button>` : 
+                    `<button class="btn-block" style="background:#ffffff; color:var(--primary-green); border-top:1px solid #eee;" onclick="abrirHistorialIndividual(${i})">
+                        VER HISTORIAL
+                    </button>`
+                }
+            </div>
+        </div>`;
+    }).join('');
 
-    localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
+    localStorage.setItem('qc_v13_respaldo', JSON.stringify(estados));
 }
 function obtenerConteosTurnos(nombreLinea) {
     let conteo = { ta: 0, ra: 0, tb: 0, rb: 0 };
