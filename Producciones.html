@@ -505,7 +505,7 @@ body.dark-mode .btn-historial-v3:hover {
 
     <script>
         let pausaSincro = false;
-        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbwih_2rxYFxjj7FY3PwhhuFYNDMP-jfc8qn9iPzBtb4rSaVkQlkAYJhTmPBfEOAcayl/exec";
+        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbwdPUX9m9K02fHtE1JSOWfWm6eWaEw1hNzJIpjXXZcevIF-3-mfynp8zzKpPibfiJeD/exec";
         const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
 
         let catalogoDefectos = JSON.parse(localStorage.getItem('qc_catalogo_v2')) || {};
@@ -917,11 +917,8 @@ async function finalizarLote(ok) {
     // Resetear el estado al abrir el modal
     selAnsi.style.display = (selProceso.value === "Pre-Empaque") ? "none" : "block";
 }
-// --- FUNCIÓN DE SINCRONIZACIÓN ACTUALIZADA ---
 async function sincronizarConNube() {
-    // 1. BLOQUEO DE SEGURIDAD
-    // No sincronizar si: hay una pausa manual, un modal abierto (usuario escribiendo)
-    // o si la pestaña no es la visible (ahorra datos y evita conflictos en segundo plano)
+    // No sincronizar si hay un modal abierto o la pestaña está oculta
     if (pausaSincro || document.querySelector('.modal[style*="block"]') || document.hidden) return;
 
     try {
@@ -931,49 +928,52 @@ async function sincronizarConNube() {
 
         if (data.historial) dbHistorial = data.historial;
 
-        if (data.pizarra) {
+        if (data.pizarra && Array.isArray(data.pizarra)) {
             let huboCambio = false;
 
-            data.pizarra.forEach((nube, i) => {
-                // Inicializar estado local si no existe para esa línea
+            data.pizarra.forEach((filaNube, i) => {
+                // TRADUCCIÓN: De Array de Excel a Objeto de JavaScript
+                const nube = {
+                    productoOriginal: filaNube[0],
+                    activo: String(filaNube[1]).trim().toUpperCase() === "SI", // Transforma "SI" en true
+                    lote: String(filaNube[2] || "").trim(),
+                    inspector: filaNube[3] || "",
+                    inicio: parseInt(filaNube[4]) || 0,
+                    horaInicioReal: filaNube[5] || "",
+                    tiempo: filaNube[6] || "00:00",
+                    productoActivo: filaNube[7] || "",
+                    proceso: filaNube[8] || "",
+                    ansi: filaNube[9] || ""
+                };
+
                 if (!estados[i]) {
                     estados[i] = { activo: false, lote: "", ultimoCierreReal: 0, tiempo: "00:00" };
                 }
                 
                 const local = estados[i];
 
-                // --- ESCUDO ANTI-FANTASMAS (RACE CONDITION) ---
-                // Si la nube dice que el lote está ACTIVO, pero tú localmente lo tienes INACTIVO:
+                // ESCUDO ANTI-FANTASMAS: Si lo cerramos hace poco, no dejar que la nube lo "reviva"
                 if (nube.activo && !local.activo) {
-                    // Si lo cerraste hace menos de 30 segundos, ignora la nube.
-                    // Esto evita que el lote "reviva" porque Google Sheets aún no procesó el borrado.
-                    const tiempoDesdeCierre = ahora - (local.ultimoCierreReal || 0);
-                    if (tiempoDesdeCierre < 30000) return; 
+                    if (ahora - (local.ultimoCierreReal || 0) < 30000) return; 
                 }
 
-                // --- DETECTAR CAMBIOS REALES ---
-                // Comparamos el contenido de la nube con el local
-                if (JSON.stringify(local) !== JSON.stringify(nube)) {
-                    
-                    // Si la nube nos está "apagando" un lote que teníamos activo, 
-                    // guardamos el timestamp para activar el escudo de arriba.
+                // COMPARACIÓN: Si el lote o el estado activo cambió, actualizamos
+                if (local.lote !== nube.lote || local.activo !== nube.activo) {
                     if (local.activo && !nube.activo) {
-                        nube.ultimoCierreReal = ahora;
+                        nube.ultimoCierreReal = ahora; // Marcamos cierre local
                     }
-
-                    // Actualizamos el objeto local con la info fresca de la nube
-                    estados[i] = nube;
+                    estados[i] = { ...local, ...nube };
                     huboCambio = true;
                 }
             });
 
             if (huboCambio) {
-                console.log("📡 Pizarra actualizada desde la nube");
-                render(); // Solo redibujamos si algo cambió realmente
+                console.log("📡 Pizarra sincronizada desde la nube");
+                render();
             }
         }
     } catch (e) { 
-        console.warn("⚠️ Error de sincronización (posible microcorte):", e); 
+        console.warn("⚠️ Error sync:", e); 
     }
 }
 async function finalizarLote(ok) {
