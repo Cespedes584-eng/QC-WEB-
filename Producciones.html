@@ -505,7 +505,7 @@ body.dark-mode .btn-historial-v3:hover {
 
     <script>
         let pausaSincro = false;
-        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbwdPUX9m9K02fHtE1JSOWfWm6eWaEw1hNzJIpjXXZcevIF-3-mfynp8zzKpPibfiJeD/exec";
+        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbxTrebD7VIZwTf9vOPSdfIeqi6F8YQtwrSiJpHreMzl937VCW1F7KJ8SiIWYyJf9hgP/exec";
         const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
 
         let catalogoDefectos = JSON.parse(localStorage.getItem('qc_catalogo_v2')) || {};
@@ -698,19 +698,16 @@ async function iniciarLote() {
     const inputLote = document.getElementById('r-lote');
     if (!inputLote.value.trim()) return alert("⚠️ Ingrese el número de Lote");
     
-    // 1. BLOQUEO: Pausamos la sincronización automática
     pausaSincro = true; 
     
-    const idx = document.getElementById('r-linea').value;
+    const idx = parseInt(document.getElementById('r-linea').value); // Índice (0, 1, 2...)
     const btn = document.querySelector("#modal-reg .btn-main");
     
-    // 2. EFECTO VISUAL: Bloquear botón mientras validamos con Google
     btn.disabled = true;
     btn.innerText = "⏳ Guardando...";
 
     const ahora = new Date();
     
-    // Preparamos el objeto con los datos del nuevo lote
     const datosInicio = {
         activo: true,
         lote: inputLote.value.trim(),
@@ -720,63 +717,52 @@ async function iniciarLote() {
         proceso: document.getElementById('r-proceso').value,
         ansi: document.getElementById('r-ansi').value,
         productoActivo: (document.getElementById('contenedor-hibrida').style.display === 'block') ? document.getElementById('r-producto-especifico').value : lineasArr[idx],
-        productoOriginal: lineasArr[idx], // Mantenemos el nombre original de la línea
+        productoOriginal: lineasArr[idx],
         tiempo: "00:00"
     };
 
-    // Creamos una copia de los estados actuales para enviar la actualización completa
-    const copiaEstados = [...estados];
-    copiaEstados[idx] = datosInicio;
-
     try {
-        console.log("📤 Registrando inicio de lote en la nube...");
+        console.log("📤 Registrando solo ESTA línea en la nube...");
 
-        // 3. ENVÍO CON CONFIRMACIÓN (CORS REAL)
+        // --- CAMBIO CLAVE: ENVIAMOS SOLO UNA FILA ---
         const response = await fetch(SHEETS_URL, { 
             method: 'POST', 
-            mode: 'cors', // <--- CAMBIO CLAVE: Ahora sí escuchamos al servidor
-            headers: {
-                'Content-Type': 'text/plain' 
-            },
+            mode: 'cors', 
+            headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify({ 
                 action: 'save_pizarra', 
-                estados: copiaEstados 
+                fila: idx + 2,              // <--- Enviamos el número de fila física (Fila 2, 3...)
+                estadoIndividual: datosInicio // <--- Enviamos solo el objeto del lote actual
             }) 
         });
 
-        const resultado = await response.json(); // Leemos la respuesta de tu código .gs
+        const resultado = await response.json();
 
         if (resultado.status === "success") {
-            // 4. SOLO SI GOOGLE CONFIRMA ÉXITO:
-            console.log("✅ Confirmado por Google Sheets.");
+            console.log("✅ Fila actualizada sin afectar a las demás.");
             
-            estados[idx] = datosInicio; // Actualizamos el estado real local
-            render();                   // Dibujamos el cronómetro en pantalla
-            cerrarModal('modal-reg');   // Cerramos el formulario
-            inputLote.value = "";       // Limpiamos el campo
+            estados[idx] = datosInicio; 
+            render();                   
+            cerrarModal('modal-reg');   
+            inputLote.value = "";       
             
         } else {
-            // Si el Script de Google devolvió un error (ej. hoja bloqueada)
             throw new Error(resultado.message);
         }
 
     } catch (e) {
-        // 5. MANEJO DE ERRORES: Si falla el internet, no se cierra el modal
         console.error("❌ Fallo el registro:", e);
-        alert("⚠️ ERROR DE RED: El lote NO se pudo registrar en la nube. \n\nPor favor, verifique su conexión e intente de nuevo. El formulario no se cerrará para no perder los datos.");
+        alert("⚠️ ERROR DE RED: No se pudo registrar. Intente de nuevo.");
     } finally {
-        // Restaurar el botón para permitir reintentar si falló
         btn.disabled = false;
         btn.innerText = "INICIAR INSPECCIÓN";
         
-        // Mantener el escudo de sincronización por 8 segundos para que dé tiempo a la nube de actualizarse
         setTimeout(() => { 
             pausaSincro = false; 
-            console.log("🛡️ Escudo de sincronización liberado.");
+            console.log("🛡️ Escudo liberado.");
         }, 8000); 
     }
-}
-function generarDefectos() {
+}function generarDefectos() {
     const qty = document.getElementById('rech-qty').value;
     const contenedor = document.getElementById('contenedor-defectos');
     const s = estados[indexSel];
