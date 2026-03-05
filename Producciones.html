@@ -521,27 +521,46 @@ body.dark-mode .btn-historial-v3:hover {
         }
 
       function inicializarSistema() {
-    const sesion = localStorage.getItem('qc_session');
-    if (sesion) {
-        const data = JSON.parse(sesion);
-        document.getElementById('user-display').innerText = `👤 ${data.name}`;
-        document.getElementById('r-inspector').value = data.name.toUpperCase();
-        if (data.isAdmin) document.getElementById('btn-admin-access').style.display = 'inline-block';
+    const sesionGuardada = localStorage.getItem('qc_session');
+    const TIEMPO_LIMITE = 4 * 60 * 60 * 1000; // 4 horas en milisegundos
+    const ahora = new Date().getTime();
+
+    let accesoPermitido = false;
+    let datosUsuario = null;
+
+    if (sesionGuardada) {
+        datosUsuario = JSON.parse(sesionGuardada);
+        // Validamos si la sesión tiene menos de 4 horas de antigüedad
+        if (ahora - datosUsuario.timestamp < TIEMPO_LIMITE) {
+            accesoPermitido = true;
+        }
     }
 
-    // REGLA DE ORO: Agregamos loteAnterior para que la sincronización sea estable
+    if (accesoPermitido) {
+        // ENTRADA DIRECTA: Mostramos producción y cargamos datos
+        document.getElementById('seccion-login').style.display = 'none';
+        document.getElementById('seccion-produccion').style.display = 'block';
+        
+        // Cargamos el nombre en la interfaz
+        document.getElementById('user-display').innerText = `👤 ${datosUsuario.name}`;
+        document.getElementById('r-inspector').value = datosUsuario.name.toUpperCase();
+        
+        if (datosUsuario.isAdmin) {
+            document.getElementById('btn-admin-access').style.display = 'inline-block';
+        }
+    } else {
+        // SESIÓN EXPIRADA O PC NUEVA: Forzamos Login
+        localStorage.removeItem('qc_session');
+        document.getElementById('seccion-login').style.display = 'flex';
+        document.getElementById('seccion-produccion').style.display = 'none';
+    }
+
+    // --- Lógica de estados (Tu "Regla de Oro") ---
     estados = lineasArr.map(nom => ({ 
-        activo: false, 
-        lote: '', 
-        loteAnterior: '', // <--- ¡AQUÍ ESTÁ EL CAMBIO!
-        inspector: '', 
-        inicio: null, 
-        horaInicioReal: '', 
-        tiempo: '00:00', 
-        productoActivo: nom.split(" / ")[0].trim(), 
-        productoOriginal: nom, 
-        proceso: 'Final', 
-        ansi: 'Normal' 
+        activo: false, lote: '', loteAnterior: '', inspector: '', 
+        inicio: null, horaInicioReal: '', tiempo: '00:00', 
+        productoActivo: nom.split(" / ")[0].trim(), productoOriginal: nom, 
+        proceso: 'Final', ansi: 'Normal' 
     }));
 
     const selL = document.getElementById('r-linea');
@@ -552,6 +571,21 @@ body.dark-mode .btn-historial-v3:hover {
     setInterval(tick, 1000);
     setInterval(sincronizarConNube, 10000);
 }
+// Cada 5 minutos, el sistema revisa si el tiempo de sesión ya expiró
+setInterval(() => {
+    const sesion = localStorage.getItem('qc_session');
+    if (sesion) {
+        const data = JSON.parse(sesion);
+        const ahora = new Date().getTime();
+        const CUATRO_HORAS = 4 * 60 * 60 * 1000;
+
+        if (ahora - data.timestamp > CUATRO_HORAS) {
+            alert("Su sesión ha expirado por seguridad. Por favor, inicie sesión de nuevo.");
+            localStorage.removeItem('qc_session');
+            window.location.href = "index.html"; // Lo manda al login
+        }
+    }
+}, 5 * 60 * 1000); // Revisa cada 5 minutos
 
         async function cargarHistorialNube() {
             try {
