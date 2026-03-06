@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QC Tracker</title>
 <style>
-    /* --- VARIABLES DE COLOR (Soportan ambos modos) --- */
+
     :root {
         --bg-body: #ebedef;
         --panel-bg: #ffffff;
@@ -18,7 +18,7 @@
         --card-shadow: rgba(0, 0, 0, 0.05);
     }
 
-    /* Colores cuando el modo nocturno está activo */
+
 body.dark-mode {
     --bg-body: #121212; /* Fondo más profundo */
     --panel-bg: rgba(45, 45, 45, 0.6); /* Fondo semi-transparente */
@@ -34,7 +34,7 @@ body.dark-mode {
         transition: background 0.3s, color 0.3s;
     }
 
-    /* --- CABECERA --- */
+   
     .header {
         background: var(--primary-dark);
         padding: 12px 25px;
@@ -45,7 +45,7 @@ body.dark-mode {
         color: white;
     }
 
-    /* --- BOTONES DEL HEADER (Volver y Excel) --- */
+
     .btn-back {
         background: #ffffff !important;
         color: #333 !important;
@@ -96,7 +96,7 @@ body.dark-mode {
         border: 1px solid rgba(255,255,255,0.2);
     }
 
-    /* --- GRID DE TARJETAS --- */
+ 
     .grid-container {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -104,7 +104,7 @@ body.dark-mode {
         padding: 20px;
     }
 
-   /* --- NUEVAS TARJETAS MODERNAS --- */
+
 .card {
     background: var(--panel-bg);
     border: 1px solid var(--border);
@@ -142,23 +142,23 @@ body.dark-mode {
 
 .card-body { 
     padding: 20px; 
-    flex-grow: 1; /* Esto obliga al contenido a ocupar el espacio y empujar el footer */
+    flex-grow: 1; 
     display: flex; 
     flex-direction: column; 
     justify-content: center; 
     text-align: center; 
 }
 
-/* --- CLASES NUEVAS PARA LOS BOTONES SÓLIDOS --- */
+
 .card-footer-clean {
-    margin-top: auto; /* Empuja siempre al borde inferior */
+    margin-top: auto; /
     padding: 0;
 }
 
 .btn-block {
     width: 100%;
     border: none;
-    padding: 15px 0; /* Botón más alto y táctil */
+    padding: 15px 0; /
     font-weight: bold;
     cursor: pointer;
     text-transform: uppercase;
@@ -171,7 +171,7 @@ body.dark-mode {
     filter: brightness(0.9);
 }
 
-    /* --- MODALES --- */
+  
     .modal {
         display: none;
         position: fixed;
@@ -193,7 +193,7 @@ body.dark-mode {
         box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
 
-    /* --- FORMULARIOS --- */
+
     input, select {
         width: 100%;
         padding: 10px;
@@ -205,7 +205,7 @@ body.dark-mode {
         color: var(--text-dark);
     }
 
-    /* --- BOTONES PRINCIPALES --- */
+
     .btn-main {
         background: var(--primary-green);
         color: white;
@@ -368,7 +368,7 @@ body.dark-mode .btn-historial-v3:hover {
                 <option>Reducido</option>
                 <option>Riguroso</option>
             </select>
-            <button class="btn-main" style="width:100%;" onclick="iniciarLote()">INICIAR INSPECCIÓN</button>
+           <button class="btn-main" style="width:100%;" onclick="validarYEntrar()">INICIAR INSPECCIÓN</button>
         </div>
     </div>
 
@@ -529,7 +529,7 @@ body.dark-mode .btn-historial-v3:hover {
         if (data.isAdmin) document.getElementById('btn-admin-access').style.display = 'inline-block';
     }
 
-    // REGLA DE ORO: Agregamos loteAnterior para que la sincronización sea estable
+
     estados = lineasArr.map(nom => ({ 
         activo: false, 
         lote: '', 
@@ -695,6 +695,22 @@ function obtenerConteosTurnos(nombreLinea) {
             pausaSincro = false;
         }
 
+
+function validarYEntrar() {
+    const idx = parseInt(document.getElementById('r-linea').value);
+    
+    // Si la línea seleccionada ya tiene el 'activo' en true, bloqueamos
+    if (estados[idx] && estados[idx].activo === true) {
+        alert("⚠️ LÍNEA OCUPADA: \n\n" + 
+              "La línea [" + estados[idx].productoOriginal + "] ya tiene un lote en curso.\n" +
+              "Lote actual: " + estados[idx].lote + "\n\n" +
+              "No puedes sobrescribir. Finaliza el lote actual antes de iniciar uno nuevo.");
+        return; // Detiene la ejecución aquí mismo
+    }
+
+    // Si la línea está libre (activo === false), llama a tu función de siempre
+    iniciarLote(); 
+}
 async function iniciarLote() {
     const inputLote = document.getElementById('r-lote');
     if (!inputLote.value.trim()) return alert("⚠️ Ingrese el número de Lote");
