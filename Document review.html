@@ -128,7 +128,7 @@
     </div>
 
 <script>
-    const SCRIPT_URL ="https://script.google.com/macros/s/AKfycbz1rIk8kPJR_Te_sfD_Q18qz2KM0TnT4Vu1duQAiSaTOW2ydmOxx_IPFjA27BmNAKXb0g/exec";
+    const SCRIPT_URL ="https://script.google.com/macros/s/AKfycbwUzeZt6xJlyw1rXq0dOECgjb1BniGalwI3wLdrDMHHgBuP0zT6IKhVTUkbFIScfCh-ww/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
     let db = []; 
 let tempIdx = null;
@@ -320,55 +320,72 @@ let pausaSincro = false; // Este es nuestro "Escudo"
     document.getElementById('c-run').innerText = count.run; 
     document.getElementById('c-done').innerText = count.done;
 }
-    async function changeSt(i, s) { 
-        const ahora = Date.now();
-        const lote = db[i];
-        
-        if (lote.st === 'wait' && s === 'rev') {
-            const display = document.getElementById('user-display').innerText;
-            lote.user = display.replace('👤 ', '').trim().toUpperCase();
-        }
-
-        if (lote.st === 'rev' && lote.inicioRS) {
-            lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
-        }
-        if (lote.st === 'corr' && lote.inicioCS) {
-            lote.tC_acumulado = (ahora - lote.inicioCS) + (lote.tC_acumulado || 0);
-        }
-        
-        lote.st = s;
-        if (s === 'rev') lote.inicioRS = ahora;
-        else if (s === 'corr') lote.inicioCS = ahora;
-        
-        await save();
-        await refreshData(); 
+   async function changeSt(i, s) { 
+    const ahora = Date.now();
+    const lote = db[i]; // Este es el lote que el inspector está tocando
+    
+    // 1. Asignar usuario si pasa de Espera a Revisión
+    if (lote.st === 'wait' && s === 'rev') {
+        const display = document.getElementById('user-display').innerText;
+        lote.user = display.replace('👤 ', '').trim().toUpperCase();
     }
 
-   async function save() { 
-    // 1. Guardar en memoria del navegador y dibujar en pantalla de inmediato
+    // 2. Acumular tiempos antes de cambiar el estado
+    if (lote.st === 'rev' && lote.inicioRS) {
+        lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
+    }
+    if (lote.st === 'corr' && lote.inicioCS) {
+        lote.tC_acumulado = (ahora - lote.inicioCS) + (lote.tC_acumulado || 0);
+    }
+    
+    // 3. Cambiar el estado y resetear el inicio del nuevo cronómetro
+    lote.st = s;
+    if (s === 'rev') {
+        lote.inicioRS = ahora;
+        lote.inicioCS = null; // Limpiamos el otro para evitar conflictos
+    } else if (s === 'corr') {
+        lote.inicioCS = ahora;
+        lote.inicioRS = null;
+    }
+    
+    // 4. GUARDADO QUIRÚRGICO: Enviamos solo este lote para que Google lo busque y actualice
+    // Esto evita que se borren otros lotes en la hoja
+    await save(lote); 
+    
+    // 5. Refrescamos para ver cambios de otros, pero nuestro lote está protegido por el "Escudo"
+    await refreshData(); 
+}
+
+  async function save(loteEspecifico = null) { 
+    // 1. Prioridad absoluta: Guardar localmente
     localStorage.setItem('qc_final_v88', JSON.stringify(db)); 
     render(); 
 
-    // 2. ACTIVAR ESCUDO: Bloqueamos entradas de la nube para evitar "Lotes Fantasmas"
+    // 2. ACTIVAR ESCUDO
     pausaSincro = true;
-    console.log("🛡️ Escudo activado...");
+    
+    // Decidimos qué enviar: ¿Toda la lista o solo el lote que cambió?
+    // Si enviamos solo el lote que cambió, el proceso es mucho más rápido.
+    const datosEnvio = loteEspecifico ? [loteEspecifico] : db;
 
     try { 
-        // 3. ENVIAR Y OLVIDAR: No usamos 'await' para que no se trabe el código
-        fetch(SCRIPT_URL, { 
+        // 3. ENVIAR A GOOGLE
+        const response = await fetch(SCRIPT_URL, { 
             method: 'POST', 
-            mode: 'no-cors', 
-            body: JSON.stringify(db) 
+            mode: 'no-cors', // Mantenemos no-cors para evitar bloqueos de seguridad
+            body: JSON.stringify(datosEnvio) 
         });
+        
+        console.log("☁️ Sincronización enviada con éxito.");
     } catch (e) { 
-        console.error("Error de conexión", e); 
+        console.error("❌ Error de red. El lote sigue seguro en el navegador.", e); 
     }
 
-    // 4. TEMPORIZADOR: En 8 segundos bajamos el escudo
+    // 4. TEMPORIZADOR DE SEGURIDAD
     setTimeout(() => {
         pausaSincro = false;
-        console.log("🔓 Escudo desactivado. Volviendo a escuchar a la nube.");
-    }, 8000); 
+        console.log("🔓 Escudo desactivado.");
+    }, 10000); // 10 segundos es ideal para dar tiempo a Google a procesar
 }
 
     function renderAdmin() {
@@ -426,25 +443,41 @@ let pausaSincro = false; // Este es nuestro "Escudo"
         document.getElementById('tab-perf').className = t==='perf'?'tab active':'tab';
         if(t==='perf') renderPerf(); else renderAdmin();
     }
+async function addBR() {
+    const id = document.getElementById('new-id').value.trim();
+    const line = document.getElementById('new-line').value;
+    const date = document.getElementById('main-date-filter').value;
+    
+    if (!id) return alert("Ingrese número de lote");
 
-    async function addBR() {
-        const id = document.getElementById('new-id').value.trim();
-        const line = document.getElementById('new-line').value;
-        const date = document.getElementById('main-date-filter').value;
-        if (!id) return alert("Ingrese número de lote");
+    // Creamos el objeto del lote
+    const nuevoLote = {
+        id: id, 
+        line: line, 
+        user: "SIN ASIGNAR", 
+        st: 'wait',
+        date: date, 
+        inicioWS: Date.now(), 
+        tW: 0, 
+        tR: 0, 
+        tC: 0,
+        tR_acumulado: 0, 
+        tC_acumulado: 0, 
+        pg: 0, 
+        hFin: ""
+    };
 
-        const nuevoLote = {
-            id: id, line: line, user: "SIN ASIGNAR", st: 'wait',
-            date: date, inicioWS: Date.now(), tW: 0, tR: 0, tC: 0,
-            tR_acumulado: 0, tC_acumulado: 0, pg: 0, hFin: ""
-        };
-
-        db.push(nuevoLote);
-        document.getElementById('new-id').value = "";
-        hideModal('modal-new');
-        await save();
-    }
-
+    // 1. Lo agregamos a nuestra base de datos local
+    db.push(nuevoLote);
+    
+    // 2. Limpiamos la interfaz
+    document.getElementById('new-id').value = "";
+    hideModal('modal-new');
+    
+    // 3. GUARDADO QUIRÚRGICO: Enviamos solo el nuevo lote.
+    // Esto hace que Google Sheets lo agregue como una fila nueva al final.
+    await save(nuevoLote); 
+}
     function openFin(i) {
         tempIdx = i;
         showModal('modal-finish');
