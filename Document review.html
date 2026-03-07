@@ -60,7 +60,15 @@
     <div class="stats-bar">
         <div class="stat-card"><span>BRS HOY</span><div class="stat-value" id="top-brs">0</div></div>
         <div class="stat-card"><span>CANTIDAD DOCUMENTOS</span><div class="stat-value" id="top-pags">0</div></div>
-        <div class="stat-card" style="border-left-color: var(--blue);"><span>HISTORIAL</span><br><input type="date" id="main-date-filter" onchange="render()" style="border:none; font-weight:bold; font-size:1.1em; cursor:pointer;"></div>
+        <<div class="stat-card" style="border-left-color: var(--blue);">
+    <span>HISTORIAL Y TURNO</span><br>
+    <input type="date" id="main-date-filter" onchange="render()" style="border:none; font-weight:bold; font-size:1.1em; cursor:pointer;">
+    <select id="shift-filter" onchange="render()" style="border:none; font-weight:bold; cursor:pointer; color:var(--blue); display:block; margin: 0 auto;">
+        <option value="TODOS">TODOS LOS TURNOS</option>
+        <option value="TA">TURNO A</option>
+        <option value="TB">TURNO B</option>
+    </select>
+</div>
     </div>
 <div style="padding: 0 15px;">
     <input type="text" id="main-search" oninput="render()" placeholder="🔍 Buscar por Lote # ..." class="search-bar">
@@ -135,29 +143,38 @@ let tempIdx = null;
 let pausaSincro = false; // Este es nuestro "Escudo"
 
     async function init() {
-        const sesionEstandar = localStorage.getItem('qc_session');
-        const usuarioLegacy = localStorage.getItem('usuario');
-        let nombreDetectado = "SIN ASIGNAR";
+    const sesionEstandar = localStorage.getItem('qc_session');
+    const usuarioLegacy = localStorage.getItem('usuario');
+    let nombreDetectado = "SIN ASIGNAR";
 
-        if (sesionEstandar) {
-            const u = JSON.parse(sesionEstandar);
-            nombreDetectado = u.nombre || u.user || u.usuario || "SIN ASIGNAR";
-            if(u.isAdmin) document.getElementById('btn-admin-config').style.display = 'inline-block';
-        } else if (usuarioLegacy) {
-            nombreDetectado = usuarioLegacy;
-        }
-        document.getElementById('user-display').innerText = `👤 ${nombreDetectado.toUpperCase()}`;
-
-        const sel = document.getElementById('new-line');
-        sel.innerHTML = "";
-        lineas.sort().forEach(l => { sel.innerHTML += `<option value="${l}">${l}</option>`; });
-        
-        document.getElementById('main-date-filter').value = formatearFecha();
-
-        const localData = localStorage.getItem('qc_final_v88');
-        if (localData) { db = JSON.parse(localData); render(); }
-        await refreshData();
+    if (sesionEstandar) {
+        const u = JSON.parse(sesionEstandar);
+        nombreDetectado = u.nombre || u.user || u.usuario || "SIN ASIGNAR";
+        if(u.isAdmin) document.getElementById('btn-admin-config').style.display = 'inline-block';
+    } else if (usuarioLegacy) {
+        nombreDetectado = usuarioLegacy;
     }
+    document.getElementById('user-display').innerText = `👤 ${nombreDetectado.toUpperCase()}`;
+
+    const sel = document.getElementById('new-line');
+    sel.innerHTML = "";
+    lineas.sort().forEach(l => { sel.innerHTML += `<option value="${l}">${l}</option>`; });
+    
+    // --- CORRECCIÓN AQUÍ ---
+    // 1. Ponemos la fecha de hoy
+    document.getElementById('main-date-filter').value = formatearFecha();
+    // 2. Aseguramos que el filtro de turno empiece en TODOS
+    if(document.getElementById('shift-filter')) {
+        document.getElementById('shift-filter').value = "TODOS";
+    }
+
+    const localData = localStorage.getItem('qc_final_v88');
+    if (localData) { 
+        db = JSON.parse(localData); 
+        render(); // Dibujamos lo que hay en memoria mientras llega lo de la nube
+    }
+    await refreshData();
+}
 
     async function refreshData() {
     if (pausaSincro) return; // Si el escudo está activo, salimos de la función sin hacer nada
@@ -247,7 +264,7 @@ let pausaSincro = false; // Este es nuestro "Escudo"
         return `${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
     }
 
-   function render() {
+ function render() {
     const cont = { 
         wait: document.getElementById('list-wait'), 
         run: document.getElementById('list-run'), 
@@ -259,23 +276,30 @@ let pausaSincro = false; // Este es nuestro "Escudo"
     Object.values(cont).forEach(c => c.innerHTML = "");
     
     const selDate = document.getElementById('main-date-filter').value;
+    const selShift = document.getElementById('shift-filter').value; // <--- NUEVO: Captura el turno (TA/TB/TODOS)
     const searchInput = document.getElementById('main-search');
     const searchText = searchInput ? searchInput.value.toLowerCase() : ""; 
     
     let topB = 0, topP = 0;
 
-    // Usamos el índice original (i) para que los botones de "Iniciar" funcionen siempre
     db.forEach((l, i) => {
         // 1. Filtro por Fecha
         if (l.date !== selDate) return;
 
-        // 2. Filtro por Buscador (Número de lote)
+        // 2. NUEVO: Filtro por Turno
+        // Si el filtro no es "TODOS", ocultamos los que no coincidan con el turno del lote
+        if (selShift !== "TODOS" && l.turno !== selShift) return;
+
+        // 3. Filtro por Buscador (Número de lote)
         if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
 
         const isFinalizado = (l.st === 'done');
-        if(isFinalizado) { topB++; topP += parseInt(l.pg || 0); }
+        if(isFinalizado) { 
+            topB++; 
+            topP += parseInt(l.pg || 0); 
+        }
         
-        // Generamos la tarjeta usando "i" como el ID real en la base de datos
+        // --- Generación de la tarjeta (Tu código original intacto) ---
         const card = `
         <div class="card" style="position: relative;">
             ${isFinalizado ? (() => {
@@ -320,9 +344,9 @@ let pausaSincro = false; // Este es nuestro "Escudo"
     document.getElementById('c-run').innerText = count.run; 
     document.getElementById('c-done').innerText = count.done;
 }
-   async function changeSt(i, s) { 
+ async function changeSt(i, s) { 
     const ahora = Date.now();
-    const lote = db[i]; // Este es el lote que el inspector está tocando
+    const lote = db[i]; 
     
     // 1. Asignar usuario si pasa de Espera a Revisión
     if (lote.st === 'wait' && s === 'rev') {
@@ -340,19 +364,39 @@ let pausaSincro = false; // Este es nuestro "Escudo"
     
     // 3. Cambiar el estado y resetear el inicio del nuevo cronómetro
     lote.st = s;
+    
+    // --- 3.1 NUEVO: Lógica de Turnos por Horario de Finalización ---
+    if (s === 'done') {
+        const d = new Date();
+        const horaHormat = d.getHours();
+        const minFormat = d.getMinutes();
+        const totalMinutos = (horaHormat * 60) + minFormat;
+
+        // TA: De 06:00 (360 min) a 15:30 (930 min)
+        if (totalMinutos >= 360 && totalMinutos <= 930) {
+            lote.turno = "TA";
+        } else {
+            // TB: De 15:31 en adelante hasta las 23:59 (y madrugada si aplica)
+            lote.turno = "TB";
+        }
+        
+        // Registrar hora de fin para el historial
+        lote.hFin = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+    // -------------------------------------------------------------
+
     if (s === 'rev') {
         lote.inicioRS = ahora;
-        lote.inicioCS = null; // Limpiamos el otro para evitar conflictos
+        lote.inicioCS = null;
     } else if (s === 'corr') {
         lote.inicioCS = ahora;
         lote.inicioRS = null;
     }
     
-    // 4. GUARDADO QUIRÚRGICO: Enviamos solo este lote para que Google lo busque y actualice
-    // Esto evita que se borren otros lotes en la hoja
+    // 4. GUARDADO QUIRÚRGICO: Enviamos solo este lote
     await save(lote); 
     
-    // 5. Refrescamos para ver cambios de otros, pero nuestro lote está protegido por el "Escudo"
+    // 5. Refrescamos datos de la nube
     await refreshData(); 
 }
 
@@ -413,19 +457,31 @@ let pausaSincro = false; // Este es nuestro "Escudo"
         });
     }
 
-    function exportExcel() {
-        let csv = "\uFEFFFecha;Hora_Fin;Lote;Linea;Inspector;Paginas;T_Espera;T_Revision;T_Correccion\n";
-        db.filter(l => l.st === 'done').forEach(l => {
-            let horaLimpia = l.hFin || "";
-            if (horaLimpia.includes('T')) horaLimpia = horaLimpia.split('T')[1].substring(0, 5);
-            csv += `${l.date};${horaLimpia};${l.id};${l.line};${l.user};${l.pg};${fmt(l.tW)};${fmt(l.tR)};${fmt(l.tC)}\n`; 
-        });
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a"); 
-        link.href = URL.createObjectURL(blob);
-        link.download = `REPORTE_QC_${formatearFecha()}.csv`; 
-        link.click();
-    }
+   function exportExcel() {
+    // 1. Añadimos "Turno" a los encabezados (después de Hora_Fin)
+    let csv = "\uFEFFFecha;Hora_Fin;Turno;Lote;Linea;Inspector;Paginas;T_Espera;T_Revision;T_Correccion\n";
+    
+    db.filter(l => l.st === 'done').forEach(l => {
+        let horaLimpia = l.hFin || "";
+        // Limpiamos la hora por si viene con formato de fecha ISO
+        if (horaLimpia.includes('T')) horaLimpia = horaLimpia.split('T')[1].substring(0, 5);
+        else if (horaLimpia.length > 8) horaLimpia = horaLimpia.substring(0, 5);
+
+        // 2. Incluimos l.turno en la línea de datos (si no tiene turno ponemos "N/A")
+        const turnoLabel = l.turno || "N/A";
+
+        csv += `${l.date};${horaLimpia};${turnoLabel};${l.id};${l.line};${l.user};${l.pg};${fmt(l.tW)};${fmt(l.tR)};${fmt(l.tC)}\n`; 
+    });
+
+    // 3. Generación del archivo
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a"); 
+    link.href = URL.createObjectURL(blob);
+    
+    // Nombre del archivo dinámico con la fecha de hoy
+    link.download = `REPORTE_QC_${formatearFecha()}.csv`; 
+    link.click();
+}
 
     function edit(i, f) { const n = prompt("Nuevo:", db[i][f]); if(n !== null) { db[i][f] = f==='pg'?parseInt(n):n; save(); renderAdmin(); } }
     function editLine(i) {
@@ -492,13 +548,23 @@ async function confirmFinish() {
     lote.pg = p;
     lote.st = 'done';
     
-    // 1. Forzamos el formato de texto HH:mm para evitar que Google Sheets lo recalcule
+    // 1. Formato de tiempo y CÁLCULO DE TURNO
     const ahora = new Date();
-    const horas = String(ahora.getHours()).padStart(2, '0');
-    const minutos = String(ahora.getMinutes()).padStart(2, '0');
+    const horasNum = ahora.getHours();
+    const minutosNum = ahora.getMinutes();
+    const horasStr = String(horasNum).padStart(2, '0');
+    const minutosStr = String(minutosNum).padStart(2, '0');
     
-    // Guardamos como string puro "22:05"
-    lote.hFin = `${horas}:${minutos}`;
+    lote.hFin = `${horasStr}:${minutosStr}`;
+
+    // --- LÓGICA DE TURNOS (TA: 06:00 a 15:30) ---
+    const totalMinutos = (horasNum * 60) + minutosNum;
+    if (totalMinutos >= 360 && totalMinutos <= 930) {
+        lote.turno = "TA";
+    } else {
+        lote.turno = "TB";
+    }
+    // --------------------------------------------
     
     const ahoraMs = Date.now();
     if (lote.inicioRS) {
@@ -509,11 +575,9 @@ async function confirmFinish() {
     hideModal('modal-finish');
     document.getElementById('finish-pg').value = "";
     
-    // 2. Enviamos a la base de datos
-    await save();
-}
-    setInterval(tick, 1000); 
-    setInterval(refreshData, 30000); 
+    // 2. Enviamos a la base de datos (con el nuevo campo 'turno' incluido)
+    await save(lote); // Enviamos el lote específico para mayor rapidez
+} 
 </script>
 </body>
 </html>
