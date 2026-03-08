@@ -351,29 +351,27 @@ function render() {
     const searchInput = document.getElementById('main-search');
     const searchText = searchInput ? searchInput.value.toLowerCase() : ""; 
     
-    let topB = 0, topP = 0;
+    let topB = 0, topP = 0; 
 
     // 3. Revisamos cada lote de la base de datos
-    db.forEach((l, i) => {
-        
-        // --- AQUÍ EMPIEZAN LOS FILTROS QUE DEBES PONER --- //
-        
-        // Filtro por Fecha
+   db.forEach((l, i) => {
+        // 1. Filtro por Fecha
         if (l.date !== selDate) return;
 
-        // Filtro por Turno (CORREGIDO) <<-- ESTE ES EL QUE FALTABA
+        // 2. Filtro por Turno (CORREGIDO)
         if (selShift !== "TODOS" && l.turno && l.turno !== selShift) return;
 
-        // Filtro por Buscador
+        // 3. Filtro por Buscador
         if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
 
-        // --- AQUÍ TERMINAN LOS FILTROS --- //
-
+        // --- AQUÍ DEBEN IR LOS CONTADORES ---
+        // Ahora solo sumarán si el lote pasó los filtros de arriba
         const isFinalizado = (l.st === 'done');
         if(isFinalizado) { 
             topB++; 
             topP += parseInt(l.pg || 0); 
         }
+        // ------------------------------------
         
         // --- Generación de la tarjeta (Tu código sigue igual abajo) ---
         const card = `
