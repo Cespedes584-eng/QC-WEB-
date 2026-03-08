@@ -359,7 +359,8 @@ function render() {
         if (l.date !== selDate) return;
 
         // 2. Filtro por Turno (CORREGIDO)
-        if (selShift !== "TODOS" && l.turno && l.turno !== selShift) return;
+       // Opción B: Ver el turno seleccionado + todo lo que no se ha terminado todavía
+if (selShift !== "TODOS" && l.turno !== selShift && l.st === 'done') return;
 
         // 3. Filtro por Buscador
         if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
