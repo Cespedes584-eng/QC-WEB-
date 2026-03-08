@@ -183,11 +183,17 @@
     </div>
 
 <script>
-    const SCRIPT_URL ="https://script.google.com/macros/s/AKfycbwUzeZt6xJlyw1rXq0dOECgjb1BniGalwI3wLdrDMHHgBuP0zT6IKhVTUkbFIScfCh-ww/exec";
+        // Variables de configuración y estado
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwUzeZt6xJlyw1rXq0dOECgjb1BniGalwI3wLdrDMHHgBuP0zT6IKhVTUkbFIScfCh-ww/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
+    
     let db = []; 
-let currentShift = "TODOS"; // Esta variable recordará qué botón presionaste
+    let currentShift = "TODOS"; 
+    let pausaSincro = false; // Asegúrate de que esta variable esté declarada
+    let tempIdx = null;
 
+    // MOTOR DEL RELOJ: Solo una vez
+    setInterval(tick, 1000);
 function setShift(turno) {
     currentShift = turno; 
     
@@ -328,7 +334,7 @@ function setShift(turno) {
         return `${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
     }
 
- function render() {
+function render() {
     const cont = { 
         wait: document.getElementById('list-wait'), 
         run: document.getElementById('list-run'), 
@@ -336,26 +342,32 @@ function setShift(turno) {
     };
     const count = { wait: 0, run: 0, done: 0 };
     
-    // Limpiamos las listas antes de dibujar
+    // 1. Limpiamos las listas
     Object.values(cont).forEach(c => c.innerHTML = "");
     
+    // 2. Obtenemos los valores de los filtros
     const selDate = document.getElementById('main-date-filter').value;
-   const selShift = currentShift;
+    const selShift = currentShift;
     const searchInput = document.getElementById('main-search');
     const searchText = searchInput ? searchInput.value.toLowerCase() : ""; 
     
     let topB = 0, topP = 0;
 
+    // 3. Revisamos cada lote de la base de datos
     db.forEach((l, i) => {
-        // 1. Filtro por Fecha
+        
+        // --- AQUÍ EMPIEZAN LOS FILTROS QUE DEBES PONER --- //
+        
+        // Filtro por Fecha
         if (l.date !== selDate) return;
 
-        // 2. NUEVO: Filtro por Turno
-        // Si el filtro no es "TODOS", ocultamos los que no coincidan con el turno del lote
-        if (selShift !== "TODOS" && l.turno !== selShift) return;
+        // Filtro por Turno (CORREGIDO) <<-- ESTE ES EL QUE FALTABA
+        if (selShift !== "TODOS" && l.turno && l.turno !== selShift) return;
 
-        // 3. Filtro por Buscador (Número de lote)
+        // Filtro por Buscador
         if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
+
+        // --- AQUÍ TERMINAN LOS FILTROS --- //
 
         const isFinalizado = (l.st === 'done');
         if(isFinalizado) { 
@@ -363,7 +375,7 @@ function setShift(turno) {
             topP += parseInt(l.pg || 0); 
         }
         
-        // --- Generación de la tarjeta (Tu código original intacto) ---
+        // --- Generación de la tarjeta (Tu código sigue igual abajo) ---
         const card = `
         <div class="card" style="position: relative;">
             ${isFinalizado ? (() => {
@@ -372,36 +384,31 @@ function setShift(turno) {
                 else if (h.length > 8) h = h.substring(0, 5);
                 return `<div style="position: absolute; top: 10px; right: 15px; background: #f0f4f1; color: #468e5d; padding: 4px 8px; border-radius: 6px; font-size: 0.85em; font-weight: bold; border: 1px solid #d1e2d4;">🕒 ${h}</div>`;
             })() : ''}
-
             <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
             <div style="font-size:0.75em; color:#666; margin-bottom:8px;">
                 ${l.line} | <b style="color:var(--blue);">${l.user}</b>
             </div>
-
             ${isFinalizado 
                 ? `<span class="status-final" style="margin: 10px 0; display: block;">FINALIZADO</span>` 
                 : `<span class="timer-big" id="live-${i}">00:00</span>`
             }
-
             <div class="timer-grid-3" id="grid-${i}">
                 <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
                 <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
                 <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
             </div>
-
             ${l.st === 'wait' ? `<button class="btn" style="background:var(--green); color:white" onclick="changeSt(${i},'rev')">INICIAR</button>` : 
               l.st === 'rev' ? `<button class="btn" style="background:#f39c12; color:white; margin-bottom:5px;" onclick="changeSt(${i},'corr')">CORRECCIÓN</button><button class="btn" style="background:var(--dark); color:white" onclick="openFin(${i})">FINALIZAR</button>` : 
               l.st === 'corr' ? `<button class="btn" style="background:var(--green); color:white" onclick="changeSt(${i},'rev')">REANUDAR</button>` : 
               `<div style="text-align:center; font-weight:bold; color:var(--green); padding-top:5px;">PÁGINAS: ${l.pg}</div>`}
         </div>`;
         
-        // Insertamos en la columna correspondiente
         if (l.st === 'wait') { cont.wait.insertAdjacentHTML('afterbegin', card); count.wait++; }
         else if (l.st === 'done') { cont.done.insertAdjacentHTML('afterbegin', card); count.done++; }
         else { cont.run.insertAdjacentHTML('afterbegin', card); count.run++; }
     });
 
-    // Actualizamos contadores superiores
+    // 4. Actualizamos contadores
     document.getElementById('top-brs').innerText = topB; 
     document.getElementById('top-pags').innerText = topP;
     document.getElementById('c-wait').innerText = count.wait; 
