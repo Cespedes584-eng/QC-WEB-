@@ -50,26 +50,28 @@
 }
 
 /* Botones individuales */
+/* Botones individuales (apagados) */
 .btn-filter-pro {
-    background: transparent;
-    color: #666;
+    background: #e0e0e0; /* Gris para los que no están seleccionados */
+    color: #555;
     border: none;
-    padding: 4px 12px;
-    border-radius: 4px;
+    padding: 6px 16px;
+    border-radius: 6px;
     font-weight: bold;
     cursor: pointer;
-    font-size: 0.7em;
-    transition: all 0.2s;
+    font-size: 0.8em;
+    transition: all 0.3s ease;
 }
 
-/* Botón activo (Oscuro) */
+/* El botón que tocas (ENCENDIDO) */
 .btn-filter-pro.active {
-    background-color: #24303c; 
-    color: white;
+    background-color: #24303c !important; /* El oscuro de tu imagen */
+    color: white !important;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
 }
 
 .btn-filter-pro:hover:not(.active) {
-    background-color: #dcdcdc;
+    background-color: #d0d0d0;
 }
     </style>
 </head>
@@ -189,16 +191,20 @@ let currentShift = "TODOS"; // Esta variable recordará qué botón presionaste
 function setShift(turno) {
     currentShift = turno; 
     
-    // Esto cambia el color: pone oscuro el que tocaste y verde los demás
-    document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
+    // 1. Buscamos los botones con el nombre correcto de la clase (.btn-filter-pro)
+    const botones = document.querySelectorAll('.btn-filter-pro');
+    
+    // 2. Les quitamos la clase 'active' a todos para que se pongan grises
+    botones.forEach(b => b.classList.remove('active'));
+    
+    // 3. Encendemos el que tocaste (se pone oscuro #24303c)
     if(turno === 'TODOS') document.getElementById('btn-todos').classList.add('active');
     if(turno === 'TA') document.getElementById('btn-ta').classList.add('active');
     if(turno === 'TB') document.getElementById('btn-tb').classList.add('active');
     
-    render(); // Le dice al sistema: "¡Actualiza los números y las tarjetas!"
+    // 4. Actualizamos la pantalla
+    render(); 
 }
-let tempIdx = null;
-let pausaSincro = false; // Este es nuestro "Escudo"
 
     async function init() {
     const sesionEstandar = localStorage.getItem('qc_session');
