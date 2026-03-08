@@ -40,38 +40,36 @@
         .fab { position: fixed; bottom: 30px; right: 30px; width: 65px; height: 65px; background: var(--green); color: white; border-radius: 50%; font-size: 35px; border: none; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 999; }
         .btn { padding: 12px; border: none; border-radius: 6px; font-weight: 800; cursor: pointer; text-transform: uppercase; width: 100%; margin-top: 8px; font-size: 0.85em; }
         .search-bar { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 6px; border: 1px solid #ccc; box-sizing: border-box; }
-/* Grupo de botones estilo pastilla moderno */
-/* Contenedor gris de fondo para los botones */
+/* Contenedor estilo pastilla */
 .filter-group-pro {
     display: flex;
-    background: #f1f1f1;
-    padding: 3px;
-    border-radius: 8px;
+    background: #eeeeee;
+    padding: 2px;
+    border-radius: 6px;
     border: 1px solid #ddd;
 }
 
-/* Estilo de los botones individuales */
+/* Botones individuales */
 .btn-filter-pro {
     background: transparent;
-    color: #555;
+    color: #666;
     border: none;
-    padding: 5px 12px;
-    border-radius: 6px;
+    padding: 4px 12px;
+    border-radius: 4px;
     font-weight: bold;
     cursor: pointer;
-    font-size: 0.75em;
-    transition: all 0.2s ease;
+    font-size: 0.7em;
+    transition: all 0.2s;
 }
 
-/* El botón que está seleccionado (Oscuro como en tu foto) */
+/* Botón activo (Oscuro) */
 .btn-filter-pro.active {
     background-color: #24303c; 
     color: white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 .btn-filter-pro:hover:not(.active) {
-    background-color: #e0e0e0;
+    background-color: #dcdcdc;
 }
     </style>
 </head>
@@ -90,28 +88,35 @@
         </div>
     </div>
 
- <div class="stats-bar">
-    <div class="stat-card" style="border-left: 3px solid #468e5d;">
-        <span>BRS HOY</span>
-        <div class="stat-value" id="top-brs">0</div>
-    </div>
+ <div class="stats-bar" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 20px;">
     
-    <div class="stat-card" style="border-left: 3px solid #468e5d;">
-        <span>PÁGINAS TOTALES</span>
-        <div class="stat-value" id="top-pags">0</div>
+    <div style="display: flex; align-items: center; gap: 30px; flex: 1;">
+        <div class="stat-card" style="border-left: 3px solid #2e7d32; padding-left: 15px;">
+            <span style="font-size: 0.7em; color: #666; font-weight: bold;">BRS HOY</span>
+            <div class="stat-value" id="top-brs" style="font-size: 1.8em; font-weight: 800;">0</div>
+        </div>
+        
+        <div class="stat-card" style="border-left: 3px solid #2e7d32; padding-left: 15px;">
+            <span style="font-size: 0.7em; color: #666; font-weight: bold;">PÁGINAS TOTALES</span>
+            <div class="stat-value" id="top-pags" style="font-size: 1.8em; font-weight: 800;">0</div>
+        </div>
     </div>
 
-    <div class="stat-card" style="border-left: 3px solid #3498db; text-align: right;">
-        <span style="font-size: 0.8em; color: #666;">HISTORIAL</span><br>
-        <input type="date" id="main-date-filter" onchange="render()" style="border:none; font-weight:bold; font-size:1.1em; cursor:pointer;">
-    </div>
+    <div style="display: flex; align-items: flex-start; gap: 25px;">
+        
+        <div class="stat-card" style="border-left: 3px solid #2196f3; padding-left: 15px; text-align: right;">
+            <span style="font-size: 0.7em; color: #666; font-weight: bold;">HISTORIAL</span><br>
+            <input type="date" id="main-date-filter" onchange="render()" 
+                   style="border:none; font-weight:bold; font-size:1em; cursor:pointer; background: transparent;">
+        </div>
 
-    <div class="stat-card" style="border-left: none; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-        <span style="font-size: 0.65em; font-weight: bold; color: #888; margin-bottom: 4px; text-transform: uppercase;">Filtrar Turno</span>
-        <div class="filter-group-pro">
-            <button id="btn-todos" class="btn-filter-pro active" onclick="setShift('TODOS')">TODO</button>
-            <button id="btn-ta" class="btn-filter-pro" onclick="setShift('TA')">TA</button>
-            <button id="btn-tb" class="btn-filter-pro" onclick="setShift('TB')">TB</button>
+        <div style="text-align: center;">
+            <span style="font-size: 0.6em; font-weight: bold; color: #999; text-transform: uppercase; display: block; margin-bottom: 4px;">Filtrar Turno</span>
+            <div class="filter-group-pro">
+                <button id="btn-todos" class="btn-filter-pro active" onclick="setShift('TODOS')">TODO</button>
+                <button id="btn-ta" class="btn-filter-pro" onclick="setShift('TA')">TA</button>
+                <button id="btn-tb" class="btn-filter-pro" onclick="setShift('TB')">TB</button>
+            </div>
         </div>
     </div>
 </div>
