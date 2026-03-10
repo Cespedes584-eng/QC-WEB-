@@ -258,17 +258,20 @@ async function refreshData() {
         const data = await response.json();
         
         if(data && Array.isArray(data)) {
-            // 1. Mapeamos y normalizamos los datos de la nube
             const cloudData = data.filter(item => item && (item.id || item.line)).map(item => {
+                
+                // --- CORRECCIÓN RADICAL DE FECHA ---
                 let fechaLimpia = "";
                 if (item.date) {
-                    fechaLimpia = typeof item.date === 'string' ? item.date.split('T')[0] : item.date;
+                    // Si es un objeto Date o un String con tiempo, extraemos solo YYYY-MM-DD
+                    // Usamos substring(0,10) para asegurar que "2026-03-09T06:00:00" pase a ser "2026-03-09"
+                    fechaLimpia = item.date.toString().substring(0, 10);
                 } else {
                     fechaLimpia = formatearFecha();
                 }
 
                 return {
-                    id: item.id || "S/N",
+                    id: item.id ? item.id.toString() : "S/N", // Forzamos string para comparar IDs
                     line: item.line || item.linea || "S/L",
                     user: item.user || item.usuario || "SIN ASIGNAR",
                     st: item.st || "wait",
@@ -280,15 +283,14 @@ async function refreshData() {
                     tW: Number(item.tw || item.tW) || 0,
                     tR: Number(item.tr || item.tR) || 0,
                     tC: Number(item.tc || item.tC) || 0,
-                    date: fechaLimpia,
+                    date: fechaLimpia, // <--- Ahora es 100% igual al calendario
                     pg: Number(item.pg) || 0,
                     hFin: item.hfin || item.hFin || "",
                     turno: item.turno || "" 
                 };
             });
 
-            // --- 2. FILTRO DE SEGURIDAD (PARA NO REPETIR LOTES) ---
-            // Si el mismo ID está en Pizarra e Historial, dejamos el más avanzado (done > corr > rev > wait)
+            // 2. FILTRO DE SEGURIDAD (PARA NO REPETIR LOTES)
             const mapaUnicos = new Map();
             const ordenSt = { 'wait': 1, 'rev': 2, 'corr': 3, 'done': 4 };
 
@@ -297,25 +299,23 @@ async function refreshData() {
                 if (!mapaUnicos.has(id)) {
                     mapaUnicos.set(id, lote);
                 } else {
-                    // Si ya existe, comparamos cuál estado es más importante
                     const stActual = mapaUnicos.get(id).st;
                     if (ordenSt[lote.st] > ordenSt[stActual]) {
-                        mapaUnicos.set(id, lote); // Sobrescribimos con el más nuevo
+                        mapaUnicos.set(id, lote); 
                     }
                 }
             });
 
-            // Convertimos el mapa de nuevo a nuestra lista 'db'
             db = Array.from(mapaUnicos.values());
 
-            // 3. Ordenamos por ID para que la lista sea estable
+            // 3. Orden estable
             db.sort((a, b) => a.id.toString().localeCompare(b.id.toString(), undefined, {numeric: true}));
 
             // 4. Guardamos y renderizamos
             localStorage.setItem('qc_final_v88', JSON.stringify(db));
             
-            render();
-            console.log("✅ Sincronización OK. Lotes únicos dibujados:", db.length);
+            console.log("🔄 Datos normalizados. Dibujando tarjetas...");
+            render(); // Aquí es donde el filtro de fecha ahora sí va a encontrar coincidencias
         }
     } catch (e) { 
         console.error("Error al sincronizar con Pizarra:", e);
