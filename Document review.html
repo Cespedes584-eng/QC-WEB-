@@ -217,11 +217,12 @@ function setShift(turno) {
     // 3. Refrescamos la pantalla con el nuevo filtro
     render(); 
 }
-    async function init() {
+ async function init() {
     const sesionEstandar = localStorage.getItem('qc_session');
     const usuarioLegacy = localStorage.getItem('usuario');
     let nombreDetectado = "SIN ASIGNAR";
 
+    // 1. Identificación de usuario (Mantenemos esto para saber quién registra)
     if (sesionEstandar) {
         const u = JSON.parse(sesionEstandar);
         nombreDetectado = u.nombre || u.user || u.usuario || "SIN ASIGNAR";
@@ -231,23 +232,25 @@ function setShift(turno) {
     }
     document.getElementById('user-display').innerText = `👤 ${nombreDetectado.toUpperCase()}`;
 
+    // 2. Cargar líneas en el selector
     const sel = document.getElementById('new-line');
     sel.innerHTML = "";
     lineas.sort().forEach(l => { sel.innerHTML += `<option value="${l}">${l}</option>`; });
     
-    // --- CORRECCIÓN AQUÍ ---
-    // 1. Ponemos la fecha de hoy
+    // 3. Configurar fecha actual en el filtro
     document.getElementById('main-date-filter').value = formatearFecha();
-    // 2. Aseguramos que el filtro de turno empiece en TODOS
+    
     if(document.getElementById('shift-filter')) {
         document.getElementById('shift-filter').value = "TODOS";
     }
 
-    const localData = localStorage.getItem('qc_final_v88');
-    if (localData) { 
-        db = JSON.parse(localData); 
-        render(); // Dibujamos lo que hay en memoria mientras llega lo de la nube
-    }
+    // --- EL CAMBIO CLAVE AQUÍ ---
+    // Ya no leemos 'qc_final_v88'. Empezamos con la base de datos vacía
+    // para obligar al sistema a traer la "Verdad" de Google Sheets.
+    db = []; 
+    render(); 
+
+    // 4. Traer datos frescos de la Nube
     await refreshData();
 }
 
@@ -258,8 +261,9 @@ async function refreshData() {
         const data = await response.json();
         
         if(data && Array.isArray(data)) {
-            // 1. Convertimos lo que viene de la NUBE a objetos limpios
-            const cloudData = data.filter(item => item && (item.id || item.line)).map(item => {
+            // 1. Limpiamos y normalizamos los datos que vienen de la Nube
+            // Al hacer db = ... reemplazamos lo que tengamos en memoria por la verdad de la Nube
+            db = data.filter(item => item && (item.id || item.line)).map(item => {
                 let fechaLimpia = item.date ? item.date.toString().substring(0, 10) : formatearFecha();
                 return {
                     id: item.id.toString(),
@@ -281,38 +285,19 @@ async function refreshData() {
                 };
             });
 
-            // 2. LA CLAVE: Combinamos lo local con lo de la nube
-            // Si un lote está en local pero no en la nube, NO lo borramos (esperamos a que la nube se actualice)
-            const mapaFinal = new Map();
-            const ordenSt = { 'wait': 1, 'rev': 2, 'corr': 3, 'done': 4 };
-
-            // Primero cargamos lo que ya tenemos en pantalla (Local)
-            db.forEach(l => mapaFinal.set(l.id.toString(), l));
-
-            // Luego sobreescribimos con lo que diga la nube, pero SOLO si el estado es más avanzado
-            cloudData.forEach(loteNube => {
-                const id = loteNube.id.toString();
-                if (!mapaFinal.has(id)) {
-                    mapaFinal.set(id, loteNube);
-                } else {
-                    const loteLocal = mapaFinal.get(id);
-                    // Si el de la nube es igual o más avanzado, actualizamos. 
-                    // Si la nube dice 'wait' pero tú ya lo tienes en 'rev', dejamos el local.
-                    if (ordenSt[loteNube.st] >= ordenSt[loteLocal.st]) {
-                        mapaFinal.set(id, loteNube);
-                    }
-                }
-            });
-
-            db = Array.from(mapaFinal.values());
+            // 2. Ordenamos por ID para que no se muevan de lugar
             db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
 
-            localStorage.setItem('qc_final_v88', JSON.stringify(db));
+            // 3. Renderizamos directamente lo que trajo la nube
             render();
-            console.log("✅ Sincronización inteligente completada.");
+            
+            // Opcional: Actualizar el respaldo local (pero ya no se usa para mezclar)
+            localStorage.setItem('qc_final_v88', JSON.stringify(db));
+            
+            console.log("✅ Datos sincronizados directamente desde la Nube.");
         }
     } catch (e) { 
-        console.error("Error en refresh:", e);
+        console.error("Error al obtener datos de la nube:", e);
     }
 }
     function tick() {
