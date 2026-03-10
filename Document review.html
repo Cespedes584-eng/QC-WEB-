@@ -251,40 +251,56 @@ function setShift(turno) {
     await refreshData();
 }
 
-   async function refreshData() {
+  async function refreshData() {
     if (pausaSincro) return; 
     try {
         const response = await fetch(SCRIPT_URL);
         const data = await response.json();
         
         if(data && Array.isArray(data)) {
-            // 1. Mapeamos los datos de la PIZARRA
-            const cloudData = data.filter(item => item && (item.id || item.line)).map(item => ({
-                id: item.id || "S/N",
-                line: item.line || item.linea || "S/L",
-                user: item.user || item.usuario || "SIN ASIGNAR",
-                st: item.st || "wait",
-                inicioWS: item.inicioWS || null,
-                inicioRS: item.inicioRS || null,
-                inicioCS: item.inicioCS || null,
-                tR_acumulado: Number(item.tR_acumulado) || 0,
-                tC_acumulado: Number(item.tC_acumulado) || 0,
-                tW: Number(item.tw || item.tW) || 0,
-                tR: Number(item.tr || item.tR) || 0,
-                tC: Number(item.tc || item.tC) || 0,
-                date: item.date ? (typeof item.date === 'string' ? item.date.split('T')[0] : formatearFecha(item.date)) : formatearFecha(),
-                pg: Number(item.pg) || 0,
-                hFin: item.hfin || item.hFin || "",
-                turno: item.turno || "" // Agregamos turno por si acaso
-            }));
+            const cloudData = data.filter(item => item && (item.id || item.line)).map(item => {
+                // --- AJUSTE DE FECHA CRÍTICO ---
+                // Forzamos a que la fecha sea un string limpio para que el render() la encuentre
+                let fechaLimpia = "";
+                if (item.date) {
+                    // Si viene con hora (T...), la cortamos. Si no, la dejamos limpia.
+                    fechaLimpia = typeof item.date === 'string' ? item.date.split('T')[0] : item.date;
+                } else {
+                    fechaLimpia = formatearFecha();
+                }
 
-            // 2. Simplificamos el orden: Que aparezcan por ID para que no "salten" en pantalla
+                return {
+                    id: item.id || "S/N",
+                    line: item.line || item.linea || "S/L",
+                    user: item.user || item.usuario || "SIN ASIGNAR",
+                    st: item.st || "wait",
+                    inicioWS: item.inicioWS || null,
+                    inicioRS: item.inicioRS || null,
+                    inicioCS: item.inicioCS || null,
+                    tR_acumulado: Number(item.tR_acumulado) || 0,
+                    tC_acumulado: Number(item.tC_acumulado) || 0,
+                    tW: Number(item.tw || item.tW) || 0,
+                    tR: Number(item.tr || item.tR) || 0,
+                    tC: Number(item.tc || item.tC) || 0,
+                    date: fechaLimpia, // Guardamos la fecha normalizada
+                    pg: Number(item.pg) || 0,
+                    hFin: item.hfin || item.hFin || "",
+                    turno: item.turno || "" 
+                };
+            });
+
+            // 2. Ordenamos por ID
             db = cloudData.sort((a, b) => a.id.toString().localeCompare(b.id.toString(), undefined, {numeric: true}));
 
             // 3. Guardamos y renderizamos
             localStorage.setItem('qc_final_v88', JSON.stringify(db));
+            
+            // ¡MUY IMPORTANTE!
+            // Antes de renderizar, asegúrate de que el filtro de fecha de tu pantalla (el input) 
+            // coincida con el formato de la nube (ej: 2026-03-09).
+            
             render();
-            console.log("✅ Interfaz sincronizada con Pizarra");
+            console.log("✅ Interfaz sincronizada. Lotes en DB local:", db.length);
         }
     } catch (e) { 
         console.error("Error al sincronizar con Pizarra:", e);
@@ -355,7 +371,7 @@ function render() {
     if (cont.done) cont.done.innerHTML = "";
     
     // 2. Obtenemos los valores de los filtros actuales
-    const selDate = document.getElementById('main-date-filter').value;
+    const selDate = document.getElementById('main-date-filter') ? document.getElementById('main-date-filter').value : "";
     const selShift = typeof currentShift !== 'undefined' ? currentShift : "TODOS"; 
     const searchInput = document.getElementById('main-search');
     const searchText = searchInput ? searchInput.value.toLowerCase() : ""; 
@@ -364,9 +380,14 @@ function render() {
 
     // 3. Revisamos cada lote de la base de datos (db)
     db.forEach((l, i) => {
-        // --- FILTROS ---
-        // A. Filtro por Fecha
-        if (l.date !== selDate) return;
+        // --- FILTROS (CORREGIDOS) ---
+        
+        // A. Filtro por Fecha (Normalizado para evitar que desaparezcan)
+        let fechaLote = l.date ? String(l.date).trim() : "";
+        let fechaFiltro = selDate ? String(selDate).trim() : "";
+        
+        // Si el filtro de fecha está activo y no coinciden, saltamos este lote
+        if (fechaFiltro !== "" && fechaLote !== fechaFiltro) return;
 
         // B. Filtro por Turno
         if (selShift !== "TODOS" && l.turno && l.turno !== selShift) return;
@@ -411,35 +432,29 @@ function render() {
               `<div style="text-align:center; font-weight:bold; color:var(--green); padding-top:5px;">PÁGINAS: ${l.pg}</div>`}
         </div>`;
         
-        // --- 4. ASIGNACIÓN A COLUMNAS (CORREGIDA) ---
+        // --- 4. ASIGNACIÓN A COLUMNAS ---
         if (l.st === 'wait') { 
             cont.wait.insertAdjacentHTML('afterbegin', card); 
             count.wait++; 
         } 
         else if (l.st === 'done') { 
-            // Columna de la derecha (Gris)
             cont.done.insertAdjacentHTML('afterbegin', card); 
             count.done++; 
         } 
         else { 
-            // Columna central (Verde) - Incluye 'rev' y 'corr'
             cont.run.insertAdjacentHTML('afterbegin', card); 
             count.run++; 
         }
     });
 
-    // 5. Actualizamos los textos de los contadores en la interfaz
-    const elTopB = document.getElementById('top-brs');
-    const elTopP = document.getElementById('top-pags');
-    const elCWait = document.getElementById('c-wait');
-    const elCRun = document.getElementById('c-run');
-    const elCDone = document.getElementById('c-done');
+    // 5. Actualizamos contadores visuales
+    if (document.getElementById('top-brs')) document.getElementById('top-brs').innerText = topB; 
+    if (document.getElementById('top-pags')) document.getElementById('top-pags').innerText = topP;
+    if (document.getElementById('c-wait')) document.getElementById('c-wait').innerText = count.wait; 
+    if (document.getElementById('c-run')) document.getElementById('c-run').innerText = count.run; 
+    if (document.getElementById('c-done')) document.getElementById('c-done').innerText = count.done;
 
-    if (elTopB) elTopB.innerText = topB; 
-    if (elTopP) elTopP.innerText = topP;
-    if (elCWait) elCWait.innerText = count.wait; 
-    if (elCRun) elCRun.innerText = count.run; 
-    if (elCDone) elCDone.innerText = count.done;
+    console.log(`Render finalizado: Espera(${count.wait}), Proceso(${count.run}), Finalizados(${count.done})`);
 }
  async function changeSt(i, s) { 
     const ahora = Date.now();
