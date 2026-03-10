@@ -321,12 +321,10 @@ function render() {
     };
     const count = { wait: 0, run: 0, done: 0 };
     
-    // 1. Limpiamos las listas antes de dibujar (Evita duplicados visuales)
     if (cont.wait) cont.wait.innerHTML = "";
     if (cont.run) cont.run.innerHTML = "";
     if (cont.done) cont.done.innerHTML = "";
     
-    // 2. Obtenemos los valores de los filtros actuales
     const selDate = document.getElementById('main-date-filter') ? document.getElementById('main-date-filter').value : "";
     const selShift = typeof currentShift !== 'undefined' ? currentShift : "TODOS"; 
     const searchInput = document.getElementById('main-search');
@@ -334,33 +332,25 @@ function render() {
     
     let topB = 0, topP = 0; 
 
-    // 3. Revisamos cada lote de la base de datos (db)
     db.forEach((l, i) => {
+        // --- FILTRO DE FECHA REFORZADO ---
+        let fechaLote = l.date ? String(l.date).substring(0, 10) : "";
+        let fechaFiltro = selDate ? String(selDate).substring(0, 10) : "";
         
-        // --- FILTROS (REPARADOS PARA EVITAR QUE SE BORREN A LOS 7 SEG) ---
-        
-        // A. Filtro por Fecha (Normalizado: cortamos después de la 'T' para comparar solo YYYY-MM-DD)
-        let fechaLote = l.date ? String(l.date).split('T')[0].trim() : "";
-        let fechaFiltro = selDate ? String(selDate).split('T')[0].trim() : "";
-        
-        // Si el filtro de fecha está activo y no coinciden, saltamos este lote
-        if (fechaFiltro !== "" && fechaLote !== fechaFiltro) return;
+        // Si hay un filtro puesto, pero el lote tiene una fecha distinta, NO lo mostramos
+        // Pero si el filtro está vacío, mostramos todo lo de hoy por defecto
+        if (fechaFiltro !== "" && fechaLote !== "" && fechaLote !== fechaFiltro) {
+            return; 
+        }
 
-        // B. Filtro por Turno
+        // --- FILTRO DE TURNO Y BÚSQUEDA ---
         if (selShift !== "TODOS" && l.turno && l.turno !== selShift) return;
-
-        // C. Filtro por Buscador (ID de Lote)
         if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
 
         const isFinalizado = (l.st === 'done');
+        if (isFinalizado) { topB++; topP += parseInt(l.pg || 0); }
 
-        // --- CONTADORES SUPERIORES ---
-        if (isFinalizado) { 
-            topB++; 
-            topP += parseInt(l.pg || 0); 
-        }
-
-        // --- GENERACIÓN DE LA TARJETA (HTML) ---
+        // --- GENERACIÓN DE CARD ---
         const card = `
         <div class="card" style="position: relative; border-left: 5px solid ${isFinalizado ? '#468e5d' : (l.st === 'wait' ? '#2c3e50' : '#f39c12')};">
             ${isFinalizado ? (() => {
@@ -371,7 +361,7 @@ function render() {
             })() : ''}
             <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
             <div style="font-size:0.75em; color:#666; margin-bottom:8px;">
-                ${l.line} | <b style="color:var(--blue);">${l.user}</b>
+                ${l.line} | <b style="color:#2980b9;">${l.user}</b>
             </div>
             ${isFinalizado 
                 ? `<span class="status-final" style="margin: 10px 0; display: block; text-align:center; color: #468e5d; font-weight:900;">FINALIZADO</span>` 
@@ -382,66 +372,52 @@ function render() {
                 <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
                 <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
             </div>
-            ${l.st === 'wait' ? `<button class="btn" style="background:var(--green); color:white" onclick="changeSt(${i},'rev')">INICIAR</button>` : 
+            ${l.st === 'wait' ? `<button class="btn" style="background:#27ae60; color:white" onclick="changeSt(${i},'rev')">INICIAR</button>` : 
               (l.st === 'rev' || l.st === 'corr') ? `
                 <button class="btn" style="background:#f39c12; color:white; margin-bottom:5px;" onclick="changeSt(${i},'corr')">CORRECCIÓN</button>
-                <button class="btn" style="background:var(--dark); color:white" onclick="openFin(${i})">FINALIZAR</button>` : 
-              `<div style="text-align:center; font-weight:bold; color:var(--green); padding-top:5px;">PÁGINAS: ${l.pg}</div>`}
+                <button class="btn" style="background:#2c3e50; color:white" onclick="openFin(${i})">FINALIZAR</button>` : 
+              `<div style="text-align:center; font-weight:bold; color:#27ae60; padding-top:5px;">PÁGINAS: ${l.pg}</div>`}
         </div>`;
         
-        // --- 4. ASIGNACIÓN A COLUMNAS ---
-        if (l.st === 'wait') { 
-            cont.wait.insertAdjacentHTML('afterbegin', card); 
-            count.wait++; 
-        } 
-        else if (l.st === 'done') { 
-            cont.done.insertAdjacentHTML('afterbegin', card); 
-            count.done++; 
-        } 
-        else { 
-            cont.run.insertAdjacentHTML('afterbegin', card); 
-            count.run++; 
-        }
+        if (l.st === 'wait') { cont.wait.insertAdjacentHTML('afterbegin', card); count.wait++; } 
+        else if (l.st === 'done') { cont.done.insertAdjacentHTML('afterbegin', card); count.done++; } 
+        else { cont.run.insertAdjacentHTML('afterbegin', card); count.run++; }
     });
 
-    // 5. Actualizamos contadores visuales
     if (document.getElementById('top-brs')) document.getElementById('top-brs').innerText = topB; 
     if (document.getElementById('top-pags')) document.getElementById('top-pags').innerText = topP;
     if (document.getElementById('c-wait')) document.getElementById('c-wait').innerText = count.wait; 
     if (document.getElementById('c-run')) document.getElementById('c-run').innerText = count.run; 
     if (document.getElementById('c-done')) document.getElementById('c-done').innerText = count.done;
-
-    console.log(`Render finalizado: Espera(${count.wait}), Proceso(${count.run}), Finalizados(${count.done})`);
 }
- async function changeSt(i, s) { 
+ async function changeSt(idx, s) { 
     const ahora = Date.now();
-    const lote = db[i]; 
+    const lote = db[idx]; 
+    if (!lote) return;
+
+    lote.lastUpdate = ahora; // Sello para el escudo
     
-    // Marcar que este lote acaba de ser modificado localmente
-    lote.lastUpdate = ahora; 
-    
+    // Asignar usuario si pasa a revisión
     if (lote.st === 'wait' && s === 'rev') {
-        const display = document.getElementById('user-display').innerText;
-        lote.user = display.replace('👤 ', '').trim().toUpperCase();
+        const userText = document.getElementById('user-display').innerText;
+        lote.user = userText.replace('👤 ', '').trim().toUpperCase();
     }
 
-    // Acumular tiempos
+    // Calcular acumulados de tiempo antes de cambiar estado
     if (lote.st === 'rev' && lote.inicioRS) {
-        lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
+        lote.tR_acumulado = (ahora - lote.inicioRS) + (Number(lote.tR_acumulado) || 0);
     }
     if (lote.st === 'corr' && lote.inicioCS) {
-        lote.tC_acumulado = (ahora - lote.inicioCS) + (lote.tC_acumulado || 0);
+        lote.tC_acumulado = (ahora - lote.inicioCS) + (Number(lote.tC_acumulado) || 0);
     }
     
+    // Cambiar estado y setear nuevos inicios
     lote.st = s;
     if (s === 'rev') { lote.inicioRS = ahora; lote.inicioCS = null; } 
     else if (s === 'corr') { lote.inicioCS = ahora; lote.inicioRS = null; }
     
-    // Dibujar inmediatamente para que el usuario vea el cambio
-    render();
-    
-    // Guardar en la nube
-    await save(lote); 
+    render(); // Dibujar cambio visualmente rápido
+    await save(lote); // Sincronizar con la nube
 }
 
 async function save(loteEspecifico = null) { 
@@ -546,48 +522,52 @@ async function refreshData() {
         
         if (data && Array.isArray(data)) {
             const ahora = Date.now();
-            const nubeData = data.filter(item => item && item.id);
             
-            // Creamos un mapa de la nube
-            const mapaNube = new Map();
-            nubeData.forEach(item => {
-                mapaNube.set(item.id.toString(), {
+            // 1. Limpiamos y mapeamos los datos de la nube con seguridad
+            const mapaFinal = new Map();
+
+            data.filter(item => item && item.id).forEach(item => {
+                const idStr = item.id.toString();
+                // Normalizamos la fecha que viene del Excel (YYYY-MM-DD)
+                let fechaExcel = item.date ? item.date.toString().substring(0, 10) : formatearFecha();
+                
+                mapaFinal.set(idStr, {
                     ...item,
-                    id: item.id.toString(),
-                    date: item.date ? item.date.toString().substring(0, 10) : formatearFecha()
+                    id: idStr,
+                    date: fechaExcel,
+                    st: (item.st || "wait").toLowerCase()
                 });
             });
 
-            // --- EL ESCUDO DEFINITIVO ---
-            // Revisamos cada lote que tenemos actualmente en la pantalla (db)
+            // 2. APLICAR EL ESCUDO SOBRE EL MAPA
+            // Revisamos lo que tenemos en la memoria del navegador (db)
             db.forEach(loteLocal => {
                 const idStr = loteLocal.id.toString();
-                const infoNube = mapaNube.get(idStr);
+                
+                // Si el lote local está en proceso o es muy nuevo (creado hace < 60s)
+                const estaTrabajando = (loteLocal.st === 'rev' || loteLocal.st === 'corr');
+                const esReciente = (ahora - (loteLocal.lastUpdate || 0)) < 60000;
 
-                if (infoNube) {
-                    // REGLA DE ORO: Si el lote local está en REVISIÓN o CORRECCIÓN, 
-                    // o si lo acabamos de crear (menos de 60s), NO permitimos que la nube lo cambie.
-                    const estaTrabajando = (loteLocal.st === 'rev' || loteLocal.st === 'corr');
-                    const esReciente = (ahora - (loteLocal.lastUpdate || 0)) < 60000;
-
-                    if (estaTrabajando || esReciente) {
-                        // Mantenemos nuestra versión local y la ponemos en el mapa de la nube (la sobreescribimos)
-                        mapaNube.set(idStr, loteLocal);
-                    }
+                if (estaTrabajando || esReciente) {
+                    // Sobreescribimos lo que diga la nube con nuestra versión local activa
+                    mapaFinal.set(idStr, loteLocal);
                 }
             });
 
-            // Convertimos el mapa final a nuestra base de datos
-            db = Array.from(mapaNube.values());
+            // 3. Convertir a Array y actualizar base de datos
+            db = Array.from(mapaFinal.values());
             
-            // Ordenar por ID para que no salten de posición
+            // 4. Ordenar numéricamente para evitar que los lotes "salten" de posición
             db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
             
-            render();
+            // 5. Guardar y Dibujar
             localStorage.setItem('qc_final_v88', JSON.stringify(db));
+            render(); 
+            
+            console.log("📡 Sincronización exitosa. Lotes en memoria:", db.length);
         }
     } catch (e) {
-        console.error("Error en sincronización definitiva:", e);
+        console.error("Error en sincronización reforzada:", e);
     }
 }
 // --- FUNCIÓN PARA REGISTRAR UN NUEVO LOTE ---
