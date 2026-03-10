@@ -528,45 +528,46 @@ function render() {
 }
 
 async function save(loteEspecifico = null) { 
-    // --- 1. ENCENDER EL MENSAJE VISUAL ---
     const loader = document.getElementById('loader-save');
     if (loader) loader.style.display = 'flex';
 
-    // Guardado local inmediato (Seguridad ante todo)
+    // 1. Guardado local inmediato para que no se pierda nada
     localStorage.setItem('qc_final_v88', JSON.stringify(db)); 
     render(); 
 
-    // 2. ACTIVAR ESCUDO
+    // 2. ESCUDO DE PROTECCIÓN
+    // Si ya hay un proceso guardando, no dejamos que entre otro para evitar duplicados
     if (pausaSincro) return; 
-    pausaSincro = true;
+    pausaSincro = true; 
     
+    // Decidimos si enviamos un lote o toda la base de datos
     const datosEnvio = loteEspecifico ? [loteEspecifico] : db;
 
     try { 
-        // 3. ENVIAR Y ESPERAR (Modo CORS por defecto)
+        // 3. ENVÍO A LA NUBE
         const response = await fetch(SCRIPT_URL, { 
             method: 'POST', 
             body: JSON.stringify(datosEnvio),
-            headers: {
-                'Content-Type': 'text/plain;charset=utf-8'
-            }
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }
         });
 
-        // 4. LEER RESPUESTA DEL SERVIDOR
         const res = await response.json();
         if (res.result === "success") {
-            console.log("✅ Confirmado: Lote guardado y procesado en la nube.");
+            console.log("✅ Confirmado en Nube: Lote " + (loteEspecifico ? loteEspecifico.id : "múltiple") + " guardado.");
         }
     } catch (e) { 
-        console.error("❌ Error: Los datos se guardaron local, pero la nube no respondió.", e); 
+        console.error("❌ Error de red: Guardado solo en memoria local.", e); 
     }
 
-    // --- 5. APAGAR EL MENSAJE Y LIBERAR ESCUDO ---
-    setTimeout(() => {
-        if (loader) loader.style.display = 'none'; // Ocultamos el aviso
-        pausaSincro = false;
-        refreshData(); 
-    }, 1500); // 1.5 segundos es suficiente para dar feedback visual
+    // --- 4. LIBERACIÓN ESTRATÉGICA DEL ESCUDO ---
+    // Subimos a 3 segundos (3000ms) para que a Google le dé tiempo de procesar
+    // y refreshData traiga la información actualizada sin borrar lo nuevo.
+    setTimeout(async () => {
+        if (loader) loader.style.display = 'none';
+        pausaSincro = false; // Abrimos la puerta a nuevas sincronizaciones
+        console.log("🔄 Sincronización post-guardado iniciada...");
+        await refreshData(); 
+    }, 3000); 
 }
     function renderAdmin() {
         const b = document.getElementById('adm-body'); 
@@ -638,39 +639,30 @@ async function save(loteEspecifico = null) {
 async function addBR() {
     const idInput = document.getElementById('new-id').value.trim();
     const line = document.getElementById('new-line').value;
-    const date = document.getElementById('main-date-filter').value;
+    // Forzamos que la fecha sea solo YYYY-MM-DD
+    const rawDate = document.getElementById('main-date-filter').value;
+    const date = rawDate.split('T')[0]; 
     
     if (!idInput) return alert("Ingrese número de lote");
 
-    // Creamos el objeto del lote con la estructura exacta de la PIZARRA
     const nuevoLote = {
-        id: idInput.toString(), // Forzamos texto para no perder ceros a la izquierda
+        id: idInput.toString(),
         line: line, 
         user: "SIN ASIGNAR", 
         st: 'wait',
         date: date, 
         inicioWS: Date.now(), 
-        tW: 0, 
-        tR: 0, 
-        tC: 0,
-        tR_acumulado: 0, 
-        tC_acumulado: 0, 
-        pg: 0, 
-        hFin: "",
-        turno: "" // Inicializamos vacío para que la columna en Sheets no se desfase
+        tW: 0, tR: 0, tC: 0,
+        tR_acumulado: 0, tC_acumulado: 0, 
+        pg: 0, hFin: "", turno: "" 
     };
 
-    // 1. Actualización local
     db.push(nuevoLote);
-    
-    // 2. Limpieza de interfaz
     document.getElementById('new-id').value = "";
     hideModal('modal-new');
     
-    // 3. Renderizado inmediato para que el inspector vea el lote en "Espera"
     render();
-    
-    // 4. ENVÍO A LA PIZARRA: Al ser st: 'wait', el Script lo pondrá en la hoja PIZARRA
+    // Guardamos y activamos el escudo de pausaSincro para que no haya parpadeos
     await save(nuevoLote); 
 }
 
