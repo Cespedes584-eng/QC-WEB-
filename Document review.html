@@ -181,10 +181,18 @@
             </div>
         </div>
     </div>
+<div id="loader-save" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:5000; flex-direction:column; align-items:center; justify-content:center; color:white;">
+    <div style="border: 8px solid #f3f3f3; border-top: 8px solid #468e5d; border-radius: 50%; width: 60px; height: 60px; animation: spin 2s linear infinite;"></div>
+    <h2 style="margin-top:20px; font-family:sans-serif;">GUARDANDO EN NUBE...</h2>
+</div>
+
+<style>
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+</style>
 
 <script>
         // Variables de configuración y estado
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwUzeZt6xJlyw1rXq0dOECgjb1BniGalwI3wLdrDMHHgBuP0zT6IKhVTUkbFIScfCh-ww/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwbv7zF41a0SBJqMFrAhw7b4_r3_zE4r7fDlKchuhviRQdsow2258K2qKMZU6gncE7gsw/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
     
     let db = []; 
@@ -243,43 +251,45 @@ function setShift(turno) {
     await refreshData();
 }
 
-    async function refreshData() {
-    if (pausaSincro) return; // Si el escudo está activo, salimos de la función sin hacer nada
+   async function refreshData() {
+    if (pausaSincro) return; 
     try {
-            const response = await fetch(SCRIPT_URL);
-            const data = await response.json();
-            
-            if(data && Array.isArray(data)) {
-                const cloudData = data.filter(item => item && (item.id || item.line)).map(item => ({
-                    id: item.id || "S/N",
-                    line: item.line || item.linea || "S/L",
-                    user: item.user || item.usuario || "SIN ASIGNAR",
-                    st: item.st || "wait",
-                    inicioWS: item.inicioWS || null,
-                    inicioRS: item.inicioRS || null,
-                    inicioCS: item.inicioCS || null,
-                    tR_acumulado: Number(item.tR_acumulado) || 0,
-                    tC_acumulado: Number(item.tC_acumulado) || 0,
-                    tW: Number(item.tw || item.tW) || 0,
-                    tR: Number(item.tr || item.tR) || 0,
-                    tC: Number(item.tc || item.tC) || 0,
-                    date: item.date ? (typeof item.date === 'string' ? item.date.split('T')[0] : formatearFecha(item.date)) : formatearFecha(),
-                    pg: Number(item.pg) || 0,
-                    hFin: item.hfin || item.hFin || ""
-                }));
+        const response = await fetch(SCRIPT_URL);
+        const data = await response.json();
+        
+        if(data && Array.isArray(data)) {
+            // 1. Mapeamos los datos de la PIZARRA
+            const cloudData = data.filter(item => item && (item.id || item.line)).map(item => ({
+                id: item.id || "S/N",
+                line: item.line || item.linea || "S/L",
+                user: item.user || item.usuario || "SIN ASIGNAR",
+                st: item.st || "wait",
+                inicioWS: item.inicioWS || null,
+                inicioRS: item.inicioRS || null,
+                inicioCS: item.inicioCS || null,
+                tR_acumulado: Number(item.tR_acumulado) || 0,
+                tC_acumulado: Number(item.tC_acumulado) || 0,
+                tW: Number(item.tw || item.tW) || 0,
+                tR: Number(item.tr || item.tR) || 0,
+                tC: Number(item.tc || item.tC) || 0,
+                date: item.date ? (typeof item.date === 'string' ? item.date.split('T')[0] : formatearFecha(item.date)) : formatearFecha(),
+                pg: Number(item.pg) || 0,
+                hFin: item.hfin || item.hFin || "",
+                turno: item.turno || "" // Agregamos turno por si acaso
+            }));
 
-                db = cloudData.sort((a, b) => {
-                    if (b.date !== a.date) return b.date.localeCompare(a.date);
-                    return a.id.toString().localeCompare(b.id.toString(), undefined, {numeric: true});
-                });
+            // 2. Simplificamos el orden: Que aparezcan por ID para que no "salten" en pantalla
+            db = cloudData.sort((a, b) => a.id.toString().localeCompare(b.id.toString(), undefined, {numeric: true}));
 
-                localStorage.setItem('qc_final_v88', JSON.stringify(db));
-                render();
-            }
-        } catch (e) { 
-            console.error("Error al sincronizar:", e);
+            // 3. Guardamos y renderizamos
+            localStorage.setItem('qc_final_v88', JSON.stringify(db));
+            render();
+            console.log("✅ Interfaz sincronizada con Pizarra");
         }
+    } catch (e) { 
+        console.error("Error al sincronizar con Pizarra:", e);
     }
+}
 
     function tick() {
         const ahora = Date.now();
@@ -475,38 +485,47 @@ function render() {
     await refreshData(); 
 }
 
-  async function save(loteEspecifico = null) { 
-    // 1. Prioridad absoluta: Guardar localmente
+async function save(loteEspecifico = null) { 
+    // --- 1. ENCENDER EL MENSAJE VISUAL ---
+    const loader = document.getElementById('loader-save');
+    if (loader) loader.style.display = 'flex';
+
+    // Guardado local inmediato (Seguridad ante todo)
     localStorage.setItem('qc_final_v88', JSON.stringify(db)); 
     render(); 
 
     // 2. ACTIVAR ESCUDO
+    if (pausaSincro) return; 
     pausaSincro = true;
     
-    // Decidimos qué enviar: ¿Toda la lista o solo el lote que cambió?
-    // Si enviamos solo el lote que cambió, el proceso es mucho más rápido.
     const datosEnvio = loteEspecifico ? [loteEspecifico] : db;
 
     try { 
-        // 3. ENVIAR A GOOGLE
+        // 3. ENVIAR Y ESPERAR (Modo CORS por defecto)
         const response = await fetch(SCRIPT_URL, { 
             method: 'POST', 
-            mode: 'no-cors', // Mantenemos no-cors para evitar bloqueos de seguridad
-            body: JSON.stringify(datosEnvio) 
+            body: JSON.stringify(datosEnvio),
+            headers: {
+                'Content-Type': 'text/plain;charset=utf-8'
+            }
         });
-        
-        console.log("☁️ Sincronización enviada con éxito.");
+
+        // 4. LEER RESPUESTA DEL SERVIDOR
+        const res = await response.json();
+        if (res.result === "success") {
+            console.log("✅ Confirmado: Lote guardado y procesado en la nube.");
+        }
     } catch (e) { 
-        console.error("❌ Error de red. El lote sigue seguro en el navegador.", e); 
+        console.error("❌ Error: Los datos se guardaron local, pero la nube no respondió.", e); 
     }
 
-    // 4. TEMPORIZADOR DE SEGURIDAD
+    // --- 5. APAGAR EL MENSAJE Y LIBERAR ESCUDO ---
     setTimeout(() => {
+        if (loader) loader.style.display = 'none'; // Ocultamos el aviso
         pausaSincro = false;
-        console.log("🔓 Escudo desactivado.");
-    }, 10000); // 10 segundos es ideal para dar tiempo a Google a procesar
+        refreshData(); 
+    }, 1500); // 1.5 segundos es suficiente para dar feedback visual
 }
-
     function renderAdmin() {
         const b = document.getElementById('adm-body'); 
         const s = document.getElementById('adm-search').value.toLowerCase(); 
@@ -575,15 +594,15 @@ function render() {
         if(t==='perf') renderPerf(); else renderAdmin();
     }
 async function addBR() {
-    const id = document.getElementById('new-id').value.trim();
+    const idInput = document.getElementById('new-id').value.trim();
     const line = document.getElementById('new-line').value;
     const date = document.getElementById('main-date-filter').value;
     
-    if (!id) return alert("Ingrese número de lote");
+    if (!idInput) return alert("Ingrese número de lote");
 
-    // Creamos el objeto del lote
+    // Creamos el objeto del lote con la estructura exacta de la PIZARRA
     const nuevoLote = {
-        id: id, 
+        id: idInput.toString(), // Forzamos texto para no perder ceros a la izquierda
         line: line, 
         user: "SIN ASIGNAR", 
         st: 'wait',
@@ -595,55 +614,76 @@ async function addBR() {
         tR_acumulado: 0, 
         tC_acumulado: 0, 
         pg: 0, 
-        hFin: ""
+        hFin: "",
+        turno: "" // Inicializamos vacío para que la columna en Sheets no se desfase
     };
 
-    // 1. Lo agregamos a nuestra base de datos local
+    // 1. Actualización local
     db.push(nuevoLote);
     
-    // 2. Limpiamos la interfaz
+    // 2. Limpieza de interfaz
     document.getElementById('new-id').value = "";
     hideModal('modal-new');
     
-    // 3. GUARDADO QUIRÚRGICO: Enviamos solo el nuevo lote.
-    // Esto hace que Google Sheets lo agregue como una fila nueva al final.
+    // 3. Renderizado inmediato para que el inspector vea el lote en "Espera"
+    render();
+    
+    // 4. ENVÍO A LA PIZARRA: Al ser st: 'wait', el Script lo pondrá en la hoja PIZARRA
     await save(nuevoLote); 
 }
-    function openFin(i) {
-        tempIdx = i;
-        showModal('modal-finish');
-        document.getElementById('finish-pg').focus();
-    }
 
+// --- PEGA ESTA FUNCIÓN AQUÍ (Es el cerebro del botón) ---
+function openFin(i) {
+    tempIdx = i; 
+    document.getElementById('finish-pg').value = ""; 
+    showModal('modal-finish');
+}
 async function confirmFinish() {
     const p = document.getElementById('finish-pg').value;
     if (!p || p <= 0) return alert("Ingrese total de documentos");
 
-    const lote = db[tempIdx];
-    lote.pg = p;
-    lote.st = 'done';
+    const lote = db[tempIdx]; // Usamos el índice temporal del modal
+    const ahoraMs = Date.now();
+    const ahoraFecha = new Date();
     
-    const ahora = new Date();
-    const horasNum = ahora.getHours();
-    const minutosNum = ahora.getMinutes();
+    // 1. Datos finales del lote
+    lote.pg = parseInt(p);
+    lote.st = 'done'; // Señal para mover al HISTORIAL
     
-    // Guardamos la hora de fin amigable
-    lote.hFin = `${String(horasNum).padStart(2, '0')}:${String(minutosNum).padStart(2, '0')}`;
+    // Hora de fin amigable (24h)
+    const horas = String(ahoraFecha.getHours()).padStart(2, '0');
+    const minutos = String(ahoraFecha.getMinutes()).padStart(2, '0');
+    lote.hFin = `${horas}:${minutos}`;
 
-    // --- LÓGICA DE TURNOS (TA: 06:00 a 15:30) ---
-    const totalMinutos = (horasNum * 60) + minutosNum;
-    if (totalMinutos >= 360 && totalMinutos <= 930) {
-        lote.turno = "TA";
-    } else {
-        lote.turno = "TB";
+    // 2. Lógica de Turnos (TA: 06:00 a 15:30)
+    const totalMinutos = (ahoraFecha.getHours() * 60) + ahoraFecha.getMinutes();
+    lote.turno = (totalMinutos >= 360 && totalMinutos <= 930) ? "TA" : "TB";
+
+    // 3. CÁLCULO DE TIEMPOS (No olvidar este paso)
+    // Si estaba en revisión, sumamos el tramo final
+    if (lote.st === 'done' && lote.inicioRS) {
+        lote.tR_acumulado = (ahoraMs - lote.inicioRS) + (lote.tR_acumulado || 0);
+    }
+    // Si estaba en corrección, sumamos el tramo final
+    if (lote.st === 'done' && lote.inicioCS) {
+        lote.tC_acumulado = (ahoraMs - lote.inicioCS) + (lote.tC_acumulado || 0);
     }
     
-    // ... (aquí sigue tu código de cálculo de tiempos acumulados) ...
+    // Limpiamos los inicios para que el JSON sea más ligero
+    lote.inicioRS = null;
+    lote.inicioCS = null;
 
+    // 4. Actualización Visual
     hideModal('modal-finish');
-    render(); // Dibujamos el cambio localmente de inmediato
-    await save(lote); // Sincronizamos con la nube
+    render(); // Actualiza la tabla local
+    
+    // 5. El Salto a la Nube
+    // Esto lo quita de la hoja PIZARRA y lo pega en HISTORIAL
+    await save(lote); 
+    
+    console.log(`🚀 Lote ${lote.id} enviado al Historial con éxito.`);
 }
+
 </script>
 </body>
 </html>
