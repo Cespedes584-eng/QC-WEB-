@@ -261,7 +261,7 @@ async function refreshData() {
         const data = await response.json();
         
         if(data && Array.isArray(data)) {
-            // 1. Extraemos lo que dice la Nube
+            // 1. Lo que dice la Nube actualmente
             const nubeData = data.filter(item => item && (item.id || item.line)).map(item => {
                 let fechaLimpia = item.date ? item.date.toString().substring(0, 10) : formatearFecha();
                 return {
@@ -284,38 +284,35 @@ async function refreshData() {
                 };
             });
 
-            // 2. APLICAMOS EL ESCUDO
+            // 2. EL ESCUDO: Combinamos Nube con Lotes Recientes
             const ahora = Date.now();
-            const mapaResultante = new Map();
+            const mapaFinal = new Map();
 
-            // Primero: Agregamos TODO lo que viene de la Nube
-            nubeData.forEach(l => mapaResultante.set(l.id, l));
+            // Metemos todo lo de la Nube al mapa
+            nubeData.forEach(l => mapaFinal.set(l.id, l));
 
-            // Segundo: Revisamos lo que tenemos en pantalla (db)
-            // Si hay un lote que NO está en la nube, pero se creó hace menos de 20 segundos,
-            // LO MANTENEMOS a la fuerza para que no desaparezca.
+            // Revisamos lo que tienes tú en pantalla (db)
             db.forEach(loteLocal => {
-                if (!mapaResultante.has(loteLocal.id)) {
-                    const edadLote = ahora - (loteLocal.inicioWS || ahora);
-                    if (edadLote < 20000) { // 20 segundos de gracia
-                        mapaResultante.set(loteLocal.id, loteLocal);
-                        console.log(`🛡️ Escudo activo: Manteniendo lote ${loteLocal.id} mientras Google procesa.`);
+                // Si el lote NO está en la nube...
+                if (!mapaFinal.has(loteLocal.id)) {
+                    // ...pero tiene menos de 20 segundos de haber sido creado
+                    const edad = ahora - (loteLocal.inicioWS || ahora);
+                    if (edad < 20000) { 
+                        mapaFinal.set(loteLocal.id, loteLocal); // ¡Lo rescatamos!
+                        console.log(`🛡️ Escudo: Manteniendo lote nuevo ${loteLocal.id}`);
                     }
                 }
             });
 
-            // 3. Actualizamos la base de datos global
-            db = Array.from(mapaResultante.values());
-
-            // 4. Ordenamos y dibujamos
+            // 3. Actualizamos la base de datos y dibujamos
+            db = Array.from(mapaFinal.values());
             db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
-            render();
             
+            render();
             localStorage.setItem('qc_final_v88', JSON.stringify(db));
-            console.log("✅ Sincronización terminada (con escudo de protección).");
         }
     } catch (e) { 
-        console.error("Error al obtener datos de la nube:", e);
+        console.error("Error al refrescar:", e);
     }
 }
     function tick() {
@@ -694,6 +691,69 @@ async function refreshData() {
         console.error("Error al refrescar:", e);
     }
 }
+// --- FUNCIÓN PARA REGISTRAR UN NUEVO LOTE ---
+async function addBR() {
+    console.log("Iniciando registro de lote...");
+    
+    // 1. Capturar elementos de la interfaz
+    const input = document.getElementById('new-id');
+    const lineSel = document.getElementById('new-line');
+    const dateSel = document.getElementById('main-date-filter');
+
+    // 2. Validar que el ID no esté vacío
+    if (!input || !input.value.trim()) {
+        alert("Por favor, ingrese el número de lote");
+        return;
+    }
+    
+    const idInput = input.value.trim();
+    const line = lineSel ? lineSel.value : "S/L";
+    
+    // Obtenemos la fecha (del filtro o la actual del sistema)
+    let date = new Date().toISOString().split('T')[0];
+    if (dateSel && dateSel.value) {
+        date = dateSel.value.split('T')[0];
+    }
+
+    // 3. Crear el objeto del lote con la estructura de la Pizarra
+    const nuevoLote = {
+        id: idInput.toString(),
+        line: line, 
+        user: "SIN ASIGNAR", 
+        st: 'wait',
+        date: date, 
+        inicioWS: Date.now(), // SELLO DE TIEMPO: Crucial para el escudo de 20 seg
+        tW: 0, tR: 0, tC: 0,
+        tR_acumulado: 0, tC_acumulado: 0, 
+        pg: 0, hFin: "", turno: "" 
+    };
+
+    // 4. Agregar a la base de datos local (db)
+    if (typeof db === 'undefined') db = [];
+    db.push(nuevoLote);
+    
+    // 5. Limpiar el formulario y cerrar el modal
+    input.value = "";
+    if (typeof hideModal === 'function') hideModal('modal-new');
+    
+    // 6. Refrescar la pantalla inmediatamente
+    render(); 
+    
+    // 7. Enviar a Google Sheets
+    console.log("🚀 Lote " + idInput + " creado. Sincronizando con la nube...");
+    await save(nuevoLote); 
+}
+
+// --- FUNCIÓN PARA ABRIR EL MODAL DE FINALIZACIÓN ---
+let tempIdx = null; // Variable global para recordar qué lote estamos cerrando
+
+function openFin(i) {
+    tempIdx = i; 
+    const inputPg = document.getElementById('finish-pg');
+    if (inputPg) inputPg.value = ""; 
+    showModal('modal-finish');
+}
+
 async function confirmFinish() {
     const p = document.getElementById('finish-pg').value;
     if (!p || p <= 0) return alert("Ingrese total de documentos");
