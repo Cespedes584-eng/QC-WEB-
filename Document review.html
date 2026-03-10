@@ -192,7 +192,7 @@
 
 <script>
         // Variables de configuración y estado
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwbv7zF41a0SBJqMFrAhw7b4_r3_zE4r7fDlKchuhviRQdsow2258K2qKMZU6gncE7gsw/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzboAme07AeO_DJHW5T1r_69eAibM67EcrzdLNCV0BiC7JWmLoCnm25wr_KbYHx92RU8Q/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
     
     let db = []; 
@@ -350,11 +350,13 @@ function render() {
     const count = { wait: 0, run: 0, done: 0 };
     
     // 1. Limpiamos las listas antes de dibujar
-    Object.values(cont).forEach(c => c.innerHTML = "");
+    if (cont.wait) cont.wait.innerHTML = "";
+    if (cont.run) cont.run.innerHTML = "";
+    if (cont.done) cont.done.innerHTML = "";
     
     // 2. Obtenemos los valores de los filtros actuales
     const selDate = document.getElementById('main-date-filter').value;
-    const selShift = currentShift; // TA, TB o TODOS
+    const selShift = typeof currentShift !== 'undefined' ? currentShift : "TODOS"; 
     const searchInput = document.getElementById('main-search');
     const searchText = searchInput ? searchInput.value.toLowerCase() : ""; 
     
@@ -366,15 +368,15 @@ function render() {
         // A. Filtro por Fecha
         if (l.date !== selDate) return;
 
-        // B. Filtro por Turno (Solo oculta si el lote ya tiene turno y no coincide)
+        // B. Filtro por Turno
         if (selShift !== "TODOS" && l.turno && l.turno !== selShift) return;
 
         // C. Filtro por Buscador (ID de Lote)
         if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
 
-        // --- CONTADORES SUPERIORES ---
-        // Solo sumamos al "BRs Hoy" y "Páginas" si el lote está FINALIZADO y pasó los filtros
         const isFinalizado = (l.st === 'done');
+
+        // --- CONTADORES SUPERIORES ---
         if (isFinalizado) { 
             topB++; 
             topP += parseInt(l.pg || 0); 
@@ -382,7 +384,7 @@ function render() {
 
         // --- GENERACIÓN DE LA TARJETA (HTML) ---
         const card = `
-        <div class="card" style="position: relative;">
+        <div class="card" style="position: relative; border-left: 5px solid ${isFinalizado ? '#468e5d' : (l.st === 'wait' ? '#2c3e50' : '#f39c12')};">
             ${isFinalizado ? (() => {
                 let h = l.hFin || '--:--';
                 if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
@@ -403,31 +405,41 @@ function render() {
                 <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
             </div>
             ${l.st === 'wait' ? `<button class="btn" style="background:var(--green); color:white" onclick="changeSt(${i},'rev')">INICIAR</button>` : 
-              l.st === 'rev' ? `<button class="btn" style="background:#f39c12; color:white; margin-bottom:5px;" onclick="changeSt(${i},'corr')">CORRECCIÓN</button><button class="btn" style="background:var(--dark); color:white" onclick="openFin(${i})">FINALIZAR</button>` : 
-              l.st === 'corr' ? `<button class="btn" style="background:var(--green); color:white" onclick="changeSt(${i},'rev')">REANUDAR</button>` : 
+              (l.st === 'rev' || l.st === 'corr') ? `
+                <button class="btn" style="background:#f39c12; color:white; margin-bottom:5px;" onclick="changeSt(${i},'corr')">CORRECCIÓN</button>
+                <button class="btn" style="background:var(--dark); color:white" onclick="openFin(${i})">FINALIZAR</button>` : 
               `<div style="text-align:center; font-weight:bold; color:var(--green); padding-top:5px;">PÁGINAS: ${l.pg}</div>`}
         </div>`;
         
-        // --- ASIGNACIÓN A COLUMNAS (Lógica anti-duplicados) ---
+        // --- 4. ASIGNACIÓN A COLUMNAS (CORREGIDA) ---
         if (l.st === 'wait') { 
             cont.wait.insertAdjacentHTML('afterbegin', card); 
             count.wait++; 
-        } else if (l.st === 'done') { 
+        } 
+        else if (l.st === 'done') { 
+            // Columna de la derecha (Gris)
             cont.done.insertAdjacentHTML('afterbegin', card); 
             count.done++; 
-        } else { 
-            // Esto agrupa 'rev' (revisión) y 'corr' (corrección) en la columna central
+        } 
+        else { 
+            // Columna central (Verde) - Incluye 'rev' y 'corr'
             cont.run.insertAdjacentHTML('afterbegin', card); 
             count.run++; 
         }
     });
 
-    // 4. Actualizamos los textos de los contadores en la interfaz
-    document.getElementById('top-brs').innerText = topB; 
-    document.getElementById('top-pags').innerText = topP;
-    document.getElementById('c-wait').innerText = count.wait; 
-    document.getElementById('c-run').innerText = count.run; 
-    document.getElementById('c-done').innerText = count.done;
+    // 5. Actualizamos los textos de los contadores en la interfaz
+    const elTopB = document.getElementById('top-brs');
+    const elTopP = document.getElementById('top-pags');
+    const elCWait = document.getElementById('c-wait');
+    const elCRun = document.getElementById('c-run');
+    const elCDone = document.getElementById('c-done');
+
+    if (elTopB) elTopB.innerText = topB; 
+    if (elTopP) elTopP.innerText = topP;
+    if (elCWait) elCWait.innerText = count.wait; 
+    if (elCRun) elCRun.innerText = count.run; 
+    if (elCDone) elCDone.innerText = count.done;
 }
  async function changeSt(i, s) { 
     const ahora = Date.now();
