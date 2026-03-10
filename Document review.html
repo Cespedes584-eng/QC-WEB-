@@ -417,13 +417,15 @@ function render() {
     const ahora = Date.now();
     const lote = db[i]; 
     
-    // 1. Asignar usuario si pasa de Espera a Revisión
+    // Marcar que este lote acaba de ser modificado localmente
+    lote.lastUpdate = ahora; 
+    
     if (lote.st === 'wait' && s === 'rev') {
         const display = document.getElementById('user-display').innerText;
         lote.user = display.replace('👤 ', '').trim().toUpperCase();
     }
 
-    // 2. Acumular tiempos antes de cambiar el estado
+    // Acumular tiempos
     if (lote.st === 'rev' && lote.inicioRS) {
         lote.tR_acumulado = (ahora - lote.inicioRS) + (lote.tR_acumulado || 0);
     }
@@ -431,83 +433,42 @@ function render() {
         lote.tC_acumulado = (ahora - lote.inicioCS) + (lote.tC_acumulado || 0);
     }
     
-    // 3. Cambiar el estado y resetear el inicio del nuevo cronómetro
     lote.st = s;
+    if (s === 'rev') { lote.inicioRS = ahora; lote.inicioCS = null; } 
+    else if (s === 'corr') { lote.inicioCS = ahora; lote.inicioRS = null; }
     
-    // --- 3.1 NUEVO: Lógica de Turnos por Horario de Finalización ---
-    if (s === 'done') {
-        const d = new Date();
-        const horaHormat = d.getHours();
-        const minFormat = d.getMinutes();
-        const totalMinutos = (horaHormat * 60) + minFormat;
-
-        // TA: De 06:00 (360 min) a 15:30 (930 min)
-        if (totalMinutos >= 360 && totalMinutos <= 930) {
-            lote.turno = "TA";
-        } else {
-            // TB: De 15:31 en adelante hasta las 23:59 (y madrugada si aplica)
-            lote.turno = "TB";
-        }
-        
-        // Registrar hora de fin para el historial
-        lote.hFin = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-    }
-    // -------------------------------------------------------------
-
-    if (s === 'rev') {
-        lote.inicioRS = ahora;
-        lote.inicioCS = null;
-    } else if (s === 'corr') {
-        lote.inicioCS = ahora;
-        lote.inicioRS = null;
-    }
+    // Dibujar inmediatamente para que el usuario vea el cambio
+    render();
     
-    // 4. GUARDADO QUIRÚRGICO: Enviamos solo este lote
+    // Guardar en la nube
     await save(lote); 
-    
-    // 5. Refrescamos datos de la nube
-    await refreshData(); 
 }
 
 async function save(loteEspecifico = null) { 
-    // 1. BLOQUEO INMEDIATO (Evita que refreshData borre cambios mientras guardamos)
     if (pausaSincro) return; 
     pausaSincro = true; 
-
+    
     const loader = document.getElementById('loader-save');
     if (loader) loader.style.display = 'flex';
 
-    // 2. Guardado local de respaldo
-    localStorage.setItem('qc_final_v88', JSON.stringify(db)); 
-    render(); 
-    
-    // Decidimos qué enviar
-    const datosEnvio = loteEspecifico ? [loteEspecifico] : db;
-
     try { 
-        // 3. ENVÍO A LA NUBE
+        const datosEnvio = loteEspecifico ? [loteEspecifico] : db;
         const response = await fetch(SCRIPT_URL, { 
             method: 'POST', 
             body: JSON.stringify(datosEnvio),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' }
         });
-
-        const res = await response.json();
-        if (res.result === "success") {
-            console.log("✅ Confirmado en Nube.");
-        }
+        await response.json();
     } catch (e) { 
-        console.error("❌ Error de red: Guardado solo local.", e); 
+        console.error("Error guardando:", e); 
     }
 
-    // 4. LIBERACIÓN Y LIMPIEZA
-    // Esperamos 3 segundos para que Google Sheets termine su proceso interno
-    setTimeout(async () => {
+    // Esperamos 4 segundos (tiempo de seguridad para Google Sheets)
+    setTimeout(() => {
         if (loader) loader.style.display = 'none';
-        pausaSincro = false; // Abrimos la puerta de nuevo
-        console.log("🔄 Sincronizando post-guardado...");
-        await refreshData(); 
-    }, 3000); 
+        pausaSincro = false;
+        console.log("🔒 Sistema desbloqueado. Sincronización normal restaurada.");
+    }, 4000); 
 }
     function renderAdmin() {
         const b = document.getElementById('adm-body'); 
@@ -577,64 +538,56 @@ async function save(loteEspecifico = null) {
         if(t==='perf') renderPerf(); else renderAdmin();
     }
 async function refreshData() {
-    if (pausaSincro) return; 
+    if (pausaSincro || document.hidden) return;
+    
     try {
         const response = await fetch(SCRIPT_URL);
         const data = await response.json();
         
-        if(data && Array.isArray(data)) {
-            // 1. Lo que dice la Nube actualmente
-            const nubeData = data.filter(item => item && (item.id || item.line)).map(item => {
-                let fechaLimpia = item.date ? item.date.toString().substring(0, 10) : formatearFecha();
-                return {
+        if (data && Array.isArray(data)) {
+            const ahora = Date.now();
+            const nubeData = data.filter(item => item && item.id);
+            
+            // Creamos un mapa de la nube
+            const mapaNube = new Map();
+            nubeData.forEach(item => {
+                mapaNube.set(item.id.toString(), {
+                    ...item,
                     id: item.id.toString(),
-                    line: item.line || "S/L",
-                    user: item.user || "SIN ASIGNAR",
-                    st: item.st || "wait",
-                    inicioWS: item.inicioWS || null,
-                    inicioRS: item.inicioRS || null,
-                    inicioCS: item.inicioCS || null,
-                    tR_acumulado: Number(item.tR_acumulado) || 0,
-                    tC_acumulado: Number(item.tC_acumulado) || 0,
-                    tW: Number(item.tw || item.tW) || 0,
-                    tR: Number(item.tr || item.tR) || 0,
-                    tC: Number(item.tc || item.tC) || 0,
-                    date: fechaLimpia,
-                    pg: Number(item.pg) || 0,
-                    hFin: item.hfin || item.hFin || "",
-                    turno: item.turno || "" 
-                };
+                    date: item.date ? item.date.toString().substring(0, 10) : formatearFecha()
+                });
             });
 
-            // 2. EL ESCUDO: Combinamos Nube con Lotes Recientes
-            const ahora = Date.now();
-            const mapaFinal = new Map();
-
-            // Metemos todo lo de la Nube al mapa
-            nubeData.forEach(l => mapaFinal.set(l.id, l));
-
-            // Revisamos lo que tienes tú en pantalla (db)
+            // --- EL ESCUDO DEFINITIVO ---
+            // Revisamos cada lote que tenemos actualmente en la pantalla (db)
             db.forEach(loteLocal => {
-                // Si el lote NO está en la nube...
-                if (!mapaFinal.has(loteLocal.id)) {
-                    // ...pero tiene menos de 20 segundos de haber sido creado
-                    const edad = ahora - (loteLocal.inicioWS || ahora);
-                    if (edad < 20000) { 
-                        mapaFinal.set(loteLocal.id, loteLocal); // ¡Lo rescatamos!
-                        console.log(`🛡️ Escudo: Manteniendo lote nuevo ${loteLocal.id}`);
+                const idStr = loteLocal.id.toString();
+                const infoNube = mapaNube.get(idStr);
+
+                if (infoNube) {
+                    // REGLA DE ORO: Si el lote local está en REVISIÓN o CORRECCIÓN, 
+                    // o si lo acabamos de crear (menos de 60s), NO permitimos que la nube lo cambie.
+                    const estaTrabajando = (loteLocal.st === 'rev' || loteLocal.st === 'corr');
+                    const esReciente = (ahora - (loteLocal.lastUpdate || 0)) < 60000;
+
+                    if (estaTrabajando || esReciente) {
+                        // Mantenemos nuestra versión local y la ponemos en el mapa de la nube (la sobreescribimos)
+                        mapaNube.set(idStr, loteLocal);
                     }
                 }
             });
 
-            // 3. Actualizamos la base de datos y dibujamos
-            db = Array.from(mapaFinal.values());
+            // Convertimos el mapa final a nuestra base de datos
+            db = Array.from(mapaNube.values());
+            
+            // Ordenar por ID para que no salten de posición
             db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
             
             render();
             localStorage.setItem('qc_final_v88', JSON.stringify(db));
         }
-    } catch (e) { 
-        console.error("Error al refrescar:", e);
+    } catch (e) {
+        console.error("Error en sincronización definitiva:", e);
     }
 }
 // --- FUNCIÓN PARA REGISTRAR UN NUEVO LOTE ---
