@@ -192,7 +192,7 @@
 
 <script>
         // Variables de configuración y estado
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxbSMDQvy5ckJiEvDt8nM-4mZiGn0H5gUdQYLBK0lDjj70Ug9Z0xU5j9dTHgD3Njh0MEw/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzN8pVObvU2Tf396M9A-tcg3bwn6b6Xj1a8eGPhaPLaOY1MP386VPw_YBCFhshlurOk/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
     
     let db = []; 
@@ -522,55 +522,43 @@ async function refreshData() {
         
         if (data && Array.isArray(data)) {
             const ahora = Date.now();
-            
-            // 1. Limpiamos y mapeamos los datos de la nube con seguridad
             const mapaFinal = new Map();
 
-            data.filter(item => item && item.id).forEach(item => {
-                const idStr = item.id.toString();
-                // Normalizamos la fecha que viene del Excel (YYYY-MM-DD)
-                let fechaExcel = item.date ? item.date.toString().substring(0, 10) : formatearFecha();
+            // 1. Cargar lo que viene de la Nube
+            data.forEach(item => {
+                if(!item.id) return;
+                const idStr = item.id.toString().trim();
+                let fechaLimpia = item.date ? item.date.toString().substring(0, 10) : formatearFecha();
                 
                 mapaFinal.set(idStr, {
                     ...item,
                     id: idStr,
-                    date: fechaExcel,
+                    date: fechaLimpia,
                     st: (item.st || "wait").toLowerCase()
                 });
             });
 
-            // 2. APLICAR EL ESCUDO SOBRE EL MAPA
-            // Revisamos lo que tenemos en la memoria del navegador (db)
+            // 2. Escudo Local (No dejar que la nube borre lo que estoy trabajando)
             db.forEach(loteLocal => {
-                const idStr = loteLocal.id.toString();
-                
-                // Si el lote local está en proceso o es muy nuevo (creado hace < 60s)
+                const idStr = loteLocal.id.toString().trim();
                 const estaTrabajando = (loteLocal.st === 'rev' || loteLocal.st === 'corr');
-                const esReciente = (ahora - (loteLocal.lastUpdate || 0)) < 60000;
+                const esReciente = (ahora - (loteLocal.lastUpdate || 0)) < 30000; // 30 seg de gracia
 
                 if (estaTrabajando || esReciente) {
-                    // Sobreescribimos lo que diga la nube con nuestra versión local activa
                     mapaFinal.set(idStr, loteLocal);
                 }
             });
 
-            // 3. Convertir a Array y actualizar base de datos
             db = Array.from(mapaFinal.values());
-            
-            // 4. Ordenar numéricamente para evitar que los lotes "salten" de posición
             db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
             
-            // 5. Guardar y Dibujar
             localStorage.setItem('qc_final_v88', JSON.stringify(db));
             render(); 
-            
-            console.log("📡 Sincronización exitosa. Lotes en memoria:", db.length);
         }
     } catch (e) {
-        console.error("Error en sincronización reforzada:", e);
+        console.error("Error en sincronización:", e);
     }
 }
-// --- FUNCIÓN PARA REGISTRAR UN NUEVO LOTE ---
 async function addBR() {
     console.log("Iniciando registro de lote...");
     
@@ -585,44 +573,60 @@ async function addBR() {
         return;
     }
     
-    const idInput = input.value.trim();
+    // Limpieza de ID para evitar errores de búsqueda
+    const idInput = input.value.trim().toString();
     const line = lineSel ? lineSel.value : "S/L";
     
-    // Obtenemos la fecha (del filtro o la actual del sistema)
-    let date = new Date().toISOString().split('T')[0];
+    // 3. Manejo de Fecha (Crucial para el filtro de la App)
+    let dateStr = new Date().toISOString().split('T')[0];
     if (dateSel && dateSel.value) {
-        date = dateSel.value.split('T')[0];
+        dateStr = dateSel.value; // Usamos la fecha que tiene seleccionada el usuario
     }
 
-    // 3. Crear el objeto del lote con la estructura de la Pizarra
+    // 4. Lógica de Turnos automática
+    const ahora = new Date();
+    const totalMinutos = (ahora.getHours() * 60) + ahora.getMinutes();
+    const turnoDetectado = (totalMinutos >= 360 && totalMinutos <= 930) ? "TA" : "TB";
+
+    // 5. Crear el objeto con EL ESCUDO ACTIVO (lastUpdate)
     const nuevoLote = {
-        id: idInput.toString(),
+        id: idInput,
         line: line, 
         user: "SIN ASIGNAR", 
         st: 'wait',
-        date: date, 
-        inicioWS: Date.now(), // SELLO DE TIEMPO: Crucial para el escudo de 20 seg
+        date: dateStr, 
+        inicioWS: Date.now(),
+        lastUpdate: Date.now(), // <--- ESTO ES EL ESCUDO: Protege el lote por 30 segundos
         tW: 0, tR: 0, tC: 0,
         tR_acumulado: 0, tC_acumulado: 0, 
-        pg: 0, hFin: "", turno: "" 
+        pg: 0, 
+        hFin: "", 
+        turno: turnoDetectado 
     };
 
-    // 4. Agregar a la base de datos local (db)
+    // 6. Agregar a la base de datos local (db)
     if (typeof db === 'undefined') db = [];
+    
+    // Evitar duplicados locales antes de guardar
+    const existe = db.find(l => l.id.toString() === idInput);
+    if (existe) {
+        alert("El lote " + idInput + " ya está en la lista.");
+        return;
+    }
+
     db.push(nuevoLote);
     
-    // 5. Limpiar el formulario y cerrar el modal
+    // 7. Limpiar el formulario y cerrar el modal
     input.value = "";
     if (typeof hideModal === 'function') hideModal('modal-new');
     
-    // 6. Refrescar la pantalla inmediatamente
+    // 8. Refrescar la pantalla inmediatamente (Visualmente es instantáneo)
     render(); 
     
-    // 7. Enviar a Google Sheets
+    // 9. Enviar a Google Sheets
     console.log("🚀 Lote " + idInput + " creado. Sincronizando con la nube...");
     await save(nuevoLote); 
 }
-
 
 function openFin(i) {
     tempIdx = i; 
@@ -632,49 +636,68 @@ function openFin(i) {
 }
 
 async function confirmFinish() {
-    const p = document.getElementById('finish-pg').value;
+    const pInput = document.getElementById('finish-pg');
+    const p = pInput ? pInput.value : "";
+    
     if (!p || p <= 0) return alert("Ingrese total de documentos");
 
-    const lote = db[tempIdx]; // Usamos el índice temporal del modal
+    // 1. Localizar el lote correctamente
+    const lote = db[tempIdx]; 
+    if (!lote) return alert("Error: Lote no encontrado en memoria.");
+
     const ahoraMs = Date.now();
     const ahoraFecha = new Date();
     
-    // 1. Datos finales del lote
+    // 2. ACTIVAR ESCUDO Y CAMBIAR ESTADO
+    lote.lastUpdate = ahoraMs; // Protege este cambio de la sincronización automática
     lote.pg = parseInt(p);
-    lote.st = 'done'; // Señal para mover al HISTORIAL
     
-    // Hora de fin amigable (24h)
+    // 3. CÁLCULO FINAL DE TIEMPOS (Antes de cambiar el estado)
+    // Sumamos el tramo final de Revisión si venía de ahí
+    if (lote.st === 'rev' && lote.inicioRS) {
+        lote.tR_acumulado = (ahoraMs - lote.inicioRS) + (Number(lote.tR_acumulado) || 0);
+    }
+    // Sumamos el tramo final de Corrección si venía de ahí
+    if (lote.st === 'corr' && lote.inicioCS) {
+        lote.tC_acumulado = (ahoraMs - lote.inicioCS) + (Number(lote.tC_acumulado) || 0);
+    }
+
+    // Pasamos a estado finalizado
+    lote.st = 'done';
+    
+    // 4. DATOS DE CIERRE (Hora y Turno)
     const horas = String(ahoraFecha.getHours()).padStart(2, '0');
     const minutos = String(ahoraFecha.getMinutes()).padStart(2, '0');
     lote.hFin = `${horas}:${minutos}`;
 
-    // 2. Lógica de Turnos (TA: 06:00 a 15:30)
     const totalMinutos = (ahoraFecha.getHours() * 60) + ahoraFecha.getMinutes();
     lote.turno = (totalMinutos >= 360 && totalMinutos <= 930) ? "TA" : "TB";
-
-    // 3. CÁLCULO DE TIEMPOS (No olvidar este paso)
-    // Si estaba en revisión, sumamos el tramo final
-    if (lote.st === 'done' && lote.inicioRS) {
-        lote.tR_acumulado = (ahoraMs - lote.inicioRS) + (lote.tR_acumulado || 0);
-    }
-    // Si estaba en corrección, sumamos el tramo final
-    if (lote.st === 'done' && lote.inicioCS) {
-        lote.tC_acumulado = (ahoraMs - lote.inicioCS) + (lote.tC_acumulado || 0);
-    }
     
-    // Limpiamos los inicios para que el JSON sea más ligero
+    // Limpiamos referencias de inicio para el envío limpio
     lote.inicioRS = null;
     lote.inicioCS = null;
+    lote.inicioWS = null;
 
-    // 4. Actualización Visual
+    // 5. ACTUALIZACIÓN VISUAL INMEDIATA
     hideModal('modal-finish');
-    render(); // Actualiza la tabla local
+    render(); 
     
-    // 5. El Salto a la Nube
-    // Esto lo quita de la hoja PIZARRA y lo pega en HISTORIAL
-    await save(lote); 
+    // 6. ENVÍO A LA NUBE
+    console.log(`🚀 Finalizando Lote ${lote.id}...`);
     
-    console.log(`🚀 Lote ${lote.id} enviado al Historial con éxito.`);
+    // Usamos el cargador visual para que el usuario no toque nada mientras se mueve al historial
+    const loader = document.getElementById('loader-save');
+    if (loader) loader.style.display = 'flex';
+
+    try {
+        await save(lote); 
+        console.log(`✅ Lote ${lote.id} guardado en Historial.`);
+    } catch (error) {
+        console.error("Error al finalizar:", error);
+        alert("Hubo un problema al guardar en la nube, pero el lote se actualizó localmente.");
+    } finally {
+        if (loader) loader.style.display = 'none';
+    }
 }
 // --- PASO 4: APERTURA SEGURA (BLOQUEO DE NUBE) ---
 function iniciarRevisionDoc(idUnico) {
