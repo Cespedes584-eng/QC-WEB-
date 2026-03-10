@@ -379,7 +379,7 @@ function render() {
     };
     const count = { wait: 0, run: 0, done: 0 };
     
-    // 1. Limpiamos las listas antes de dibujar
+    // 1. Limpiamos las listas antes de dibujar (Evita duplicados visuales)
     if (cont.wait) cont.wait.innerHTML = "";
     if (cont.run) cont.run.innerHTML = "";
     if (cont.done) cont.done.innerHTML = "";
@@ -394,11 +394,12 @@ function render() {
 
     // 3. Revisamos cada lote de la base de datos (db)
     db.forEach((l, i) => {
-        // --- FILTROS (CORREGIDOS) ---
         
-        // A. Filtro por Fecha (Normalizado para evitar que desaparezcan)
-        let fechaLote = l.date ? String(l.date).trim() : "";
-        let fechaFiltro = selDate ? String(selDate).trim() : "";
+        // --- FILTROS (REPARADOS PARA EVITAR QUE SE BORREN A LOS 7 SEG) ---
+        
+        // A. Filtro por Fecha (Normalizado: cortamos después de la 'T' para comparar solo YYYY-MM-DD)
+        let fechaLote = l.date ? String(l.date).split('T')[0].trim() : "";
+        let fechaFiltro = selDate ? String(selDate).split('T')[0].trim() : "";
         
         // Si el filtro de fecha está activo y no coinciden, saltamos este lote
         if (fechaFiltro !== "" && fechaLote !== fechaFiltro) return;
