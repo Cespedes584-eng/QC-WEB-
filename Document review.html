@@ -192,13 +192,17 @@
 
 <script>
         // Variables de configuración y estado
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw3aMF4bNO2BFFJPCYVSphsK8Zob0R4iY7mE_r6iIF38cCFIEQtkG4ZMLR3MR1VrsCb-Q/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzdnPxqO_qMxke1ng-9q_RUPsDY4ycdhaOqFnl8u478N4irAzz09c6ZjrYJLyW5dL8DIA/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
     
     let db = []; 
     let currentShift = "TODOS"; 
     let pausaSincro = false; // Asegúrate de que esta variable esté declarada
     let tempIdx = null;
+let tempIdx = null; // Lo que ya tenías
+    let dbDocumentos = [];   // Copia de seguridad de la nube
+    let docEnRevision = null; // Para guardar el ID del documento que estás tocando
+    let catalogoHallazgos = JSON.parse(localStorage.getItem('qc_hallazgos_docs')) || ["Firma Faltante", "Fecha Incorrecta", "Ilegible", "Error de Cálculo"];
 
     // MOTOR DEL RELOJ: Solo una vez
     setInterval(tick, 1000);
@@ -797,7 +801,123 @@ async function confirmFinish() {
     
     console.log(`🚀 Lote ${lote.id} enviado al Historial con éxito.`);
 }
+// --- PASO 4: APERTURA SEGURA (BLOQUEO DE NUBE) ---
+function iniciarRevisionDoc(idUnico) {
+    // 1. ACTIVAR ESCUDO: Detenemos la sincronización inmediatamente
+    pausaSincro = true; 
+    console.log("🛡️ Escudo Activo. Revisando ID: " + idUnico);
 
+    // 2. BUSCAR EL DOCUMENTO: Lo buscamos en nuestra 'Caja Fuerte' (dbDocumentos)
+    // Usamos toString() por si el ID viene como número desde el Excel
+    const doc = dbDocumentos.find(d => d.id.toString() === idUnico.toString());
+
+    if (!doc) {
+        alert("❌ Error: No se encontró el documento en la memoria local.");
+        pausaSincro = false; // Si hay error, liberamos la nube
+        return;
+    }
+
+    // 3. GUARDAR IDENTIDAD: Memorizamos qué documento estamos revisando
+    docEnRevision = idUnico;
+
+    // 4. LLENAR EL MODAL: Pasamos los datos del Excel al diseño del Modal
+    // (Asegúrate que estos IDs existan en tu HTML del modal)
+    document.getElementById('m-doc-id').innerText = doc.id;
+    document.getElementById('m-doc-lote').innerText = doc.id; // O el campo que uses para el nombre
+    
+    // Limpiamos comentarios de la revisión anterior
+    if(document.getElementById('m-comentarios')) {
+        document.getElementById('m-comentarios').value = "";
+    }
+
+    // 5. MOSTRAR INTERFAZ: Abrimos el modal
+    document.getElementById('modal-review').style.display = 'block';
+    
+    // Si tienes catálogo de hallazgos, los dibujamos aquí
+    generarCheckboxesHallazgos(); 
+}
+// --- PASO 3: EL MOTOR DE SINCRONIZACIÓN SEGURO ---
+async function sincronizarDatos() {
+    // Si el inspector está trabajando (pausaSincro = true), no entramos
+    if (pausaSincro || document.hidden) return; 
+
+    try {
+        // Traemos la info de tu SCRIPT_URL
+        const response = await fetch(SCRIPT_URL);
+        const data = await response.json();
+        
+        // Guardamos en nuestra "Caja Fuerte" local
+        // Esto permite que el Paso 4 sepa siempre qué ID estamos tocando
+        dbDocumentos = data; 
+        
+        console.log("📡 Datos sincronizados y guardados en dbDocumentos");
+        
+        // Dibujamos la tabla (Paso 4.2)
+        if (typeof renderizarTabla === "function") {
+            renderizarTabla();
+        }
+
+    } catch (error) {
+        console.warn("⚠️ Error al conectar con la nube:", error);
+    }
+}
+// Se ejecuta cada 10 segundos automáticamente
+setInterval(sincronizarDatos, 10000);
+
+// También la llamamos una vez al cargar la página para que no empiece vacío
+sincronizarDatos();
+async function finalizarDocumento(aprobado) {
+    // 1. LEER DATOS DEL FORMULARIO
+    const comentarios = document.getElementById('m-comentarios').value;
+    const resultado = aprobado ? "APROBADO" : "RECHAZADO";
+
+    // 2. PREPARAR EL PAQUETE (Igual que en Producción)
+    const registro = {
+        action: 'finalizar_doc_seguro',
+        id: docEnRevision, // El ID que "atrapamos" al abrir
+        resultado: resultado,
+        user: "Inspector QC", // Aquí puedes poner el nombre del usuario
+        hFin: new Date().toLocaleTimeString(),
+        hallazgos: comentarios // Lo que escribiste en el cuadro de texto
+    };
+
+    // 3. BLOQUEO DE BOTONES (Para evitar doble envío)
+    const btnAceptar = document.querySelector('button[onclick="finalizarDocumento(true)"]');
+    const btnRechazar = document.querySelector('button[onclick="finalizarDocumento(false)"]');
+    btnAceptar.disabled = true;
+    btnRechazar.disabled = true;
+    btnAceptar.innerText = "⏳ Guardando...";
+
+    try {
+        const response = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify(registro)
+        });
+
+        const res = await response.json();
+
+        if (res.status === "success") {
+            console.log("✅ Guardado en la fila correcta: " + res.message);
+            
+            // 4. ACTUALIZACIÓN LOCAL INMEDIATA
+            // Borramos el documento de nuestra "Caja Fuerte" local para que desaparezca de la pantalla
+            dbDocumentos = dbDocumentos.filter(d => d.id.toString() !== docEnRevision.toString());
+            
+            // Redibujamos la tabla para que el usuario vea que ya NO está
+            renderizarTabla();
+            
+            // Cerramos el modal
+            cerrarRevisionDoc();
+        }
+    } catch (error) {
+        alert("❌ Error de conexión. El lote no se guardó.");
+        console.error(error);
+    } finally {
+        btnAceptar.disabled = false;
+        btnRechazar.disabled = false;
+        btnAceptar.innerText = "✅ ACEPTAR";
+    }
+}
 </script>
 </body>
 </html>
