@@ -192,7 +192,7 @@
 
 <script>
         // Variables de configuración y estado
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzW6MxLxfilzZOgZEwlyOgzDTz07Of46L6TleqT7hNokxocfWNEbtBcDxmg5GefM7no/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxPoreelTvvFgHU5LmoO-h7JG2MOu1nL3t-C5BkaeehJ8J4bRwZvoKq_4AR0HJGlDGEyg/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
     
     let db = []; 
@@ -330,7 +330,7 @@ function render() {
     // Limpiamos las columnas antes de dibujar
     cont.wait.innerHTML = ""; cont.run.innerHTML = ""; cont.done.innerHTML = "";
     
-    const selDate = document.getElementById('main-date-filter').value;
+    const selDate = document.getElementById('main-date-filter').value; // Formato YYYY-MM-DD
     const searchText = document.getElementById('main-search').value.toLowerCase();
     
     let topB = 0, topP = 0;
@@ -338,20 +338,34 @@ function render() {
     db.forEach((l, i) => {
         const estado = (l.st || "wait").toLowerCase();
         
-        // --- FILTRO DE BÚSQUEDA ---
+        // --- 1. FILTRO DE BÚSQUEDA ---
         if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
 
-        // --- REGLA ANTIBORRADO (FECHA) ---
-        // Si el lote NO está finalizado ('wait', 'rev', 'corr'), lo mostramos SIEMPRE.
-        // No importa si la fecha de la nube viene rara, si está pendiente debe verse.
+        // --- 2. LÓGICA DE FECHA INTELIGENTE ---
+        let fechaLote = l.date ? String(l.date).trim() : "";
+        
+        // Si la fecha viene de Google como DD/MM/YYYY, la convertimos a YYYY-MM-DD para comparar
+        if (fechaLote.includes('/')) {
+            const partes = fechaLote.split('/');
+            if (partes.length === 3) {
+                // Convertimos "10/03/2026" -> "2026-03-10"
+                fechaLote = `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}`;
+            }
+        } else {
+            // Si viene con hora (ISO), cortamos solo los primeros 10 caracteres
+            fechaLote = fechaLote.substring(0, 10);
+        }
+
+        // --- 3. REGLA DE VISIBILIDAD CRÍTICA ---
+        // Si el lote está FINALIZADO, aplicamos filtro de fecha.
+        // Si el lote está PENDIENTE (wait, rev, corr), se muestra SIEMPRE para que no "desaparezca".
         if (estado === 'done') {
-            const fechaLote = l.date ? String(l.date).substring(0, 10) : "";
             if (selDate && fechaLote !== selDate) return;
             topB++; 
             topP += parseInt(l.pg || 0);
         }
 
-        // --- CREACIÓN DEL CUADRO (CARD) ---
+        // --- 4. CREACIÓN DEL CUADRO (CARD) ---
         const isFinalizado = (estado === 'done');
         const card = `
         <div class="card" style="border-left: 5px solid ${isFinalizado ? '#468e5d' : (estado === 'wait' ? '#2c3e50' : '#f39c12')};">
