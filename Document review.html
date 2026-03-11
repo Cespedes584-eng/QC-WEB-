@@ -255,13 +255,19 @@ function setShift(turno) {
     // 4. Traer datos frescos de la Nube inmediatamente
     await refreshData();
 
-    // 5. Iniciar el ciclo automático (AHORA DENTRO DE INIT)
-    setInterval(refreshData, 10000);
+    // 5. CICLO AUTOMÁTICO PROTEGIDO
+    // Aumentamos a 15 segundos para dar respiro al servidor y evitar colisiones
+    setInterval(() => {
+        if (!pausaSincro) { // <--- EL FILTRO CLAVE: Si el escudo está activo, no pidas datos
+            refreshData();
+        } else {
+            console.log("⏳ Sincronización omitida: Escudo activo.");
+        }
+    }, 15000); 
     
     // 6. Iniciar cronómetro de relojes
     setInterval(tick, 1000);
-} 
-// Aquí termina init correctamente.
+}
 
     function tick() {
         const ahora = Date.now();
@@ -497,7 +503,7 @@ async function save(loteEspecifico = null) {
         if(t==='perf') renderPerf(); else renderAdmin();
     }
 async function refreshData() {
-    // Si estamos guardando manualmente o la pestaña está oculta, no pedimos datos
+    // 1. Bloqueo por seguridad o ahorro de recursos
     if (pausaSincro || document.hidden) return;
     
     try {
@@ -507,12 +513,10 @@ async function refreshData() {
         if (data && Array.isArray(data)) {
             const mapaFinal = new Map();
 
-            // 1. CARGAMOS TODO LO DE LA NUBE
+            // --- CARGAR DATOS DE LA NUBE ---
             data.forEach(item => {
                 if(!item.id) return;
                 const idStr = item.id.toString().trim();
-                
-                // Limpieza de fecha básica
                 let fechaLimpia = item.date ? item.date.toString().substring(0, 10) : "";
 
                 mapaFinal.set(idStr, {
@@ -523,26 +527,41 @@ async function refreshData() {
                 });
             });
 
-           // 2. EL ESCUDO REFORZADO: No deja que la nube borre lo que estás trabajando
+            // --- APLICAR ESCUDO DE PROTECCIÓN LOCAL ---
             db.forEach(loteLocal => {
                 const idStr = loteLocal.id.toString().trim();
-                const tiempoDesdeCambio = Date.now() - (loteLocal.lastUpdate || 0);
-                
-                // Si el lote está en revisión, corrección o lo acabas de crear (hace menos de 30 seg)
-                if (loteLocal.st === 'rev' || loteLocal.st === 'corr' || tiempoDesdeCambio < 30000) {
-                    mapaFinal.set(idStr, loteLocal);
+                const ahora = Date.now();
+                const tiempoDesdeCambio = ahora - (loteLocal.lastUpdate || 0);
+                const loteNube = mapaFinal.get(idStr);
+
+                // REGLA 1: Si acabamos de finalizar (hace < 45 seg), mi 'done' manda.
+                // Esto evita que la nube lo regrese a 'revisión' mientras Google procesa.
+                if (loteLocal.st === 'done') {
+                    if (tiempoDesdeCambio < 45000) { 
+                        mapaFinal.set(idStr, loteLocal);
+                        return; // Saltamos a la siguiente iteración
+                    }
+                }
+
+                // REGLA 2: Si está en Revisión o Corrección activa, usamos los tiempos locales.
+                // Esto evita que el reloj de la pantalla "salte" o se mueva por culpa de la red.
+                if (loteLocal.st === 'rev' || loteLocal.st === 'corr') {
+                    // Solo sobreescribimos si han pasado menos de 2 minutos de inactividad
+                    // o si la nube aún no tiene el lote.
+                    if (tiempoDesdeCambio < 120000) { 
+                        mapaFinal.set(idStr, loteLocal);
+                    }
                 }
             });
 
-            // 3. ACTUALIZAMOS LA BASE DE DATOS
+            // --- ACTUALIZAR BASE DE DATOS Y RENDERIZAR ---
             db = Array.from(mapaFinal.values());
             
-            // Ordenar por número de lote
+            // Ordenar numéricamente (Lote 1, 2, 10 en lugar de 1, 10, 2)
             db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
             
-            // Dibujar cambios
             render(); 
-            console.log("📡 Sincronización exitosa: La pantalla está protegida.");
+            console.log("📡 Pizarra sincronizada y protegida.");
         }
     } catch (e) {
         console.error("❌ Error en refreshData:", e);
@@ -628,22 +647,20 @@ async function confirmFinish() {
     const pInput = document.getElementById('finish-pg');
     const p = pInput ? pInput.value : "";
     
-    // Validar que se ingresen páginas
     if (!p || p <= 0) return alert("Ingrese total de documentos");
 
-    // 1. Localizar el lote
     const lote = db[tempIdx]; 
     if (!lote) return alert("Error: Lote no encontrado.");
 
     const ahoraMs = Date.now();
     const ahoraFecha = new Date();
     
-    // 2. ACTIVAR ESCUDO: Detenemos la sincronización un momento
+    // 1. BLOQUEO TOTAL E INMEDIATO
     pausaSincro = true; 
-    lote.lastUpdate = ahoraMs;
+    lote.lastUpdate = ahoraMs; // Marcamos el segundo exacto del cierre
     lote.pg = parseInt(p);
     
-    // 3. CÁLCULO FINAL DE TIEMPOS
+    // 2. CÁLCULO DE TIEMPOS (Tu lógica actual que está perfecta)
     if (lote.st === 'rev' && lote.inicioRS) {
         lote.tR_acumulado = (ahoraMs - lote.inicioRS) + (Number(lote.tR_acumulado) || 0);
     }
@@ -651,27 +668,32 @@ async function confirmFinish() {
         lote.tC_acumulado = (ahoraMs - lote.inicioCS) + (Number(lote.tC_acumulado) || 0);
     }
 
-    // Cambiar estado a FINALIZADO
     lote.st = 'done';
-    
-    // Poner hora de fin
     const horas = String(ahoraFecha.getHours()).padStart(2, '0');
     const minutos = String(ahoraFecha.getMinutes()).padStart(2, '0');
     lote.hFin = `${horas}:${minutos}`;
-// 4. ACTUALIZACIÓN VISUAL INMEDIATA
+
+    // 3. REFLEJO VISUAL INSTANTÁNEO
     hideModal('modal-finish');
     render(); 
     
-    // 5. ENVÍO A LA NUBE
-    console.log(`🚀 Guardando Lote ${lote.id} en el historial...`);
+    // 4. ENVÍO SEGURO
+    console.log(`🚀 Guardando Lote ${lote.id}...`);
     
-    await save(lote); // Sincroniza el estado 'done' con Google
-    
-    // 6. LIBERAR ESCUDO: Volvemos a permitir sincronización automática
-    setTimeout(() => {
-        pausaSincro = false;
-        console.log("✅ Ciclo completado.");
-    }, 2000);
+    try {
+        await save(lote); 
+        console.log("✅ Datos enviados. Esperando propagación de la nube...");
+    } catch (error) {
+        console.error("Error al guardar:", error);
+    } finally {
+        // 5. EL CAMBIO CLAVE: Aumentamos el tiempo de gracia.
+        // Damos 8 segundos de silencio total. Es el tiempo promedio que 
+        // tarda Google Sheets en reflejar un cambio para que la lectura no lo "rebote".
+        setTimeout(() => {
+            pausaSincro = false;
+            console.log("🛡️ Escudo liberado. Sincronización normal reanudada.");
+        }, 8000); 
+    }
 }
 function iniciarRevisionDoc(idUnico) {
     // 1. ACTIVAR ESCUDO: Detenemos la sincronización inmediatamente
