@@ -192,7 +192,7 @@
 
 <script>
         // Variables de configuración y estado
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby5bxCk6OFNdP3J3wfkuukpenJUV6UIaxNv9jC5S8y_AVj11utLg0yL0giw61XH_DNnsQ/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxhlYBCF0IzrzbGUU-TI1IREgtqUWgjmLG4UKE6Yq4dC6LGTL4vXcQWbeUdPCoOo75Qnw/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
     
     let db = []; 
@@ -532,44 +532,37 @@ async function save(loteEspecifico = null) {
         if(t==='perf') renderPerf(); else renderAdmin();
     }
 async function refreshData() {
-    // Si el usuario está operando o la pestaña está oculta, no refrescamos
     if (pausaSincro || document.hidden) return;
     
     try {
         console.log("🔄 Iniciando sincronización con la nube...");
         
-        // 1. Llamada simplificada para evitar errores de CORS con Google
-        // Usamos el t=Date.now() para que no lea datos viejos de la memoria (cache)
+        // CAMBIO AQUÍ: Quitamos el bloque de {method: 'GET', mode: 'cors'} 
+        // Esto evita que Google bloquee la conexión desde GitHub.
         const response = await fetch(`${SCRIPT_URL}?t=${Date.now()}`);
         
-        // Verificamos si la respuesta es correcta antes de seguir
         if (!response.ok) throw new Error("Respuesta de red no OK");
         
         const data = await response.json();
         
-        // --- SEGURO DE VIDA 1: Validar datos recibidos ---
         if (!data || !Array.isArray(data)) {
-            console.warn("⚠️ La nube no respondió con una lista válida. Manteniendo datos locales.");
+            console.warn("⚠️ Datos inválidos.");
             return;
         }
 
         const mapaFinal = new Map();
 
-        // 2. Procesamos lo que viene de la NUBE
         data.forEach(item => {
             if(!item.id) return;
             const idStr = item.id.toString().trim();
             
-            // --- NORMALIZACIÓN DE FECHA ---
-            // Esto asegura que "11/03/2026" se convierta en "2026-03-11"
+            // Reparación de fecha (para que 11/03/2026 funcione)
             let fDoc = "";
             if (item.date) {
                 let dStr = item.date.toString();
                 if (dStr.includes('/')) {
                     const p = dStr.split('/');
-                    if (p.length === 3) {
-                        fDoc = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
-                    }
+                    if (p.length === 3) fDoc = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
                 } else {
                     fDoc = dStr.split('T')[0].substring(0,10);
                 }
@@ -583,37 +576,23 @@ async function refreshData() {
             });
         });
 
-        // --- SEGURO DE VIDA 2: REGLA ANTIBORRADO ---
-        // Comparamos contra la base de datos local (db)
+        // Mantenemos lo local que no esté en la nube
         db.forEach(loteLocal => {
             const idStr = loteLocal.id.toString().trim();
-            
-            // Si el lote local NO está en la nube todavía, pero no está terminado,
-            // lo mantenemos a la fuerza para que no desaparezca de la pantalla.
             if (!mapaFinal.has(idStr) && loteLocal.st !== 'done') {
-                console.log("🛡️ Protegiendo lote local pendiente: " + idStr);
-                mapaFinal.set(idStr, loteLocal);
-            }
-            
-            // "Escudo" de 45 segundos: si acabas de mover un lote, 
-            // no permitas que la nube lo sobreescriba tan rápido.
-            const tiempoDesdeAccion = Date.now() - (loteLocal.lastUpdate || 0);
-            if (tiempoDesdeAccion < 45000) {
                 mapaFinal.set(idStr, loteLocal);
             }
         });
 
-        // 3. Actualizar memoria y almacenamiento global
         db = Array.from(mapaFinal.values());
         localStorage.setItem('qc_final_v88', JSON.stringify(db));
         
-        // Ordenar por número de lote y dibujar en pantalla
         db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
         render();
-        console.log("✅ Sincronización exitosa. Lotes activos en pantalla:", db.length);
+        console.log("✅ Sincronización exitosa.");
 
     } catch (e) {
-        console.error("❌ Fallo de conexión con la nube:", e);
+        console.error("❌ Error de conexión:", e);
     }
 }
 async function addBR() {
