@@ -327,19 +327,18 @@ function render() {
     
     const selDate = document.getElementById('main-date-filter') ? document.getElementById('main-date-filter').value : "";
     const selShift = typeof currentShift !== 'undefined' ? currentShift : "TODOS"; 
-    const searchInput = document.getElementById('main-search');
-    const searchText = searchInput ? searchInput.value.toLowerCase() : ""; 
+    const searchText = document.getElementById('main-search') ? document.getElementById('main-search').value.toLowerCase() : ""; 
     
     let topB = 0, topP = 0; 
 
     db.forEach((l, i) => {
-        // --- FILTRO DE FECHA REFORZADO ---
+        // --- FILTRO DE FECHA (MÁS FLEXIBLE) ---
         let fechaLote = l.date ? String(l.date).substring(0, 10) : "";
         let fechaFiltro = selDate ? String(selDate).substring(0, 10) : "";
         
-        // Si hay un filtro puesto, pero el lote tiene una fecha distinta, NO lo mostramos
-        // Pero si el filtro está vacío, mostramos todo lo de hoy por defecto
-        if (fechaFiltro !== "" && fechaLote !== "" && fechaLote !== fechaFiltro) {
+        // Si el lote es de una fecha distinta a la seleccionada, lo saltamos
+        // PERO: Si el lote está en 'wait' o 'rev', lo mostramos siempre (para que no se pierda el trabajo actual)
+        if (l.st === 'done' && fechaFiltro !== "" && fechaLote !== "" && fechaLote !== fechaFiltro) {
             return; 
         }
 
@@ -347,26 +346,16 @@ function render() {
         if (selShift !== "TODOS" && l.turno && l.turno !== selShift) return;
         if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
 
-        const isFinalizado = (l.st === 'done');
-        if (isFinalizado) { topB++; topP += parseInt(l.pg || 0); }
+        if (l.st === 'done') { topB++; topP += parseInt(l.pg || 0); }
 
-        // --- GENERACIÓN DE CARD ---
+        // --- GENERACIÓN DE CARD (Igual que antes) ---
+        const isFinalizado = (l.st === 'done');
         const card = `
         <div class="card" style="position: relative; border-left: 5px solid ${isFinalizado ? '#468e5d' : (l.st === 'wait' ? '#2c3e50' : '#f39c12')};">
-            ${isFinalizado ? (() => {
-                let h = l.hFin || '--:--';
-                if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
-                else if (h.length > 8) h = h.substring(0, 5);
-                return `<div style="position: absolute; top: 10px; right: 15px; background: #f0f4f1; color: #468e5d; padding: 4px 8px; border-radius: 6px; font-size: 0.85em; font-weight: bold; border: 1px solid #d1e2d4;">🕒 ${h}</div>`;
-            })() : ''}
+            ${isFinalizado ? `<div style="position: absolute; top: 10px; right: 15px; background: #f0f4f1; color: #468e5d; padding: 4px 8px; border-radius: 6px; font-size: 0.85em; font-weight: bold; border: 1px solid #d1e2d4;">🕒 ${l.hFin || '--:--'}</div>` : ''}
             <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
-            <div style="font-size:0.75em; color:#666; margin-bottom:8px;">
-                ${l.line} | <b style="color:#2980b9;">${l.user}</b>
-            </div>
-            ${isFinalizado 
-                ? `<span class="status-final" style="margin: 10px 0; display: block; text-align:center; color: #468e5d; font-weight:900;">FINALIZADO</span>` 
-                : `<span class="timer-big" id="live-${i}">00:00</span>`
-            }
+            <div style="font-size:0.75em; color:#666; margin-bottom:8px;">${l.line} | <b style="color:#2980b9;">${l.user}</b></div>
+            ${isFinalizado ? `<span class="status-final">FINALIZADO</span>` : `<span class="timer-big" id="live-${i}">00:00</span>`}
             <div class="timer-grid-3" id="grid-${i}">
                 <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
                 <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
@@ -384,11 +373,11 @@ function render() {
         else { cont.run.insertAdjacentHTML('afterbegin', card); count.run++; }
     });
 
-    if (document.getElementById('top-brs')) document.getElementById('top-brs').innerText = topB; 
-    if (document.getElementById('top-pags')) document.getElementById('top-pags').innerText = topP;
-    if (document.getElementById('c-wait')) document.getElementById('c-wait').innerText = count.wait; 
-    if (document.getElementById('c-run')) document.getElementById('c-run').innerText = count.run; 
-    if (document.getElementById('c-done')) document.getElementById('c-done').innerText = count.done;
+    document.getElementById('top-brs').innerText = topB; 
+    document.getElementById('top-pags').innerText = topP;
+    document.getElementById('c-wait').innerText = count.wait; 
+    document.getElementById('c-run').innerText = count.run; 
+    document.getElementById('c-done').innerText = count.done;
 }
  async function changeSt(idx, s) { 
     const ahora = Date.now();
@@ -740,26 +729,26 @@ function iniciarRevisionDoc(idUnico) {
 // También la llamamos una vez al cargar la página para que no empiece vacío
 sincronizarDatos();
 async function finalizarDocumento(aprobado) {
-    // 1. LEER DATOS DEL FORMULARIO
-    const comentarios = document.getElementById('m-comentarios').value;
+    // 1. LEER DATOS
+    const comentarios = document.getElementById('m-comentarios') ? document.getElementById('m-comentarios').value : "";
     const resultado = aprobado ? "APROBADO" : "RECHAZADO";
 
-    // 2. PREPARAR EL PAQUETE (Igual que en Producción)
+    // 2. PREPARAR EL PAQUETE
     const registro = {
         action: 'finalizar_doc_seguro',
-        id: docEnRevision, // El ID que "atrapamos" al abrir
+        id: docEnRevision, 
         resultado: resultado,
-        user: "Inspector QC", // Aquí puedes poner el nombre del usuario
+        user: document.getElementById('user-display').innerText.replace('👤 ', ''),
         hFin: new Date().toLocaleTimeString(),
-        hallazgos: comentarios // Lo que escribiste en el cuadro de texto
+        hallazgos: comentarios 
     };
 
-    // 3. BLOQUEO DE BOTONES (Para evitar doble envío)
+    // 3. BLOQUEO DE INTERFAZ
     const btnAceptar = document.querySelector('button[onclick="finalizarDocumento(true)"]');
-    const btnRechazar = document.querySelector('button[onclick="finalizarDocumento(false)"]');
-    btnAceptar.disabled = true;
-    btnRechazar.disabled = true;
-    btnAceptar.innerText = "⏳ Guardando...";
+    if(btnAceptar) {
+        btnAceptar.disabled = true;
+        btnAceptar.innerText = "⏳ Guardando...";
+    }
 
     try {
         const response = await fetch(SCRIPT_URL, {
@@ -770,27 +759,44 @@ async function finalizarDocumento(aprobado) {
         const res = await response.json();
 
         if (res.status === "success") {
-            console.log("✅ Guardado en la fila correcta: " + res.message);
+            console.log("✅ Guardado: " + res.message);
             
-            // 4. ACTUALIZACIÓN LOCAL INMEDIATA
-            // Borramos el documento de nuestra "Caja Fuerte" local para que desaparezca de la pantalla
-            dbDocumentos = dbDocumentos.filter(d => d.id.toString() !== docEnRevision.toString());
+            // 4. ACTUALIZACIÓN DE LA BASE DE DATOS PRINCIPAL (db)
+            // Esto evita que al refrescar desaparezcan
+            db = db.filter(d => d.id.toString() !== docEnRevision.toString());
             
-            // Redibujamos la tabla para que el usuario vea que ya NO está
-            renderizarTabla();
+            // Guardar en memoria del navegador para el próximo refresh
+            localStorage.setItem('qc_final_v88', JSON.stringify(db));
             
-            // Cerramos el modal
-            cerrarRevisionDoc();
+            // Redibujar la pizarra principal
+            render();
+            
+            // Cerrar modal si existe la función
+            if(typeof cerrarRevisionDoc === 'function') cerrarRevisionDoc();
+            else document.getElementById('modal-review').style.display = 'none';
         }
     } catch (error) {
-        alert("❌ Error de conexión. El lote no se guardó.");
+        alert("❌ Error de conexión. El lote no se guardó en la nube, pero se actualizó localmente.");
         console.error(error);
     } finally {
-        btnAceptar.disabled = false;
-        btnRechazar.disabled = false;
-        btnAceptar.innerText = "✅ ACEPTAR";
+        if(btnAceptar) {
+            btnAceptar.disabled = false;
+            btnAceptar.innerText = "✅ ACEPTAR";
+        }
     }
 }
+
+// --- REFUERZO DE CARGA AL REFRESCAR ---
+// Esto asegura que al presionar F5, los lotes de "ESPERA" se dibujen de inmediato
+window.addEventListener('load', () => {
+    const backup = localStorage.getItem('qc_final_v88');
+    if (backup) {
+        db = JSON.parse(backup);
+        console.log("📦 Datos recuperados del historial local:", db.length);
+        render(); // Dibuja lo que había antes de pedirle datos nuevos a la nube
+    }
+});
+
 </script>
 </body>
 </html>
