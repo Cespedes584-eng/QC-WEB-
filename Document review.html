@@ -502,6 +502,7 @@ async function save(loteEspecifico = null) {
         if(t==='perf') renderPerf(); else renderAdmin();
     }
 async function refreshData() {
+    // Si estamos guardando manualmente o la pestaña no está activa, no pedimos datos
     if (pausaSincro || document.hidden) return;
     
     try {
@@ -509,15 +510,21 @@ async function refreshData() {
         const data = await response.json();
         
         if (data && Array.isArray(data)) {
-            const ahora = Date.now();
             const mapaFinal = new Map();
 
-            // 1. Cargar lo que viene de la Nube
+            // 1. CARGAR TODO LO DE LA NUBE (La fuente de verdad)
             data.forEach(item => {
                 if(!item.id) return;
                 const idStr = item.id.toString().trim();
-                let fechaLimpia = item.date ? item.date.toString().substring(0, 10) : formatearFecha();
                 
+                // Limpieza de fecha para que el filtro de render() no lo oculte
+                let fechaLimpia = item.date;
+                if (item.date instanceof Date) {
+                    fechaLimpia = item.date.toISOString().substring(0, 10);
+                } else if (item.date) {
+                    fechaLimpia = item.date.toString().substring(0, 10);
+                }
+
                 mapaFinal.set(idStr, {
                     ...item,
                     id: idStr,
@@ -526,25 +533,28 @@ async function refreshData() {
                 });
             });
 
-            // 2. Escudo Local (No dejar que la nube borre lo que estoy trabajando)
+            // 2. ESCUDO DE ACTIVIDAD (Solo protegemos lo que está moviendo el cronómetro)
             db.forEach(loteLocal => {
                 const idStr = loteLocal.id.toString().trim();
-                const estaTrabajando = (loteLocal.st === 'rev' || loteLocal.st === 'corr');
-                const esReciente = (ahora - (loteLocal.lastUpdate || 0)) < 30000; // 30 seg de gracia
-
-                if (estaTrabajando || esReciente) {
+                // Si el lote local está en Revisión o Corrección, NO dejamos que la nube lo mueva
+                // Esto evita que el cronómetro se resetee a 00:00 mientras trabajas
+                if (loteLocal.st === 'rev' || loteLocal.st === 'corr') {
                     mapaFinal.set(idStr, loteLocal);
                 }
             });
 
+            // 3. ACTUALIZAR BASE DE DATOS GLOBAL
             db = Array.from(mapaFinal.values());
+            
+            // 4. ORDENAR (Importante para que no salten de posición)
             db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
             
-            localStorage.setItem('qc_final_v88', JSON.stringify(db));
+            // 5. DIBUJAR EN PANTALLA (Sin LocalStorage)
             render(); 
+            console.log("📡 Sincronización exitosa con la Nube");
         }
     } catch (e) {
-        console.error("Error en sincronización:", e);
+        console.error("❌ Error en sincronización:", e);
     }
 }
 async function addBR() {
