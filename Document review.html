@@ -416,37 +416,36 @@ async function save(loteEspecifico = null) {
     const loader = document.getElementById('loader-save');
     if (loader) loader.style.display = 'flex';
 
+    // Si enviamos un solo lote o toda la DB
+    const datosEnvio = loteEspecifico ? [loteEspecifico] : db;
+
     try { 
-        const datosEnvio = loteEspecifico ? [loteEspecifico] : db;
+        console.log("📡 Intentando enviar a la nube...", datosEnvio);
+
         const response = await fetch(SCRIPT_URL, { 
             method: 'POST', 
-            body: JSON.stringify(datosEnvio),
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+            mode: 'cors', // Cambiamos a cors para poder ver errores
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(datosEnvio)
         });
-        await response.json();
+
+        if (response.ok) {
+            const resJson = await response.json();
+            console.log("✅ Respuesta del servidor:", resJson);
+        } else {
+            console.error("❌ El servidor respondió con error:", response.status);
+        }
+
     } catch (e) { 
-        console.error("Error guardando:", e); 
+        console.error("❌ Error de red o bloqueo de Google:", e); 
+        alert("No se pudo conectar con Google Sheets. Verifica tu conexión o los permisos del Script.");
     }
 
-    // Esperamos 4 segundos (tiempo de seguridad para Google Sheets)
     setTimeout(() => {
         if (loader) loader.style.display = 'none';
         pausaSincro = false;
-        console.log("🔒 Sistema desbloqueado. Sincronización normal restaurada.");
-    }, 4000); 
+    }, 3000); 
 }
-    function renderAdmin() {
-        const b = document.getElementById('adm-body'); 
-        const s = document.getElementById('adm-search').value.toLowerCase(); 
-        b.innerHTML = "";
-        [...db].reverse().forEach((l) => {
-            if(l.id.toString().toLowerCase().includes(s)) {
-                const originalIdx = db.indexOf(l);
-                b.innerHTML += `<tr><td>${l.date} <span class="pencil" onclick="edit(${originalIdx},'date')">✏️</span></td><td>${l.id} <span class="pencil" onclick="edit(${originalIdx},'id')">✏️</span></td><td>${l.line} <span class="pencil" onclick="editLine(${originalIdx})">✏️</span></td><td>${l.user} <span class="pencil" onclick="edit(${originalIdx},'user')">✏️</span></td><td>${l.pg} <span class="pencil" onclick="edit(${originalIdx},'pg')">✏️</span></td><td><button onclick="del(${originalIdx})" style="background:none; border:none; cursor:pointer;">🗑️</button></td></tr>`;
-            }
-        });
-    }
-
     function renderPerf() {
         const b = document.getElementById('perf-body'); 
         const s = document.getElementById('perf-search').value.toLowerCase(); 
