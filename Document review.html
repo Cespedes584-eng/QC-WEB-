@@ -532,10 +532,13 @@ async function save(loteEspecifico = null) {
         if(t==='perf') renderPerf(); else renderAdmin();
     }
 async function refreshData() {
+    // Si el usuario está operando o la pestaña está oculta, no refrescamos
     if (pausaSincro || document.hidden) return;
     
     try {
-        // 1. Forzamos modo CORS y quitamos el cache con t=Date.now()
+        console.log("🔄 Iniciando sincronización con la nube...");
+        
+        // 1. Forzamos modo CORS y evitamos caché con el timestamp
         const response = await fetch(`${SCRIPT_URL}?t=${Date.now()}`, {
             method: 'GET',
             mode: 'cors' 
@@ -543,28 +546,34 @@ async function refreshData() {
         
         const data = await response.json();
         
-        // --- SEGURO DE VIDA 1: Validar que recibimos un array ---
+        // --- SEGURO DE VIDA 1: Validar datos recibidos ---
         if (!data || !Array.isArray(data)) {
-            console.warn("⚠️ Datos de nube inválidos. Manteniendo local.");
+            console.warn("⚠️ La nube no respondió con una lista. Manteniendo datos locales.");
             return;
         }
 
         const mapaFinal = new Map();
 
-        // 2. Procesamos lo que SI vino de la nube
+        // 2. Procesamos lo que viene de la NUBE
         data.forEach(item => {
             if(!item.id) return;
             const idStr = item.id.toString().trim();
             
-            // Normalización de fecha para que el render no lo oculte
+            // --- NORMALIZACIÓN DE FECHA CRÍTICA ---
             let fDoc = "";
             if (item.date) {
-                // Si viene DD/MM/YYYY lo convertimos a YYYY-MM-DD
-                if (item.date.toString().includes('/')) {
-                    const p = item.date.toString().split('/');
-                    if (p.length === 3) fDoc = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
-                } else {
-                    fDoc = item.date.toString().split('T')[0].substring(0,10);
+                let dStr = item.date.toString();
+                // Si viene como "11/03/2026" (visto en tu imagen)
+                if (dStr.includes('/')) {
+                    const p = dStr.split('/');
+                    if (p.length === 3) {
+                        // Lo convertimos a YYYY-MM-DD para que la App lo entienda
+                        fDoc = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+                    }
+                } 
+                // Si viene como formato ISO o similar
+                else {
+                    fDoc = dStr.split('T')[0].substring(0,10);
                 }
             }
 
@@ -576,35 +585,37 @@ async function refreshData() {
             });
         });
 
-        // --- SEGURO DE VIDA 2: REGLA ANTIBORRADO ---
-        // Comparamos lo que tenemos en pantalla (db) contra lo que mandó la nube (mapaFinal)
+        // --- SEGURO DE VIDA 2: PERSISTENCIA LOCAL ---
         db.forEach(loteLocal => {
             const idStr = loteLocal.id.toString().trim();
             
-            // Si el lote local NO está en la nube, pero en local está como 'wait', 'rev' o 'corr'
-            // ¡NO PERMITIMOS QUE SE BORRE! Lo volvemos a meter al mapa.
-            if (!mapaFinal.has(idStr) && loteLocal.st !== 'done') {
-                console.log("🛡️ Protegiendo lote pendiente que la nube no devolvió: " + idStr);
-                mapaFinal.set(idStr, loteLocal);
+            // Si el lote está en pantalla pero la nube no lo mandó:
+            if (!mapaFinal.has(idStr)) {
+                // Si no está terminado, lo protegemos para que no desaparezca
+                if (loteLocal.st !== 'done') {
+                    console.log("🛡️ Protegiendo lote local pendiente: " + idStr);
+                    mapaFinal.set(idStr, loteLocal);
+                }
             }
             
-            // Además mantenemos el "Escudo" de 45 segundos para cambios recientes
+            // Mantenemos el "Escudo de actualización reciente" (45 seg)
             const tiempoDesdeAccion = Date.now() - (loteLocal.lastUpdate || 0);
             if (tiempoDesdeAccion < 45000) {
                 mapaFinal.set(idStr, loteLocal);
             }
         });
 
-        // 3. Guardar y Renderizar
+        // 3. Actualizar memoria y almacenamiento
         db = Array.from(mapaFinal.values());
         localStorage.setItem('qc_final_v88', JSON.stringify(db));
         
+        // Ordenar y dibujar
         db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
         render();
-        console.log("✅ Sincronización inteligente terminada.");
+        console.log("✅ Sincronización exitosa. Lotes activos:", db.length);
 
     } catch (e) {
-        console.error("❌ Error contactando la nube:", e);
+        console.error("❌ Fallo de conexión con la nube:", e);
     }
 }
 async function addBR() {
