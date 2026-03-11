@@ -503,91 +503,72 @@ async function save(loteEspecifico = null) {
         if(t==='perf') renderPerf(); else renderAdmin();
     }
 async function refreshData() {
-    // 1. Si estamos guardando algo manualmente, no pedimos datos para no chocar
+    // Si el usuario está moviendo algo o la pestaña está oculta, no refrescamos
     if (pausaSincro || document.hidden) return;
     
     try {
-        console.log("🔄 Sincronizando con la nube (CORS)...");
-        
-        // Usamos un timestamp para evitar que el navegador guarde una copia vieja (cache)
-        const response = await fetch(`${SCRIPT_URL}?_=${Date.now()}`, {
-            method: 'GET',
-            mode: 'cors',
-            headers: { 'Content-Type': 'application/json' }
-        });
-
+        // Pedimos datos a Google Sheets (con un truco para que no nos de datos viejos)
+        const response = await fetch(`${SCRIPT_URL}?t=${Date.now()}`);
         const data = await response.json();
         
-        // VALIDACIÓN CRÍTICA: Si la nube responde vacío o error, NO borramos la pantalla
+        // --- SEGURO DE VIDA ---
+        // Si la respuesta no es una lista válida, SALIMOS sin borrar la pantalla
         if (!data || !Array.isArray(data)) {
-            console.error("⚠️ La nube respondió con un formato inválido:", data);
-            return; 
+            console.warn("⚠️ La nube no respondió correctamente. Manteniendo lo que hay en pantalla.");
+            return;
         }
 
-        // Si la nube responde con 0 registros pero el fetch fue exitoso, 
-        // significa que la hoja "Pizarra" está realmente vacía.
-        if (data.length === 0) {
-            console.warn("📁 La hoja de Google Sheets está vacía.");
+        // Si la nube está realmente vacía (0 lotes), limpiamos la pantalla
+        if (data.length === 0 && db.length > 0) {
             db = [];
+            localStorage.removeItem('qc_final_v88');
             render();
             return;
         }
 
         const mapaFinal = new Map();
 
-        // --- PROCESAR DATOS DE LA NUBE ---
+        // Procesamos lo que viene de la nube
         data.forEach(item => {
-            if(!item.id) return; // Ignorar filas vacías de Excel
-            
+            if(!item.id) return;
             const idStr = item.id.toString().trim();
             
-            // Limpieza de fecha para que el filtro de la App (YYYY-MM-DD) funcione
-            let fechaLimpia = "";
-            if (item.date) {
-                // Si viene formato ISO o fecha de Google, extraemos solo YYYY-MM-DD
-                fechaLimpia = item.date.toString().split('T')[0].substring(0, 10);
-            }
+            // Limpiamos la fecha para que el filtro de la App la reconozca
+            let fDoc = "";
+            if (item.date) fDoc = item.date.toString().split('T')[0].substring(0,10);
 
             mapaFinal.set(idStr, {
                 ...item,
                 id: idStr,
-                date: fechaLimpia,
-                st: (item.st || "wait").toLowerCase(),
-                // Aseguramos que los contadores sean números
-                tW: Number(item.tW) || 0,
-                tR: Number(item.tR) || 0,
-                tC: Number(item.tC) || 0,
-                pg: Number(item.pg) || 0
+                date: fDoc,
+                st: (item.st || "wait").toLowerCase()
             });
         });
 
-        // --- ESCUDO DE PROTECCIÓN (Solo para lotes activos) ---
-        // Esto evita que si acabas de darle "Iniciar", la nube (que es lenta)
-        // te lo regrese a "Espera" antes de que Google termine de escribir.
+        // --- EL ESCUDO ---
+        // Si el inspector hizo un cambio hace menos de 45 segundos, 
+        // ese cambio manda sobre lo que diga la nube.
         db.forEach(loteLocal => {
             const idStr = loteLocal.id.toString().trim();
             const tiempoDesdeAccion = Date.now() - (loteLocal.lastUpdate || 0);
-
-            // Si hice un cambio hace menos de 40 segundos, ignoro lo que diga la nube para ese ID
-            if (tiempoDesdeAccion < 40000 && mapaFinal.has(idStr)) {
+            
+            if (tiempoDesdeAccion < 45000) {
                 mapaFinal.set(idStr, loteLocal);
             }
         });
 
-        // --- ACTUALIZACIÓN FINAL ---
+        // Guardamos todo en la memoria real y en el "bolsillo" del navegador
         db = Array.from(mapaFinal.values());
-        
-        // Guardamos en el bolsillo del navegador por si se va el internet
         localStorage.setItem('qc_final_v88', JSON.stringify(db));
         
-        // Ordenar: Lotes más nuevos arriba o por ID numérico
+        // Ordenar por número de lote y dibujar
         db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
-        
         render();
-        console.log("✅ Pizarra actualizada desde la nube.");
+        console.log("✅ Sincronización con la nube exitosa.");
 
     } catch (e) {
-        console.error("❌ Error total en la comunicación con Google Sheets:", e);
+        console.error("❌ Error de conexión: No se pudo contactar a la nube.", e);
+        // Si hay error de internet, NO borramos la variable 'db', así los lotes siguen ahí.
     }
 }
 async function addBR() {
@@ -604,14 +585,14 @@ async function addBR() {
         return;
     }
     
-   // Extraemos solo los números por si el escáner o el usuario meten texto extra
+    // Extraemos solo los números
     const idInput = input.value.replace(/[^0-9]/g, '');
     const line = lineSel ? lineSel.value : "S/L";
     
-    // 3. Manejo de Fecha (Crucial para el filtro de la App)
+    // 3. Manejo de Fecha
     let dateStr = new Date().toISOString().split('T')[0];
     if (dateSel && dateSel.value) {
-        dateStr = dateSel.value; // Usamos la fecha que tiene seleccionada el usuario
+        dateStr = dateSel.value; 
     }
 
     // 4. Lógica de Turnos automática
@@ -627,7 +608,7 @@ async function addBR() {
         st: 'wait',
         date: dateStr, 
         inicioWS: Date.now(),
-        lastUpdate: Date.now(), // <--- ESTO ES EL ESCUDO: Protege el lote por 30 segundos
+        lastUpdate: Date.now(), // PROTECCIÓN: Evita que la nube lo borre al inicio
         tW: 0, tR: 0, tC: 0,
         tR_acumulado: 0, tC_acumulado: 0, 
         pg: 0, 
@@ -638,7 +619,7 @@ async function addBR() {
     // 6. Agregar a la base de datos local (db)
     if (typeof db === 'undefined') db = [];
     
-    // Evitar duplicados locales antes de guardar
+    // Evitar duplicados
     const existe = db.find(l => l.id.toString() === idInput);
     if (existe) {
         alert("El lote " + idInput + " ya está en la lista.");
@@ -647,6 +628,10 @@ async function addBR() {
 
     db.push(nuevoLote);
     
+    // --- PASO CLAVE: Guardar en el disco duro del navegador (LocalStorage) ---
+    // Esto asegura que si das F5, el lote siga ahí.
+    localStorage.setItem('qc_final_v88', JSON.stringify(db));
+
     // 7. Limpiar el formulario y cerrar el modal
     input.value = "";
     if (typeof hideModal === 'function') hideModal('modal-new');
@@ -656,9 +641,14 @@ async function addBR() {
     
     // 9. Enviar a Google Sheets
     console.log("🚀 Lote " + idInput + " creado. Sincronizando con la nube...");
-    await save(nuevoLote); 
+    
+    try {
+        await save(nuevoLote); 
+        console.log("✅ Lote guardado en la nube correctamente.");
+    } catch (e) {
+        console.error("❌ Error de red, pero el lote se mantiene en la pantalla local.");
+    }
 }
-
 function openFin(i) {
     tempIdx = i; 
     const inputPg = document.getElementById('finish-pg');
@@ -815,17 +805,21 @@ async function finalizarDocumento(aprobado) {
     }
 }
 
-// --- REFUERZO DE CARGA AL REFRESCAR ---
-// Esto asegura que al presionar F5, los lotes de "ESPERA" se dibujen de inmediato
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
+    // 1. Primero dibujamos lo que el navegador guardó la última vez
     const backup = localStorage.getItem('qc_final_v88');
     if (backup) {
         db = JSON.parse(backup);
-        console.log("📦 Datos recuperados del historial local:", db.length);
-        render(); // Dibuja lo que había antes de pedirle datos nuevos a la nube
+        console.log("📦 Recuperando datos locales...");
+        render(); 
     }
-});
 
+    // 2. Inmediatamente preguntamos a la nube si hay algo nuevo
+    await refreshData();
+    
+    // 3. Dejamos el reloj activado para que se actualice solo cada 15 segundos
+    setInterval(refreshData, 15000);
+});
 </script>
 </body>
 </html>
