@@ -319,65 +319,60 @@ function render() {
         run: document.getElementById('list-run'), 
         done: document.getElementById('list-done') 
     };
-    const count = { wait: 0, run: 0, done: 0 };
+    if (!cont.wait || !cont.run || !cont.done) return;
+
+    // Limpiamos las columnas antes de dibujar
+    cont.wait.innerHTML = ""; cont.run.innerHTML = ""; cont.done.innerHTML = "";
     
-    if (cont.wait) cont.wait.innerHTML = "";
-    if (cont.run) cont.run.innerHTML = "";
-    if (cont.done) cont.done.innerHTML = "";
+    const selDate = document.getElementById('main-date-filter').value;
+    const searchText = document.getElementById('main-search').value.toLowerCase();
     
-    const selDate = document.getElementById('main-date-filter') ? document.getElementById('main-date-filter').value : "";
-    const selShift = typeof currentShift !== 'undefined' ? currentShift : "TODOS"; 
-    const searchText = document.getElementById('main-search') ? document.getElementById('main-search').value.toLowerCase() : ""; 
-    
-    let topB = 0, topP = 0; 
+    let topB = 0, topP = 0;
 
     db.forEach((l, i) => {
-        // --- FILTRO DE FECHA (MÁS FLEXIBLE) ---
-        let fechaLote = l.date ? String(l.date).substring(0, 10) : "";
-        let fechaFiltro = selDate ? String(selDate).substring(0, 10) : "";
+        const estado = (l.st || "wait").toLowerCase();
         
-        // Si el lote es de una fecha distinta a la seleccionada, lo saltamos
-        // PERO: Si el lote está en 'wait' o 'rev', lo mostramos siempre (para que no se pierda el trabajo actual)
-        if (l.st === 'done' && fechaFiltro !== "" && fechaLote !== "" && fechaLote !== fechaFiltro) {
-            return; 
-        }
-
-        // --- FILTRO DE TURNO Y BÚSQUEDA ---
-        if (selShift !== "TODOS" && l.turno && l.turno !== selShift) return;
+        // --- FILTRO DE BÚSQUEDA ---
         if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
 
-        if (l.st === 'done') { topB++; topP += parseInt(l.pg || 0); }
+        // --- REGLA ANTIBORRADO (FECHA) ---
+        // Si el lote NO está finalizado ('wait', 'rev', 'corr'), lo mostramos SIEMPRE.
+        // No importa si la fecha de la nube viene rara, si está pendiente debe verse.
+        if (estado === 'done') {
+            const fechaLote = l.date ? String(l.date).substring(0, 10) : "";
+            if (selDate && fechaLote !== selDate) return;
+            topB++; 
+            topP += parseInt(l.pg || 0);
+        }
 
-        // --- GENERACIÓN DE CARD (Igual que antes) ---
-        const isFinalizado = (l.st === 'done');
+        // --- CREACIÓN DEL CUADRO (CARD) ---
+        const isFinalizado = (estado === 'done');
         const card = `
-        <div class="card" style="position: relative; border-left: 5px solid ${isFinalizado ? '#468e5d' : (l.st === 'wait' ? '#2c3e50' : '#f39c12')};">
-            ${isFinalizado ? `<div style="position: absolute; top: 10px; right: 15px; background: #f0f4f1; color: #468e5d; padding: 4px 8px; border-radius: 6px; font-size: 0.85em; font-weight: bold; border: 1px solid #d1e2d4;">🕒 ${l.hFin || '--:--'}</div>` : ''}
+        <div class="card" style="border-left: 5px solid ${isFinalizado ? '#468e5d' : (estado === 'wait' ? '#2c3e50' : '#f39c12')};">
             <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
-            <div style="font-size:0.75em; color:#666; margin-bottom:8px;">${l.line} | <b style="color:#2980b9;">${l.user}</b></div>
+            <div style="font-size:0.75em; color:#666;">${l.line} | <b>${l.user}</b></div>
             ${isFinalizado ? `<span class="status-final">FINALIZADO</span>` : `<span class="timer-big" id="live-${i}">00:00</span>`}
             <div class="timer-grid-3" id="grid-${i}">
                 <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
                 <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
                 <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
             </div>
-            ${l.st === 'wait' ? `<button class="btn" style="background:#27ae60; color:white" onclick="changeSt(${i},'rev')">INICIAR</button>` : 
-              (l.st === 'rev' || l.st === 'corr') ? `
+            ${estado === 'wait' ? `<button class="btn" style="background:#27ae60; color:white" onclick="changeSt(${i},'rev')">INICIAR</button>` : 
+              (estado === 'rev' || estado === 'corr') ? `
                 <button class="btn" style="background:#f39c12; color:white; margin-bottom:5px;" onclick="changeSt(${i},'corr')">CORRECCIÓN</button>
                 <button class="btn" style="background:#2c3e50; color:white" onclick="openFin(${i})">FINALIZAR</button>` : 
-              `<div style="text-align:center; font-weight:bold; color:#27ae60; padding-top:5px;">PÁGINAS: ${l.pg}</div>`}
+              `<div style="text-align:center; font-weight:bold; color:#27ae60;">PÁGINAS: ${l.pg}</div>`}
         </div>`;
-        
-        if (l.st === 'wait') { cont.wait.insertAdjacentHTML('afterbegin', card); count.wait++; } 
-        else if (l.st === 'done') { cont.done.insertAdjacentHTML('afterbegin', card); count.done++; } 
-        else { cont.run.insertAdjacentHTML('afterbegin', card); count.run++; }
+
+        // Enviamos el cuadro a su columna correspondiente
+        if (estado === 'wait') cont.wait.insertAdjacentHTML('afterbegin', card);
+        else if (isFinalizado) cont.done.insertAdjacentHTML('afterbegin', card);
+        else cont.run.insertAdjacentHTML('afterbegin', card);
     });
 
-    document.getElementById('top-brs').innerText = topB; 
+    // Actualizamos los contadores de arriba
+    document.getElementById('top-brs').innerText = topB;
     document.getElementById('top-pags').innerText = topP;
-    document.getElementById('c-wait').innerText = count.wait; 
-    document.getElementById('c-run').innerText = count.run; 
-    document.getElementById('c-done').innerText = count.done;
 }
  async function changeSt(idx, s) { 
     const ahora = Date.now();
@@ -410,7 +405,7 @@ function render() {
 }
 
 async function save(loteEspecifico = null) { 
-    if (pausaSincro) return; 
+    if (pausaSincro && loteEspecifico === null) return;
     pausaSincro = true; 
     
     const loader = document.getElementById('loader-save');
@@ -502,6 +497,7 @@ async function save(loteEspecifico = null) {
         if(t==='perf') renderPerf(); else renderAdmin();
     }
 async function refreshData() {
+    // Si estamos guardando manualmente o la pestaña está oculta, no pedimos datos
     if (pausaSincro || document.hidden) return;
     
     try {
@@ -511,35 +507,42 @@ async function refreshData() {
         if (data && Array.isArray(data)) {
             const mapaFinal = new Map();
 
+            // 1. CARGAMOS TODO LO DE LA NUBE
             data.forEach(item => {
                 if(!item.id) return;
+                const idStr = item.id.toString().trim();
                 
-                // --- LIMPIEZA CRÍTICA ---
-                // Extraemos solo los números del ID por si viene mezclado con texto
-                let idLimpio = item.id.toString().split(' ')[0].trim(); 
-                
+                // Limpieza de fecha básica
                 let fechaLimpia = item.date ? item.date.toString().substring(0, 10) : "";
 
-                mapaFinal.set(idLimpio, {
+                mapaFinal.set(idStr, {
                     ...item,
-                    id: idLimpio, // Guardamos solo el número
+                    id: idStr,
                     date: fechaLimpia,
                     st: (item.st || "wait").toLowerCase()
                 });
             });
 
-            // Escudo para lo que estás trabajando
+           // 2. EL ESCUDO REFORZADO: No deja que la nube borre lo que estás trabajando
             db.forEach(loteLocal => {
-                if (loteLocal.st === 'rev' || loteLocal.st === 'corr') {
-                    mapaFinal.set(loteLocal.id.toString().trim(), loteLocal);
+                const idStr = loteLocal.id.toString().trim();
+                const tiempoDesdeCambio = Date.now() - (loteLocal.lastUpdate || 0);
+                
+                // Si el lote está en revisión, corrección o lo acabas de crear (hace menos de 30 seg)
+                if (loteLocal.st === 'rev' || loteLocal.st === 'corr' || tiempoDesdeCambio < 30000) {
+                    mapaFinal.set(idStr, loteLocal);
                 }
             });
 
+            // 3. ACTUALIZAMOS LA BASE DE DATOS
             db = Array.from(mapaFinal.values());
+            
+            // Ordenar por número de lote
             db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
             
+            // Dibujar cambios
             render(); 
-            console.log("📡 Sincronización limpia realizada.");
+            console.log("📡 Sincronización exitosa: La pantalla está protegida.");
         }
     } catch (e) {
         console.error("❌ Error en refreshData:", e);
@@ -559,8 +562,8 @@ async function addBR() {
         return;
     }
     
-    // Limpieza de ID para evitar errores de búsqueda
-    const idInput = input.value.trim().toString();
+   // Extraemos solo los números por si el escáner o el usuario meten texto extra
+    const idInput = input.value.replace(/[^0-9]/g, '');
     const line = lineSel ? lineSel.value : "S/L";
     
     // 3. Manejo de Fecha (Crucial para el filtro de la App)
@@ -625,67 +628,51 @@ async function confirmFinish() {
     const pInput = document.getElementById('finish-pg');
     const p = pInput ? pInput.value : "";
     
+    // Validar que se ingresen páginas
     if (!p || p <= 0) return alert("Ingrese total de documentos");
 
-    // 1. Localizar el lote correctamente
+    // 1. Localizar el lote
     const lote = db[tempIdx]; 
-    if (!lote) return alert("Error: Lote no encontrado en memoria.");
+    if (!lote) return alert("Error: Lote no encontrado.");
 
     const ahoraMs = Date.now();
     const ahoraFecha = new Date();
     
-    // 2. ACTIVAR ESCUDO Y CAMBIAR ESTADO
-    lote.lastUpdate = ahoraMs; // Protege este cambio de la sincronización automática
+    // 2. ACTIVAR ESCUDO: Detenemos la sincronización un momento
+    pausaSincro = true; 
+    lote.lastUpdate = ahoraMs;
     lote.pg = parseInt(p);
     
-    // 3. CÁLCULO FINAL DE TIEMPOS (Antes de cambiar el estado)
-    // Sumamos el tramo final de Revisión si venía de ahí
+    // 3. CÁLCULO FINAL DE TIEMPOS
     if (lote.st === 'rev' && lote.inicioRS) {
         lote.tR_acumulado = (ahoraMs - lote.inicioRS) + (Number(lote.tR_acumulado) || 0);
     }
-    // Sumamos el tramo final de Corrección si venía de ahí
     if (lote.st === 'corr' && lote.inicioCS) {
         lote.tC_acumulado = (ahoraMs - lote.inicioCS) + (Number(lote.tC_acumulado) || 0);
     }
 
-    // Pasamos a estado finalizado
+    // Cambiar estado a FINALIZADO
     lote.st = 'done';
     
-    // 4. DATOS DE CIERRE (Hora y Turno)
+    // Poner hora de fin
     const horas = String(ahoraFecha.getHours()).padStart(2, '0');
     const minutos = String(ahoraFecha.getMinutes()).padStart(2, '0');
     lote.hFin = `${horas}:${minutos}`;
-
-    const totalMinutos = (ahoraFecha.getHours() * 60) + ahoraFecha.getMinutes();
-    lote.turno = (totalMinutos >= 360 && totalMinutos <= 930) ? "TA" : "TB";
-    
-    // Limpiamos referencias de inicio para el envío limpio
-    lote.inicioRS = null;
-    lote.inicioCS = null;
-    lote.inicioWS = null;
-
-    // 5. ACTUALIZACIÓN VISUAL INMEDIATA
+// 4. ACTUALIZACIÓN VISUAL INMEDIATA
     hideModal('modal-finish');
     render(); 
     
-    // 6. ENVÍO A LA NUBE
-    console.log(`🚀 Finalizando Lote ${lote.id}...`);
+    // 5. ENVÍO A LA NUBE
+    console.log(`🚀 Guardando Lote ${lote.id} en el historial...`);
     
-    // Usamos el cargador visual para que el usuario no toque nada mientras se mueve al historial
-    const loader = document.getElementById('loader-save');
-    if (loader) loader.style.display = 'flex';
-
-    try {
-        await save(lote); 
-        console.log(`✅ Lote ${lote.id} guardado en Historial.`);
-    } catch (error) {
-        console.error("Error al finalizar:", error);
-        alert("Hubo un problema al guardar en la nube, pero el lote se actualizó localmente.");
-    } finally {
-        if (loader) loader.style.display = 'none';
-    }
+    await save(lote); // Sincroniza el estado 'done' con Google
+    
+    // 6. LIBERAR ESCUDO: Volvemos a permitir sincronización automática
+    setTimeout(() => {
+        pausaSincro = false;
+        console.log("✅ Ciclo completado.");
+    }, 2000);
 }
-// --- PASO 4: APERTURA SEGURA (BLOQUEO DE NUBE) ---
 function iniciarRevisionDoc(idUnico) {
     // 1. ACTIVAR ESCUDO: Detenemos la sincronización inmediatamente
     pausaSincro = true; 
