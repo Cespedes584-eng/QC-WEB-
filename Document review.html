@@ -192,7 +192,7 @@
 
 <script>
         // Variables de configuración y estado
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxPoreelTvvFgHU5LmoO-h7JG2MOu1nL3t-C5BkaeehJ8J4bRwZvoKq_4AR0HJGlDGEyg/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw1xISHfDTINgL3lRAm1gFRt_J2lUGCNwICr839nUvaC775fHc7AsygjDdeSjrliROVcw/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
     
     let db = []; 
@@ -425,41 +425,56 @@ function render() {
 }
 
 async function save(loteEspecifico = null) { 
+    // Si la sincronización está pausada y no es un envío forzado de un lote, salimos
     if (pausaSincro && loteEspecifico === null) return;
+    
     pausaSincro = true; 
     
     const loader = document.getElementById('loader-save');
     if (loader) loader.style.display = 'flex';
 
-    // Si enviamos un solo lote o toda la DB
+    // Si enviamos un solo lote, actualizamos su 'lastUpdate' antes de enviarlo
+    if (loteEspecifico) {
+        loteEspecifico.lastUpdate = Date.now(); 
+    }
+
     const datosEnvio = loteEspecifico ? [loteEspecifico] : db;
 
     try { 
-        console.log("📡 Intentando enviar a la nube...", datosEnvio);
+        console.log("📡 Enviando con modo CORS...", datosEnvio);
 
         const response = await fetch(SCRIPT_URL, { 
             method: 'POST', 
-            mode: 'cors', // Cambiamos a cors para poder ver errores
+            mode: 'cors', 
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify(datosEnvio)
         });
 
-        if (response.ok) {
-            const resJson = await response.json();
-            console.log("✅ Respuesta del servidor:", resJson);
+        // Con CORS, podemos leer la respuesta real
+        const resJson = await response.json();
+
+        if (resJson.status === "success") {
+            console.log("✅ Google Sheets confirmó el guardado con éxito.");
+            
+            // Si fue un lote específico, refrescamos la pantalla para asegurar que el 'lastUpdate' se guardó
+            if (loteEspecifico) {
+                localStorage.setItem('qc_final_v88', JSON.stringify(db));
+            }
         } else {
-            console.error("❌ El servidor respondió con error:", response.status);
+            console.error("❌ Error en la lógica del Script:", resJson.message);
         }
 
     } catch (e) { 
-        console.error("❌ Error de red o bloqueo de Google:", e); 
-        alert("No se pudo conectar con Google Sheets. Verifica tu conexión o los permisos del Script.");
+        console.error("❌ Error de comunicación (CORS):", e); 
+        // No lanzamos alert aquí para no interrumpir al inspector, solo lo dejamos en consola
     }
 
+    // Esperamos 4 segundos antes de quitar la pausa para dejar que Sheets se refresque internamente
     setTimeout(() => {
         if (loader) loader.style.display = 'none';
         pausaSincro = false;
-    }, 3000); 
+        console.log("🔄 Sincronización automática reanudada.");
+    }, 4000); 
 }
     function renderPerf() {
         const b = document.getElementById('perf-body'); 
@@ -517,39 +532,41 @@ async function save(loteEspecifico = null) {
         if(t==='perf') renderPerf(); else renderAdmin();
     }
 async function refreshData() {
-    // Si el usuario está moviendo algo o la pestaña está oculta, no refrescamos
     if (pausaSincro || document.hidden) return;
     
     try {
-        // Pedimos datos a Google Sheets (con un truco para que no nos de datos viejos)
-        const response = await fetch(`${SCRIPT_URL}?t=${Date.now()}`);
+        // 1. Forzamos modo CORS y quitamos el cache con t=Date.now()
+        const response = await fetch(`${SCRIPT_URL}?t=${Date.now()}`, {
+            method: 'GET',
+            mode: 'cors' 
+        });
+        
         const data = await response.json();
         
-        // --- SEGURO DE VIDA ---
-        // Si la respuesta no es una lista válida, SALIMOS sin borrar la pantalla
+        // --- SEGURO DE VIDA 1: Validar que recibimos un array ---
         if (!data || !Array.isArray(data)) {
-            console.warn("⚠️ La nube no respondió correctamente. Manteniendo lo que hay en pantalla.");
-            return;
-        }
-
-        // Si la nube está realmente vacía (0 lotes), limpiamos la pantalla
-        if (data.length === 0 && db.length > 0) {
-            db = [];
-            localStorage.removeItem('qc_final_v88');
-            render();
+            console.warn("⚠️ Datos de nube inválidos. Manteniendo local.");
             return;
         }
 
         const mapaFinal = new Map();
 
-        // Procesamos lo que viene de la nube
+        // 2. Procesamos lo que SI vino de la nube
         data.forEach(item => {
             if(!item.id) return;
             const idStr = item.id.toString().trim();
             
-            // Limpiamos la fecha para que el filtro de la App la reconozca
+            // Normalización de fecha para que el render no lo oculte
             let fDoc = "";
-            if (item.date) fDoc = item.date.toString().split('T')[0].substring(0,10);
+            if (item.date) {
+                // Si viene DD/MM/YYYY lo convertimos a YYYY-MM-DD
+                if (item.date.toString().includes('/')) {
+                    const p = item.date.toString().split('/');
+                    if (p.length === 3) fDoc = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+                } else {
+                    fDoc = item.date.toString().split('T')[0].substring(0,10);
+                }
+            }
 
             mapaFinal.set(idStr, {
                 ...item,
@@ -559,30 +576,35 @@ async function refreshData() {
             });
         });
 
-        // --- EL ESCUDO ---
-        // Si el inspector hizo un cambio hace menos de 45 segundos, 
-        // ese cambio manda sobre lo que diga la nube.
+        // --- SEGURO DE VIDA 2: REGLA ANTIBORRADO ---
+        // Comparamos lo que tenemos en pantalla (db) contra lo que mandó la nube (mapaFinal)
         db.forEach(loteLocal => {
             const idStr = loteLocal.id.toString().trim();
-            const tiempoDesdeAccion = Date.now() - (loteLocal.lastUpdate || 0);
             
+            // Si el lote local NO está en la nube, pero en local está como 'wait', 'rev' o 'corr'
+            // ¡NO PERMITIMOS QUE SE BORRE! Lo volvemos a meter al mapa.
+            if (!mapaFinal.has(idStr) && loteLocal.st !== 'done') {
+                console.log("🛡️ Protegiendo lote pendiente que la nube no devolvió: " + idStr);
+                mapaFinal.set(idStr, loteLocal);
+            }
+            
+            // Además mantenemos el "Escudo" de 45 segundos para cambios recientes
+            const tiempoDesdeAccion = Date.now() - (loteLocal.lastUpdate || 0);
             if (tiempoDesdeAccion < 45000) {
                 mapaFinal.set(idStr, loteLocal);
             }
         });
 
-        // Guardamos todo en la memoria real y en el "bolsillo" del navegador
+        // 3. Guardar y Renderizar
         db = Array.from(mapaFinal.values());
         localStorage.setItem('qc_final_v88', JSON.stringify(db));
         
-        // Ordenar por número de lote y dibujar
         db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
         render();
-        console.log("✅ Sincronización con la nube exitosa.");
+        console.log("✅ Sincronización inteligente terminada.");
 
     } catch (e) {
-        console.error("❌ Error de conexión: No se pudo contactar a la nube.", e);
-        // Si hay error de internet, NO borramos la variable 'db', así los lotes siguen ahí.
+        console.error("❌ Error contactando la nube:", e);
     }
 }
 async function addBR() {
