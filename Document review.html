@@ -192,7 +192,7 @@
 
 <script>
         // Variables de configuración y estado
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyYAv3AKKywSnkx_eixs61hpiNbNSPl0KJARjKcbRjadqIz1a_U_lAwju2ZzcJHutv1PA/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzW6MxLxfilzZOgZEwlyOgzDTz07Of46L6TleqT7hNokxocfWNEbtBcDxmg5GefM7no/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
     
     let db = []; 
@@ -503,68 +503,91 @@ async function save(loteEspecifico = null) {
         if(t==='perf') renderPerf(); else renderAdmin();
     }
 async function refreshData() {
-    // 1. Bloqueo por seguridad o ahorro de recursos
+    // 1. Si estamos guardando algo manualmente, no pedimos datos para no chocar
     if (pausaSincro || document.hidden) return;
     
     try {
-        const response = await fetch(SCRIPT_URL);
+        console.log("🔄 Sincronizando con la nube (CORS)...");
+        
+        // Usamos un timestamp para evitar que el navegador guarde una copia vieja (cache)
+        const response = await fetch(`${SCRIPT_URL}?_=${Date.now()}`, {
+            method: 'GET',
+            mode: 'cors',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
         const data = await response.json();
         
-        if (data && Array.isArray(data)) {
-            const mapaFinal = new Map();
-
-            // --- CARGAR DATOS DE LA NUBE ---
-            data.forEach(item => {
-                if(!item.id) return;
-                const idStr = item.id.toString().trim();
-                let fechaLimpia = item.date ? item.date.toString().substring(0, 10) : "";
-
-                mapaFinal.set(idStr, {
-                    ...item,
-                    id: idStr,
-                    date: fechaLimpia,
-                    st: (item.st || "wait").toLowerCase()
-                });
-            });
-
-            // --- APLICAR ESCUDO DE PROTECCIÓN LOCAL ---
-            db.forEach(loteLocal => {
-                const idStr = loteLocal.id.toString().trim();
-                const ahora = Date.now();
-                const tiempoDesdeCambio = ahora - (loteLocal.lastUpdate || 0);
-                const loteNube = mapaFinal.get(idStr);
-
-                // REGLA 1: Si acabamos de finalizar (hace < 45 seg), mi 'done' manda.
-                // Esto evita que la nube lo regrese a 'revisión' mientras Google procesa.
-                if (loteLocal.st === 'done') {
-                    if (tiempoDesdeCambio < 45000) { 
-                        mapaFinal.set(idStr, loteLocal);
-                        return; // Saltamos a la siguiente iteración
-                    }
-                }
-
-                // REGLA 2: Si está en Revisión o Corrección activa, usamos los tiempos locales.
-                // Esto evita que el reloj de la pantalla "salte" o se mueva por culpa de la red.
-                if (loteLocal.st === 'rev' || loteLocal.st === 'corr') {
-                    // Solo sobreescribimos si han pasado menos de 2 minutos de inactividad
-                    // o si la nube aún no tiene el lote.
-                    if (tiempoDesdeCambio < 120000) { 
-                        mapaFinal.set(idStr, loteLocal);
-                    }
-                }
-            });
-
-            // --- ACTUALIZAR BASE DE DATOS Y RENDERIZAR ---
-            db = Array.from(mapaFinal.values());
-            
-            // Ordenar numéricamente (Lote 1, 2, 10 en lugar de 1, 10, 2)
-            db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
-            
-            render(); 
-            console.log("📡 Pizarra sincronizada y protegida.");
+        // VALIDACIÓN CRÍTICA: Si la nube responde vacío o error, NO borramos la pantalla
+        if (!data || !Array.isArray(data)) {
+            console.error("⚠️ La nube respondió con un formato inválido:", data);
+            return; 
         }
+
+        // Si la nube responde con 0 registros pero el fetch fue exitoso, 
+        // significa que la hoja "Pizarra" está realmente vacía.
+        if (data.length === 0) {
+            console.warn("📁 La hoja de Google Sheets está vacía.");
+            db = [];
+            render();
+            return;
+        }
+
+        const mapaFinal = new Map();
+
+        // --- PROCESAR DATOS DE LA NUBE ---
+        data.forEach(item => {
+            if(!item.id) return; // Ignorar filas vacías de Excel
+            
+            const idStr = item.id.toString().trim();
+            
+            // Limpieza de fecha para que el filtro de la App (YYYY-MM-DD) funcione
+            let fechaLimpia = "";
+            if (item.date) {
+                // Si viene formato ISO o fecha de Google, extraemos solo YYYY-MM-DD
+                fechaLimpia = item.date.toString().split('T')[0].substring(0, 10);
+            }
+
+            mapaFinal.set(idStr, {
+                ...item,
+                id: idStr,
+                date: fechaLimpia,
+                st: (item.st || "wait").toLowerCase(),
+                // Aseguramos que los contadores sean números
+                tW: Number(item.tW) || 0,
+                tR: Number(item.tR) || 0,
+                tC: Number(item.tC) || 0,
+                pg: Number(item.pg) || 0
+            });
+        });
+
+        // --- ESCUDO DE PROTECCIÓN (Solo para lotes activos) ---
+        // Esto evita que si acabas de darle "Iniciar", la nube (que es lenta)
+        // te lo regrese a "Espera" antes de que Google termine de escribir.
+        db.forEach(loteLocal => {
+            const idStr = loteLocal.id.toString().trim();
+            const tiempoDesdeAccion = Date.now() - (loteLocal.lastUpdate || 0);
+
+            // Si hice un cambio hace menos de 40 segundos, ignoro lo que diga la nube para ese ID
+            if (tiempoDesdeAccion < 40000 && mapaFinal.has(idStr)) {
+                mapaFinal.set(idStr, loteLocal);
+            }
+        });
+
+        // --- ACTUALIZACIÓN FINAL ---
+        db = Array.from(mapaFinal.values());
+        
+        // Guardamos en el bolsillo del navegador por si se va el internet
+        localStorage.setItem('qc_final_v88', JSON.stringify(db));
+        
+        // Ordenar: Lotes más nuevos arriba o por ID numérico
+        db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
+        
+        render();
+        console.log("✅ Pizarra actualizada desde la nube.");
+
     } catch (e) {
-        console.error("❌ Error en refreshData:", e);
+        console.error("❌ Error total en la comunicación con Google Sheets:", e);
     }
 }
 async function addBR() {
