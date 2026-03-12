@@ -453,7 +453,7 @@ async function save(loteEspecifico = null) {
 
        resJson = await response.json();
         // Con CORS, podemos leer la respuesta real
-        const resJson = await response.json();
+       let resJson = await response.json();
 
         if (resJson.status === "success") {
             console.log("✅ Google Sheets confirmó el guardado con éxito.");
@@ -538,20 +538,29 @@ async function refreshData() {
     
     try {
         console.log("🔄 Iniciando sincronización con la nube...");
-   const response = await fetch(SCRIPT_URL, { 
-            method: 'POST', 
-            mode: 'no-cors', // Cambio crítico para que Google acepte el envío sin bloquear
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(datosEnvio)
-        });
+// Usamos GET para leer, no POST. Y no enviamos 'body'.
+const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), { 
+    method: 'GET',
+    mode: 'cors', 
+    redirect: 'follow'
+});
         
-        if (response.status >= 400) throw new Error("Respuesta de red no OK");
-        
+       // 1. Validamos la respuesta sin que se rompa el código
+        if (!response.ok) {
+            console.warn("⚠️ No se pudo leer de la nube, manteniendo datos locales.");
+            return; // Salimos de la función sin borrar nada
+        }
+
         const data = await response.json();
-        if (!data || !Array.isArray(data)) return;
+        
+        // 2. Si la nube responde vacío o error, no vaciamos la pantalla
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            console.log("☁️ La nube está vacía o no respondió correctamente.");
+            return; 
+        }
 
         const mapaFinal = new Map();
-
+        console.log("✅ Datos sincronizados con éxito:", data.length, "lotes encontrados.");
         data.forEach(item => {
             if(!item.id) return;
             const idStr = item.id.toString().trim();
