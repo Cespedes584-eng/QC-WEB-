@@ -192,7 +192,7 @@
 
 <script>
         // Variables de configuración y estado
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwgIsmGMkCoKDbhnp98bXZqXBz5SuceMIQUfJWCrE0JxWA9BbHXPzVKIKWjI2ca_boxRA/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSDt_CUnHXF1tf9o49a_Dv9LpAPdw2zVwYMZtQa6RYYs1R2nYRnEODKqm7BMO3Z89E9A/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
     
     let db = []; 
@@ -814,65 +814,61 @@ function iniciarRevisionDoc(idUnico) {
 
 
 // También la llamamos una vez al cargar la página para que no empiece vacío
-refreshData();
-async function finalizarDocumento(aprobado) {
-    // 1. LEER DATOS
-    const comentarios = document.getElementById('m-comentarios') ? document.getElementById('m-comentarios').value : "";
-    const resultado = aprobado ? "APROBADO" : "RECHAZADO";
-
-    // 2. PREPARAR EL PAQUETE
-    const registro = {
-        action: 'finalizar_doc_seguro',
-        id: docEnRevision, 
-        resultado: resultado,
-        user: document.getElementById('user-display').innerText.replace('👤 ', ''),
-        hFin: new Date().toLocaleTimeString(),
-        hallazgos: comentarios 
-    };
-
-    // 3. BLOQUEO DE INTERFAZ
-    const btnAceptar = document.querySelector('button[onclick="finalizarDocumento(true)"]');
-    if(btnAceptar) {
-        btnAceptar.disabled = true;
-        btnAceptar.innerText = "⏳ Guardando...";
-    }
-
+async function refreshData() {
     try {
-        const response = await fetch(SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify(registro)
+        console.log("🔄 Iniciando sincronización con la nube...");
+        
+        const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), {
+            method: 'GET',
+            redirect: 'follow'
         });
 
-        const res = await response.json();
+        if (!response.ok) {
+            console.warn("⚠️ No se pudo conectar con la nube. Usando datos locales.");
+            return;
+        }
 
-        if (res.status === "success") {
-            console.log("✅ Guardado: " + res.message);
-            
-            // 4. ACTUALIZACIÓN DE LA BASE DE DATOS PRINCIPAL (db)
-            // Esto evita que al refrescar desaparezcan
-            db = db.filter(d => d.id.toString() !== docEnRevision.toString());
-            
-            // Guardar en memoria del navegador para el próximo refresh
-            localStorage.setItem('qc_final_v88', JSON.stringify(db));
-            
-            // Redibujar la pizarra principal
-            render();
-            
-            // Cerrar modal si existe la función
-            if(typeof cerrarRevisionDoc === 'function') cerrarRevisionDoc();
-            else document.getElementById('modal-review').style.display = 'none';
-        }
+        const data = await response.json();
+        if (!data || !Array.isArray(data)) return;
+
+        const mapaFinal = new Map();
+
+        // 1. Cargamos lo que viene de la nube (Google Sheets)
+        data.forEach(item => {
+            if (!item.id) return;
+            const idStr = item.id.toString().trim();
+            mapaFinal.set(idStr, {
+                ...item,
+                id: idStr,
+                st: (item.st || "wait").toLowerCase()
+            });
+        });
+
+        // 2. EL ESCUDO: Protegemos cambios locales recientes (como los lotes 453, 565)
+        db.forEach(loteLocal => {
+            const idStrLocal = loteLocal.id.toString().trim();
+            const esReciente = (Date.now() - (loteLocal.lastUpdate || 0) < 45000); // 45 segundos
+            const loteNube = mapaFinal.get(idStrLocal);
+
+            // Si el lote no está en la nube O es muy reciente O el estado local es más avanzado
+            if (!loteNube || esReciente || (loteLocal.st !== 'wait' && (!loteNube || loteNube.st === 'wait'))) {
+                mapaFinal.set(idStrLocal, loteLocal);
+            }
+        });
+
+        // 3. Actualizamos la base de datos y ordenamos
+        db = Array.from(mapaFinal.values());
+        db.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+
+        // 4. Guardamos y dibujamos
+        localStorage.setItem('qc_final_v88', JSON.stringify(db));
+        render();
+        console.log("✅ Sincronización exitosa. Total lotes:", db.length);
+
     } catch (error) {
-        alert("❌ Error de conexión. El lote no se guardó en la nube, pero se actualizó localmente.");
-        console.error(error);
-    } finally {
-        if(btnAceptar) {
-            btnAceptar.disabled = false;
-            btnAceptar.innerText = "✅ ACEPTAR";
-        }
+        console.error("❌ Error crítico en refreshData:", error);
     }
 }
-
 window.addEventListener('load', async () => {
     // 1. Primero dibujamos lo que el navegador guardó la última vez
     const backup = localStorage.getItem('qc_final_v88');
