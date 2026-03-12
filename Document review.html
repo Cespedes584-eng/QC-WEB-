@@ -428,401 +428,78 @@ function render() {
 }
 
 async function save(loteEspecifico = null) { 
-    // Si la sincronización está pausada y no es un envío forzado de un lote, salimos
     if (pausaSincro && loteEspecifico === null) return;
-    
     pausaSincro = true; 
-    
     const loader = document.getElementById('loader-save');
     if (loader) loader.style.display = 'flex';
 
-    // Si enviamos un solo lote, actualizamos su 'lastUpdate' antes de enviarlo
-    if (loteEspecifico) {
-        loteEspecifico.lastUpdate = Date.now(); 
-    }
-
-    const datosEnvio = loteEspecifico ? [loteEspecifico] : db;
+    if (loteEspecifico) loteEspecifico.lastUpdate = Date.now(); 
+    const datos = loteEspecifico ? [loteEspecifico] : db;
 
     try { 
-        console.log("📡 Enviando con modo CORS...", datosEnvio);
-
-        const response = await fetch(SCRIPT_URL, { 
+        await fetch(SCRIPT_URL, { 
             method: 'POST', 
-            mode: 'cors', // Mantenemos CORS para poder leer la respuesta
-            redirect: 'follow', // CAMBIO CLAVE: Permite seguir el redireccionamiento de Google
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(datosEnvio)
+            mode: 'no-cors', // Evita el error de las capturas rojas
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(datos)
         });
-
-     const resJson = await response.json();
-        if (resJson.status === "success") {
-            console.log("✅ Google Sheets confirmó el guardado con éxito.");
-            
-            // Si fue un lote específico, refrescamos la pantalla para asegurar que el 'lastUpdate' se guardó
-            if (loteEspecifico) {
-                localStorage.setItem('qc_final_v88', JSON.stringify(db));
-            }
-        } else {
-            console.error("❌ Error en la lógica del Script:", resJson.message);
-        }
-
+        console.log("✅ Datos enviados (Modo Silencioso)");
     } catch (e) { 
-        console.error("❌ Error de comunicación (CORS):", e); 
-        // No lanzamos alert aquí para no interrumpir al inspector, solo lo dejamos en consola
+        console.error("❌ Error save:", e); 
     }
 
-    // Esperamos 4 segundos antes de quitar la pausa para dejar que Sheets se refresque internamente
     setTimeout(() => {
         if (loader) loader.style.display = 'none';
         pausaSincro = false;
-        console.log("🔄 Sincronización automática reanudada.");
     }, 4000); 
 }
-    function renderPerf() {
-        const b = document.getElementById('perf-body'); 
-        const s = document.getElementById('perf-search').value.toLowerCase(); 
-        b.innerHTML = "";
-        [...db].reverse().filter(l => l.st === 'done' && 
-            (l.user.toLowerCase().includes(s) || l.line.toLowerCase().includes(s) || l.id.toString().toLowerCase().includes(s))
-        ).forEach(l => {
-            let h = l.hFin || "--:--";
-            if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
-            b.innerHTML += `<tr><td>${l.date}</td><td>${h}</td><td>${l.id}</td><td>${l.line}</td><td>${l.user}</td><td>${l.pg}</td><td>${fmt(l.tR)}</td></tr>`;
-        });
-    }
 
-   function exportExcel() {
-    // 1. Añadimos "Turno" a los encabezados (después de Hora_Fin)
-    let csv = "\uFEFFFecha;Hora_Fin;Turno;Lote;Linea;Inspector;Paginas;T_Espera;T_Revision;T_Correccion\n";
-    
-    db.filter(l => l.st === 'done').forEach(l => {
-        let horaLimpia = l.hFin || "";
-        // Limpiamos la hora por si viene con formato de fecha ISO
-        if (horaLimpia.includes('T')) horaLimpia = horaLimpia.split('T')[1].substring(0, 5);
-        else if (horaLimpia.length > 8) horaLimpia = horaLimpia.substring(0, 5);
-
-        // 2. Incluimos l.turno en la línea de datos (si no tiene turno ponemos "N/A")
-        const turnoLabel = l.turno || "N/A";
-
-        csv += `${l.date};${horaLimpia};${turnoLabel};${l.id};${l.line};${l.user};${l.pg};${fmt(l.tW)};${fmt(l.tR)};${fmt(l.tC)}\n`; 
-    });
-
-    // 3. Generación del archivo
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a"); 
-    link.href = URL.createObjectURL(blob);
-    
-    // Nombre del archivo dinámico con la fecha de hoy
-    link.download = `REPORTE_QC_${formatearFecha()}.csv`; 
-    link.click();
-}
-
-    function edit(i, f) { const n = prompt("Nuevo:", db[i][f]); if(n !== null) { db[i][f] = f==='pg'?parseInt(n):n; save(); renderAdmin(); } }
-    function editLine(i) {
-        let list = "Línea:\n"; lineas.forEach((l, x) => list += `${x}: ${l}\n`);
-        const choice = prompt(list); if(choice !== null && lineas[choice]) { db[i].line = lineas[choice]; save(); renderAdmin(); }
-    }
-    function del(i) { if(confirm("¿Borrar?")) { db.splice(i,1); save(); renderAdmin(); } }
-    function showModal(id) { document.getElementById(id).style.display = 'flex'; }
-    function hideModal(id) { document.getElementById(id).style.display = 'none'; }
-    function toggleAdmin(v) { document.getElementById('admin-panel').style.display = v?'flex':'none'; if(v) renderPerf(); }
-    function switchTab(t) {
-        document.getElementById('view-edit').style.display = t==='edit'?'block':'none';
-        document.getElementById('view-perf').style.display = t==='perf'?'block':'none';
-        document.getElementById('tab-edit').className = t==='edit'?'tab active':'tab';
-        document.getElementById('tab-perf').className = t==='perf'?'tab active':'tab';
-        if(t==='perf') renderPerf(); else renderAdmin();
-    }
 async function refreshData() {
+    if (pausaSincro) return;
     try {
-        console.log("🔄 Iniciando sincronización con la nube...");
+        console.log("🔄 Iniciando sincronización...");
+        const resp = await fetch(SCRIPT_URL + '?t=' + Date.now());
+        if (!resp.ok) throw new Error("Respuesta no OK");
         
-        const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), {
-            method: 'GET',
-            redirect: 'follow'
-        });
+        const data = await resp.json();
+        const mapa = new Map();
 
-        if (!response.ok) return;
-
-        const data = await response.json();
-        if (!data || !Array.isArray(data)) return;
-
-        const mapaFinal = new Map();
-
-        // 1. Cargar datos de la nube
+        // Cargar nube
         data.forEach(item => {
-            if (!item.id) return;
-            const idStr = item.id.toString().trim();
-            mapaFinal.set(idStr, {
-                ...item,
-                id: idStr,
-                st: (item.st || "wait").toLowerCase()
-            });
-        });
-
-        // 2. Aplicar Escudo a datos locales
-        db.forEach(loteLocal => {
-            const idStrLocal = loteLocal.id.toString().trim();
-            const esReciente = (Date.now() - (loteLocal.lastUpdate || 0) < 45000);
-            if (!mapaFinal.has(idStrLocal) || esReciente) {
-                mapaFinal.set(idStrLocal, loteLocal);
+            if (item.id) {
+                const id = item.id.toString();
+                mapa.set(id, {...item, id, st: (item.st || "wait").toLowerCase()});
             }
         });
 
-        db = Array.from(mapaFinal.values());
-        db.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
-        
+        // Escudo local
+        db.forEach(local => {
+            const id = local.id.toString();
+            const reciente = (Date.now() - (local.lastUpdate || 0) < 45000);
+            if (!mapa.has(id) || reciente) mapa.set(id, local);
+        });
+
+        db = Array.from(mapa.values());
+        db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
         localStorage.setItem('qc_final_v88', JSON.stringify(db));
         render();
-        console.log("✅ Sincronización exitosa.");
-
-    } catch (error) {
-        console.error("❌ Error en refreshData:", error);
-    }
-} // AQUÍ SE CIERRA LA FUNCIÓN CORRECTAMENTE
-async function addBR() {
-    console.log("Iniciando registro de lote...");
-    
-    // 1. Capturar elementos de la interfaz
-    const input = document.getElementById('new-id');
-    const lineSel = document.getElementById('new-line');
-    const dateSel = document.getElementById('main-date-filter');
-
-    // 2. Validar que el ID no esté vacío
-    if (!input || !input.value.trim()) {
-        alert("Por favor, ingrese el número de lote");
-        return;
-    }
-    
-    // Extraemos solo los números
-    const idInput = input.value.replace(/[^0-9]/g, '');
-    const line = lineSel ? lineSel.value : "S/L";
-    
-    // 3. Manejo de Fecha
-    let dateStr = new Date().toISOString().split('T')[0];
-    if (dateSel && dateSel.value) {
-        dateStr = dateSel.value; 
-    }
-
-    // 4. Lógica de Turnos automática
-    const ahora = new Date();
-    const totalMinutos = (ahora.getHours() * 60) + ahora.getMinutes();
-    const turnoDetectado = (totalMinutos >= 360 && totalMinutos <= 930) ? "TA" : "TB";
-
-    // 5. Crear el objeto con EL ESCUDO ACTIVO (lastUpdate)
-    const nuevoLote = {
-        id: idInput,
-        line: line, 
-        user: "SIN ASIGNAR", 
-        st: 'wait',
-        date: dateStr, 
-        inicioWS: Date.now(),
-        lastUpdate: Date.now(), // PROTECCIÓN: Evita que la nube lo borre al inicio
-        tW: 0, tR: 0, tC: 0,
-        tR_acumulado: 0, tC_acumulado: 0, 
-        pg: 0, 
-        hFin: "", 
-        turno: turnoDetectado 
-    };
-
-    // 6. Agregar a la base de datos local (db)
-    if (typeof db === 'undefined') db = [];
-    
-    // Evitar duplicados
-    const existe = db.find(l => l.id.toString() === idInput);
-    if (existe) {
-        alert("El lote " + idInput + " ya está en la lista.");
-        return;
-    }
-
-    db.push(nuevoLote);
-    
-    // --- PASO CLAVE: Guardar en el disco duro del navegador (LocalStorage) ---
-    // Esto asegura que si das F5, el lote siga ahí.
-    localStorage.setItem('qc_final_v88', JSON.stringify(db));
-
-    // 7. Limpiar el formulario y cerrar el modal
-    input.value = "";
-    if (typeof hideModal === 'function') hideModal('modal-new');
-    
-    // 8. Refrescar la pantalla inmediatamente (Visualmente es instantáneo)
-    render(); 
-    
-    // 9. Enviar a Google Sheets
-    console.log("🚀 Lote " + idInput + " creado. Sincronizando con la nube...");
-    
-    try {
-        await save(nuevoLote); 
-        console.log("✅ Lote guardado en la nube correctamente.");
+        console.log("✅ Sincronización exitosa");
     } catch (e) {
-        console.error("❌ Error de red, pero el lote se mantiene en la pantalla local.");
+        console.error("❌ Error en refreshData:", e);
     }
 }
-function openFin(i) {
-    tempIdx = i; 
-    const inputPg = document.getElementById('finish-pg');
-    if (inputPg) inputPg.value = ""; 
-    showModal('modal-finish');
-}
 
-async function confirmFinish() {
-    const pInput = document.getElementById('finish-pg');
-    const p = pInput ? pInput.value : "";
-    
-    if (!p || p <= 0) return alert("Ingrese total de documentos");
-
-    const lote = db[tempIdx]; 
-    if (!lote) return alert("Error: Lote no encontrado.");
-
-    const ahoraMs = Date.now();
-    const ahoraFecha = new Date();
-    
-    // 1. BLOQUEO TOTAL E INMEDIATO
-    pausaSincro = true; 
-    lote.lastUpdate = ahoraMs; // Marcamos el segundo exacto del cierre
-    lote.pg = parseInt(p);
-    
-    // 2. CÁLCULO DE TIEMPOS (Tu lógica actual que está perfecta)
-    if (lote.st === 'rev' && lote.inicioRS) {
-        lote.tR_acumulado = (ahoraMs - lote.inicioRS) + (Number(lote.tR_acumulado) || 0);
-    }
-    if (lote.st === 'corr' && lote.inicioCS) {
-        lote.tC_acumulado = (ahoraMs - lote.inicioCS) + (Number(lote.tC_acumulado) || 0);
-    }
-
-    lote.st = 'done';
-    const horas = String(ahoraFecha.getHours()).padStart(2, '0');
-    const minutos = String(ahoraFecha.getMinutes()).padStart(2, '0');
-    lote.hFin = `${horas}:${minutos}`;
-
-    // 3. REFLEJO VISUAL INSTANTÁNEO
-    hideModal('modal-finish');
-    render(); 
-    
-    // 4. ENVÍO SEGURO
-    console.log(`🚀 Guardando Lote ${lote.id}...`);
-    
-    try {
-        await save(lote); 
-        console.log("✅ Datos enviados. Esperando propagación de la nube...");
-    } catch (error) {
-        console.error("Error al guardar:", error);
-    } finally {
-        // 5. EL CAMBIO CLAVE: Aumentamos el tiempo de gracia.
-        // Damos 8 segundos de silencio total. Es el tiempo promedio que 
-        // tarda Google Sheets en reflejar un cambio para que la lectura no lo "rebote".
-        setTimeout(() => {
-            pausaSincro = false;
-            console.log("🛡️ Escudo liberado. Sincronización normal reanudada.");
-        }, 8000); 
-    }
-}
-function iniciarRevisionDoc(idUnico) {
-    // 1. ACTIVAR ESCUDO: Detenemos la sincronización inmediatamente
-    pausaSincro = true; 
-    console.log("🛡️ Escudo Activo. Revisando ID: " + idUnico);
-
-    // 2. BUSCAR EL DOCUMENTO: Lo buscamos en nuestra 'Caja Fuerte' (dbDocumentos)
-    // Usamos toString() por si el ID viene como número desde el Excel
-    const doc = dbDocumentos.find(d => d.id.toString() === idUnico.toString());
-
-    if (!doc) {
-        alert("❌ Error: No se encontró el documento en la memoria local.");
-        pausaSincro = false; // Si hay error, liberamos la nube
-        return;
-    }
-
-    // 3. GUARDAR IDENTIDAD: Memorizamos qué documento estamos revisando
-    docEnRevision = idUnico;
-
-    // 4. LLENAR EL MODAL: Pasamos los datos del Excel al diseño del Modal
-    // (Asegúrate que estos IDs existan en tu HTML del modal)
-    document.getElementById('m-doc-id').innerText = doc.id;
-    document.getElementById('m-doc-lote').innerText = doc.id; // O el campo que uses para el nombre
-    
-    // Limpiamos comentarios de la revisión anterior
-    if(document.getElementById('m-comentarios')) {
-        document.getElementById('m-comentarios').value = "";
-    }
-
-    // 5. MOSTRAR INTERFAZ: Abrimos el modal
-    document.getElementById('modal-review').style.display = 'block';
-    
-    // Si tienes catálogo de hallazgos, los dibujamos aquí
-    generarCheckboxesHallazgos(); 
-}
-// --- PASO 3: EL MOTOR DE SINCRONIZACIÓN SEGURO ---
-
-
-// También la llamamos una vez al cargar la página para que no empiece vacío
-async function refreshData() {
-    try {
-        console.log("🔄 Iniciando sincronización con la nube...");
-        
-        const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), {
-            method: 'GET',
-            redirect: 'follow'
-        });
-
-        if (!response.ok) {
-            console.warn("⚠️ No se pudo conectar con la nube. Usando datos locales.");
-            return;
-        }
-
-        const data = await response.json();
-        if (!data || !Array.isArray(data)) return;
-
-        const mapaFinal = new Map();
-
-        // 1. Cargamos lo que viene de la nube (Google Sheets)
-        data.forEach(item => {
-            if (!item.id) return;
-            const idStr = item.id.toString().trim();
-            mapaFinal.set(idStr, {
-                ...item,
-                id: idStr,
-                st: (item.st || "wait").toLowerCase()
-            });
-        });
-
-        // 2. EL ESCUDO: Protegemos cambios locales recientes (como los lotes 453, 565)
-        db.forEach(loteLocal => {
-            const idStrLocal = loteLocal.id.toString().trim();
-            const esReciente = (Date.now() - (loteLocal.lastUpdate || 0) < 45000); // 45 segundos
-            const loteNube = mapaFinal.get(idStrLocal);
-
-            // Si el lote no está en la nube O es muy reciente O el estado local es más avanzado
-            if (!loteNube || esReciente || (loteLocal.st !== 'wait' && (!loteNube || loteNube.st === 'wait'))) {
-                mapaFinal.set(idStrLocal, loteLocal);
-            }
-        });
-
-        // 3. Actualizamos la base de datos y ordenamos
-        db = Array.from(mapaFinal.values());
-        db.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
-
-        // 4. Guardamos y dibujamos
-        localStorage.setItem('qc_final_v88', JSON.stringify(db));
-        render();
-        console.log("✅ Sincronización exitosa. Total lotes:", db.length);
-
-    } catch (error) {
-        console.error("❌ Error crítico en refreshData:", error);
-    }
-}
+// ARRANQUE SEGURO
 window.addEventListener('load', async () => {
-    // 1. Primero dibujamos lo que el navegador guardó la última vez
+    // 1. Quita el onload="init()" del <body> si aún lo tienes
+    await init(); 
+    
     const backup = localStorage.getItem('qc_final_v88');
     if (backup) {
         db = JSON.parse(backup);
-        console.log("📦 Recuperando datos locales...");
         render(); 
     }
-
-    // 2. Inmediatamente preguntamos a la nube si hay algo nuevo
-    await refreshData();
     
-    // 3. Dejamos el reloj activado para que se actualice solo cada 15 segundos
     setInterval(refreshData, 15000);
 });
 </script>
