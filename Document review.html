@@ -222,51 +222,56 @@ function setShift(turno) {
     render(); 
 }
  async function init() {
-    const sesionEstandar = localStorage.getItem('qc_session');
-    const usuarioLegacy = localStorage.getItem('usuario');
-    let nombreDetectado = "SIN ASIGNAR";
+    try {
+        const sesionEstandar = localStorage.getItem('qc_session');
+        const usuarioLegacy = localStorage.getItem('usuario');
+        let nombreDetectado = "SIN ASIGNAR";
 
-    // 1. Identificación de usuario
-    if (sesionEstandar) {
-        const u = JSON.parse(sesionEstandar);
-        nombreDetectado = u.nombre || u.user || u.usuario || "SIN ASIGNAR";
-        if(u.isAdmin) document.getElementById('btn-admin-config').style.display = 'inline-block';
-    } else if (usuarioLegacy) {
-        nombreDetectado = usuarioLegacy;
-    }
-    document.getElementById('user-display').innerText = `👤 ${nombreDetectado.toUpperCase()}`;
-
-    // 2. Cargar líneas en el selector
-    const sel = document.getElementById('new-line');
-    sel.innerHTML = "";
-    lineas.sort().forEach(l => { sel.innerHTML += `<option value="${l}">${l}</option>`; });
-    
-    // 3. Configurar fecha actual en el filtro
-    document.getElementById('main-date-filter').value = formatearFecha();
-    
-    if(document.getElementById('shift-filter')) {
-        document.getElementById('shift-filter').value = "TODOS";
-    }
-
-    // --- BASE DE DATOS LIMPIA AL INICIO ---
-    db = []; 
-    render(); 
-
-    // 4. Traer datos frescos de la Nube inmediatamente
-    await refreshData();
-
-    // 5. CICLO AUTOMÁTICO PROTEGIDO
-    // Aumentamos a 15 segundos para dar respiro al servidor y evitar colisiones
-    setInterval(() => {
-        if (!pausaSincro) { // <--- EL FILTRO CLAVE: Si el escudo está activo, no pidas datos
-            refreshData();
-        } else {
-            console.log("⏳ Sincronización omitida: Escudo activo.");
+        // 1. Identificación de usuario
+        if (sesionEstandar) {
+            const u = JSON.parse(sesionEstandar);
+            nombreDetectado = u.nombre || u.user || u.usuario || "SIN ASIGNAR";
+            const btnAdmin = document.getElementById('btn-admin-config');
+            if(u.isAdmin && btnAdmin) btnAdmin.style.display = 'inline-block';
+        } else if (usuarioLegacy) {
+            nombreDetectado = usuarioLegacy;
         }
-    }, 15000); 
-    
-    // 6. Iniciar cronómetro de relojes
-    setInterval(tick, 1000);
+        
+        const userDisp = document.getElementById('user-display');
+        if(userDisp) userDisp.innerText = `👤 ${nombreDetectado.toUpperCase()}`;
+
+        // 2. Cargar líneas en el selector
+        const sel = document.getElementById('new-line');
+        if(sel) {
+            sel.innerHTML = "";
+            lineas.sort().forEach(l => { sel.innerHTML += `<option value="${l}">${l}</option>`; });
+        }
+        
+        // 3. Configurar fecha
+        const dateFilt = document.getElementById('main-date-filter');
+        if(dateFilt) dateFilt.value = formatearFecha();
+        
+        const shiftFilt = document.getElementById('shift-filter');
+        if(shiftFilt) shiftFilt.value = "TODOS";
+
+        // 4. Cargar datos iniciales
+        db = []; 
+        render(); 
+        await refreshData();
+
+        // 5. Ciclos automáticos
+        setInterval(() => {
+            if (typeof pausaSincro !== 'undefined' && !pausaSincro) {
+                refreshData();
+            }
+        }, 15000); 
+        
+        setInterval(tick, 1000);
+        
+        console.log("🚀 Sistema inicializado correctamente");
+    } catch (e) {
+        console.error("❌ Error en init:", e);
+    }
 }
 
     function tick() {
@@ -399,15 +404,13 @@ function render() {
     const lote = db[idx]; 
     if (!lote) return;
 
-    lote.lastUpdate = ahora; // Sello para el escudo
+    lote.lastUpdate = ahora; 
     
-    // Asignar usuario si pasa a revisión
     if (lote.st === 'wait' && s === 'rev') {
         const userText = document.getElementById('user-display').innerText;
         lote.user = userText.replace('👤 ', '').trim().toUpperCase();
     }
 
-    // Calcular acumulados de tiempo antes de cambiar estado
     if (lote.st === 'rev' && lote.inicioRS) {
         lote.tR_acumulado = (ahora - lote.inicioRS) + (Number(lote.tR_acumulado) || 0);
     }
@@ -415,13 +418,13 @@ function render() {
         lote.tC_acumulado = (ahora - lote.inicioCS) + (Number(lote.tC_acumulado) || 0);
     }
     
-    // Cambiar estado y setear nuevos inicios
     lote.st = s;
     if (s === 'rev') { lote.inicioRS = ahora; lote.inicioCS = null; } 
     else if (s === 'corr') { lote.inicioCS = ahora; lote.inicioRS = null; }
     
-    render(); // Dibujar cambio visualmente rápido
-    await save(lote); // Sincronizar con la nube
+    render(); 
+    // Aquí es donde el código fallaba. Asegúrate de pasar el objeto 'lote'
+    await save(lote); 
 }
 
 async function save(loteEspecifico = null) { 
@@ -451,10 +454,7 @@ async function save(loteEspecifico = null) {
             body: JSON.stringify(datosEnvio)
         });
 
-       resJson = await response.json();
-        // Con CORS, podemos leer la respuesta real
-       let resJson = await response.json();
-
+     const resJson = await response.json();
         if (resJson.status === "success") {
             console.log("✅ Google Sheets confirmó el guardado con éxito.");
             
