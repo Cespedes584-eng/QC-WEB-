@@ -539,7 +539,11 @@ async function refreshData() {
         
         // CAMBIO AQUÍ: Quitamos el bloque de {method: 'GET', mode: 'cors'} 
         // Esto evita que Google bloquee la conexión desde GitHub.
-       const response = await fetch(SCRIPT_URL + '?t=' + Date.now());
+       const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), {
+    method: 'GET',
+    mode: 'no-cors', // Agregamos esto para forzar la entrada
+    cache: 'no-cache'
+});
         
         if (!response.ok) throw new Error("Respuesta de red no OK");
         
