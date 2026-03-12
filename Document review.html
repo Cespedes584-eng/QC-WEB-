@@ -192,7 +192,7 @@
 
 <script>
         // Variables de configuración y estado
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSDt_CUnHXF1tf9o49a_Dv9LpAPdw2zVwYMZtQa6RYYs1R2nYRnEODKqm7BMO3Z89E9A/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxlL-kGgj067eENNZwXzhMQVOSEWbOEuSH3gPfrj0hG3JcV_WZqvEOehFbHyzLLK-puiQ/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
     
     let db = []; 
@@ -615,54 +615,64 @@ function renderAdmin() {
         document.getElementById('tab-perf').className = t==='perf'?'tab active':'tab';
         if(t==='perf') renderPerf(); else renderAdmin();
     }
+// --- FUNCIÓN DE SINCRONIZACIÓN MAESTRA ---
 async function refreshData() {
     if (typeof pausaSincro !== 'undefined' && pausaSincro) return;
-
     try {
-        console.log("🔄 Intentando conectar con la nube...");
-        
-        // Añadimos un timestamp para evitar que el navegador use datos viejos (cache)
-        const response = await fetch(SCRIPT_URL + '?t=' + Date.now());
-
-        // Si Google nos bloquea el paso (CORS), la respuesta no será "ok"
-        if (!response.ok) {
-            console.warn("⚠️ Bloqueo de seguridad detectado o nube offline.");
-            return;
-        }
-
+        const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), {
+            method: 'GET',
+            redirect: 'follow'
+        });
+        if (!response.ok) return;
         const data = await response.json();
-        
-        if (data && Array.isArray(data)) {
+        if (Array.isArray(data)) {
             const mapaFinal = new Map();
-
-            // Cargamos lo de la nube
+            // Cargar Nube
             data.forEach(item => {
-                if (!item.id) return;
                 const idStr = item.id.toString().trim();
-                mapaFinal.set(idStr, {
-                    ...item,
-                    id: idStr,
-                    st: (item.st || "wait").toLowerCase()
-                });
+                mapaFinal.set(idStr, {...item, id: idStr, st: item.st.toLowerCase()});
             });
-
-            // Actualizamos la base de datos global
+            // Mantener local solo lo muy reciente (Escudo)
+            db.forEach(l => {
+                const idStr = l.id.toString().trim();
+                if ((Date.now() - (l.lastUpdate || 0) < 45000) && !mapaFinal.has(idStr)) {
+                    mapaFinal.set(idStr, l);
+                }
+            });
             db = Array.from(mapaFinal.values());
             db.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
-            
             localStorage.setItem('qc_final_v88', JSON.stringify(db));
-            
-            // Dibujamos todo
             render(); 
+            renderPerf();
             if (typeof renderAdmin === 'function') renderAdmin();
-            if (typeof renderPerf === 'function') renderPerf();
-            
-            console.log("✅ Datos sincronizados correctamente.");
         }
-    } catch (error) {
-        console.error("❌ Error de conexión (CORS): Los datos no pudieron bajar de la nube.");
-    }
+    } catch (e) { console.error("Error de red:", e); }
 }
+
+// --- FUNCIÓN EDITAR LOTES (ADMIN) ---
+function renderAdmin() {
+    const b = document.getElementById('adm-body');
+    if (!b) return;
+    b.innerHTML = "";
+    db.forEach((l, i) => {
+        b.innerHTML += `<tr>
+            <td>${l.date}</td>
+            <td>${l.id} <span class="pencil" onclick="edit(${i},'id')">✏️</span></td>
+            <td>${l.line} <span class="pencil" onclick="editLine(${i})">✏️</span></td>
+            <td>${l.user}</td>
+            <td>${l.pg} <span class="pencil" onclick="edit(${i},'pg')">✏️</span></td>
+            <td><button onclick="del(${i})" style="color:red; background:none; border:none; cursor:pointer">🗑️</button></td>
+        </tr>`;
+    });
+}
+
+// --- ARRANQUE DEL SISTEMA (AL FINAL DEL ARCHIVO) ---
+window.addEventListener('load', async () => {
+    await init(); // Carga nombre
+    db = []; // Limpia para priorizar nube
+    render();
+    await refreshData(); // Baja los datos de los demás
+});
 function openFin(i) {
     tempIdx = i; 
     const inputPg = document.getElementById('finish-pg');
