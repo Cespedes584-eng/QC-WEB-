@@ -539,7 +539,7 @@ async function refreshData() {
         
         // CAMBIO AQUÍ: Quitamos el bloque de {method: 'GET', mode: 'cors'} 
         // Esto evita que Google bloquee la conexión desde GitHub.
-        const response = await fetch(`${SCRIPT_URL}?t=${Date.now()}`);
+       const response = await fetch(SCRIPT_URL + '?t=' + Date.now());
         
         if (!response.ok) throw new Error("Respuesta de red no OK");
         
@@ -556,17 +556,17 @@ async function refreshData() {
             if(!item.id) return;
             const idStr = item.id.toString().trim();
             
-            // Reparación de fecha (para que 11/03/2026 funcione)
-            let fDoc = "";
-            if (item.date) {
-                let dStr = item.date.toString();
-                if (dStr.includes('/')) {
-                    const p = dStr.split('/');
-                    if (p.length === 3) fDoc = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
-                } else {
-                    fDoc = dStr.split('T')[0].substring(0,10);
-                }
-            }
+           let fDoc = "";
+if (item.date) {
+    let dStr = item.date.toString();
+    if (dStr.includes('/')) {
+        const p = dStr.split('/');
+        // Esto convierte 11/03/2026 en 2026-03-11 para que el sistema lo entienda
+        if (p.length === 3) fDoc = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+    } else {
+        fDoc = dStr.split('T')[0].substring(0,10);
+    }
+}
 
             mapaFinal.set(idStr, {
                 ...item,
@@ -579,9 +579,10 @@ async function refreshData() {
         // Mantenemos lo local que no esté en la nube
         db.forEach(loteLocal => {
             const idStr = loteLocal.id.toString().trim();
-            if (!mapaFinal.has(idStr) && loteLocal.st !== 'done') {
-                mapaFinal.set(idStr, loteLocal);
-            }
+           // Si el lote no está en la nube O tiene menos de 45 segundos de vida, NO lo borres
+if (!mapaFinal.has(idStr) && (loteLocal.st !== 'done' || (Date.now() - (loteLocal.lastUpdate || 0) < 45000))) {
+    mapaFinal.set(idStr, loteLocal);
+}
         });
 
         db = Array.from(mapaFinal.values());
@@ -770,7 +771,7 @@ function iniciarRevisionDoc(idUnico) {
 
 
 // También la llamamos una vez al cargar la página para que no empiece vacío
-sincronizarDatos();
+refreshData();
 async function finalizarDocumento(aprobado) {
     // 1. LEER DATOS
     const comentarios = document.getElementById('m-comentarios') ? document.getElementById('m-comentarios').value : "";
