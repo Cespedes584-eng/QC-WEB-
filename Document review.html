@@ -617,21 +617,25 @@ function renderAdmin() {
     }
 async function refreshData() {
     try {
-        console.log("🔄 Iniciando sincronización con la nube...");
+        console.log("🔄 Sincronizando con la base de datos central...");
         
         const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), {
             method: 'GET',
             redirect: 'follow'
         });
 
-        if (!response.ok) return;
+        // Si la nube no responde, no borramos lo que tenemos, pero avisamos
+        if (!response.ok) {
+            console.warn("⚠️ No se pudo conectar con la nube. Usando datos locales.");
+            return;
+        }
 
         const data = await response.json();
         if (!data || !Array.isArray(data)) return;
 
         const mapaFinal = new Map();
 
-        // 1. Cargar datos de la nube
+        // 1. CARGAR DATOS DE LA NUBE (Prioridad Máxima)
         data.forEach(item => {
             if (!item.id) return;
             const idStr = item.id.toString().trim();
@@ -642,25 +646,30 @@ async function refreshData() {
             });
         });
 
-        // 2. Aplicar Escudo a datos locales
+        // 2. EL ESCUDO (Solo para lo que se acaba de tocar)
+        // Solo mantenemos lo local si se editó hace menos de 45 segundos
+        // y aún no se refleja en la nube.
         db.forEach(loteLocal => {
             const idStrLocal = loteLocal.id.toString().trim();
-            const esReciente = (Date.now() - (loteLocal.lastUpdate || 0) < 45000);
-            if (!mapaFinal.has(idStrLocal) || esReciente) {
+            const esMuyReciente = (Date.now() - (loteLocal.lastUpdate || 0) < 45000);
+            
+            if (esMuyReciente && !mapaFinal.has(idStrLocal)) {
                 mapaFinal.set(idStrLocal, loteLocal);
             }
         });
 
+        // 3. ACTUALIZAR BASE DE DATOS GLOBAL
         db = Array.from(mapaFinal.values());
         db.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
         
+        // 4. GUARDAR Y REFRESCAR TODAS LAS VISTAS
         localStorage.setItem('qc_final_v88', JSON.stringify(db));
 
-        // --- LOS DISPARADORES VISUALES ---
-        render();      // Refresca la lista de edición
-        renderPerf();  // <--- ESTO ES LO QUE HACÍA FALTA PARA EL HISTORIAL
+        render();      // Lista principal (index)
+        renderPerf();  // Pestaña Rendimiento
+        if (typeof renderAdmin === 'function') renderAdmin(); // Pestaña Editar Lotes
         
-        console.log("✅ Sincronización exitosa e historial actualizado.");
+        console.log("✅ Sincronización exitosa. Datos actualizados para todos.");
 
     } catch (error) {
         console.error("❌ Error en refreshData:", error);
@@ -819,20 +828,22 @@ async function refreshData() {
     }
 }
 window.addEventListener('load', async () => {
-    // 1. Iniciamos nombre de usuario y configuración
+    console.log("☁️ Conectando con la base de datos central...");
+    
+    // 1. Identificar al inspector
     await init(); 
 
-    // 2. Recuperamos el historial del disco duro del PC/Celular
-    const backup = localStorage.getItem('qc_final_v88');
-    if (backup) {
-        db = JSON.parse(backup);
-        console.log("📦 Historial local cargado.");
-        render(); 
-        renderPerf(); // <--- IMPORTANTE: Dibujamos el rendimiento de inmediato
-    }
+    // 2. Limpiar base de datos local para forzar descarga fresca
+    db = []; 
+    render(); 
+    if (typeof renderAdmin === 'function') renderAdmin();
+    if (typeof renderPerf === 'function') renderPerf();
 
-    // 3. Buscamos actualizaciones en la nube
+    // 3. Pedir los datos a Google Sheets de inmediato
+    // Esto hará que los 2 lotes que tú subiste aparezcan en todas las pantallas
     await refreshData();
+    
+    console.log("✅ Datos de la nube sincronizados para todos.");
 });
 </script>
 </body>
