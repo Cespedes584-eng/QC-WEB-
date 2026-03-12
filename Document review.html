@@ -192,7 +192,7 @@
 
 <script>
         // Variables de configuración y estado
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwzegv3muP4D0GJa25biiZ3OvGdePJUSQg92BsqPR2ZAyRvqdzBKx4lN6mXT6nB0TN36Q/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwgIsmGMkCoKDbhnp98bXZqXBz5SuceMIQUfJWCrE0JxWA9BbHXPzVKIKWjI2ca_boxRA/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
     
     let db = []; 
@@ -445,10 +445,14 @@ async function save(loteEspecifico = null) {
 
         const response = await fetch(SCRIPT_URL, { 
             method: 'POST', 
-            mode: 'cors', 
+            mode: 'cors', // Mantenemos CORS para poder leer la respuesta
+            redirect: 'follow', // CAMBIO CLAVE: Permite seguir el redireccionamiento de Google
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify(datosEnvio)
         });
+
+        // Ahora el navegador sí te permitirá leer la confirmación
+        const resJson = await response.json();
 
         // Con CORS, podemos leer la respuesta real
         const resJson = await response.json();
@@ -537,9 +541,9 @@ async function refreshData() {
     try {
         console.log("🔄 Iniciando sincronización con la nube...");
         
-        const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), {
+       const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), {
     method: 'GET',
-    mode: 'cors', // Agregamos modo cors explícito
+    mode: 'no-cors',
     redirect: 'follow'
 });
         
