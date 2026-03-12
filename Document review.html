@@ -559,11 +559,44 @@ const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), {
             return; 
         }
 
-        const mapaFinal = new Map();
-        console.log("✅ Datos sincronizados con éxito:", data.length, "lotes encontrados.");
-        data.forEach(item => {
+       data.forEach(item => {
             if(!item.id) return;
             const idStr = item.id.toString().trim();
+
+            // Guardamos lo que viene de la nube en el mapa
+            mapaFinal.set(idStr, {
+                ...item,
+                id: idStr,
+                st: (item.st || "wait").toLowerCase()
+            });
+        });
+// --- EL ESCUDO DE PROTECCIÓN MEJORADO ---
+        db.forEach(loteLocal => {
+            const idStrLocal = loteLocal.id.toString().trim();
+            // 45 segundos de margen para que la nube se actualice
+            const esReciente = (Date.now() - (loteLocal.lastUpdate || 0) < 45000);
+            
+            // BUSCAMOS SI YA ESTÁ EN LA NUBE
+            const loteNube = mapaFinal.get(idStrLocal);
+
+            // REGLA: Si el lote local es reciente O si el lote local está en proceso (work/done) 
+            // y la nube todavía dice que está en espera (wait), mandamos nosotros.
+            if (!loteNube || esReciente || (loteLocal.st !== 'wait' && loteNube.st === 'wait')) {
+                mapaFinal.set(idStrLocal, loteLocal);
+            }
+        });
+
+        // Aplicamos el resultado final a la base de datos
+        db = Array.from(mapaFinal.values());
+        // Actualizamos la base de datos visual
+        db = Array.from(mapaFinal.values());
+        
+        // Ordenar por ID para que no salten de posición
+        db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
+
+        localStorage.setItem('qc_final_v88', JSON.stringify(db));
+        render();
+        console.log("✅ Sincronización exitosa y escudo activo.");
             
            // Reparación de fecha para que el filtro de hoy funcione
             let fDoc = "";
