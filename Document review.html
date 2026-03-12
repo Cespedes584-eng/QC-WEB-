@@ -616,63 +616,51 @@ function renderAdmin() {
         if(t==='perf') renderPerf(); else renderAdmin();
     }
 async function refreshData() {
-    try {
-        console.log("🔄 Sincronizando con la base de datos central...");
-        
-        const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), {
-            method: 'GET',
-            redirect: 'follow'
-        });
+    if (typeof pausaSincro !== 'undefined' && pausaSincro) return;
 
-        // Si la nube no responde, no borramos lo que tenemos, pero avisamos
+    try {
+        console.log("🔄 Intentando conectar con la nube...");
+        
+        // Añadimos un timestamp para evitar que el navegador use datos viejos (cache)
+        const response = await fetch(SCRIPT_URL + '?t=' + Date.now());
+
+        // Si Google nos bloquea el paso (CORS), la respuesta no será "ok"
         if (!response.ok) {
-            console.warn("⚠️ No se pudo conectar con la nube. Usando datos locales.");
+            console.warn("⚠️ Bloqueo de seguridad detectado o nube offline.");
             return;
         }
 
         const data = await response.json();
-        if (!data || !Array.isArray(data)) return;
+        
+        if (data && Array.isArray(data)) {
+            const mapaFinal = new Map();
 
-        const mapaFinal = new Map();
-
-        // 1. CARGAR DATOS DE LA NUBE (Prioridad Máxima)
-        data.forEach(item => {
-            if (!item.id) return;
-            const idStr = item.id.toString().trim();
-            mapaFinal.set(idStr, {
-                ...item,
-                id: idStr,
-                st: (item.st || "wait").toLowerCase()
+            // Cargamos lo de la nube
+            data.forEach(item => {
+                if (!item.id) return;
+                const idStr = item.id.toString().trim();
+                mapaFinal.set(idStr, {
+                    ...item,
+                    id: idStr,
+                    st: (item.st || "wait").toLowerCase()
+                });
             });
-        });
 
-        // 2. EL ESCUDO (Solo para lo que se acaba de tocar)
-        // Solo mantenemos lo local si se editó hace menos de 45 segundos
-        // y aún no se refleja en la nube.
-        db.forEach(loteLocal => {
-            const idStrLocal = loteLocal.id.toString().trim();
-            const esMuyReciente = (Date.now() - (loteLocal.lastUpdate || 0) < 45000);
+            // Actualizamos la base de datos global
+            db = Array.from(mapaFinal.values());
+            db.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
             
-            if (esMuyReciente && !mapaFinal.has(idStrLocal)) {
-                mapaFinal.set(idStrLocal, loteLocal);
-            }
-        });
-
-        // 3. ACTUALIZAR BASE DE DATOS GLOBAL
-        db = Array.from(mapaFinal.values());
-        db.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
-        
-        // 4. GUARDAR Y REFRESCAR TODAS LAS VISTAS
-        localStorage.setItem('qc_final_v88', JSON.stringify(db));
-
-        render();      // Lista principal (index)
-        renderPerf();  // Pestaña Rendimiento
-        if (typeof renderAdmin === 'function') renderAdmin(); // Pestaña Editar Lotes
-        
-        console.log("✅ Sincronización exitosa. Datos actualizados para todos.");
-
+            localStorage.setItem('qc_final_v88', JSON.stringify(db));
+            
+            // Dibujamos todo
+            render(); 
+            if (typeof renderAdmin === 'function') renderAdmin();
+            if (typeof renderPerf === 'function') renderPerf();
+            
+            console.log("✅ Datos sincronizados correctamente.");
+        }
     } catch (error) {
-        console.error("❌ Error en refreshData:", error);
+        console.error("❌ Error de conexión (CORS): Los datos no pudieron bajar de la nube.");
     }
 }
 function openFin(i) {
