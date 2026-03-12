@@ -221,59 +221,85 @@ function setShift(turno) {
     // 3. Refrescamos la pantalla con el nuevo filtro
     render(); 
 }
- async function init() {
+async function init() {
     try {
+        console.log("🎬 Iniciando proceso de configuración...");
+        
+        // 1. Identificación de usuario con manejo de errores de JSON
         const sesionEstandar = localStorage.getItem('qc_session');
         const usuarioLegacy = localStorage.getItem('usuario');
         let nombreDetectado = "SIN ASIGNAR";
 
-        // 1. Identificación de usuario
         if (sesionEstandar) {
-            const u = JSON.parse(sesionEstandar);
-            nombreDetectado = u.nombre || u.user || u.usuario || "SIN ASIGNAR";
-            const btnAdmin = document.getElementById('btn-admin-config');
-            if(u.isAdmin && btnAdmin) btnAdmin.style.display = 'inline-block';
+            try {
+                const u = JSON.parse(sesionEstandar);
+                nombreDetectado = u.nombre || u.user || u.usuario || "SIN ASIGNAR";
+                
+                const btnAdmin = document.getElementById('btn-admin-config');
+                if (u.isAdmin && btnAdmin) {
+                    btnAdmin.style.display = 'inline-block';
+                }
+            } catch (jsonErr) {
+                console.warn("⚠️ Sesión corrupta, usando valores por defecto.");
+            }
         } else if (usuarioLegacy) {
             nombreDetectado = usuarioLegacy;
         }
         
+        // Actualizar visualización del usuario
         const userDisp = document.getElementById('user-display');
-        if(userDisp) userDisp.innerText = `👤 ${nombreDetectado.toUpperCase()}`;
+        if (userDisp) {
+            userDisp.innerText = `👤 ${nombreDetectado.toUpperCase()}`;
+        }
 
-        // 2. Cargar líneas en el selector
+        // 2. Cargar líneas en el selector (Validando existencia de la variable 'lineas')
         const sel = document.getElementById('new-line');
-        if(sel) {
+        if (sel && typeof lineas !== 'undefined') {
             sel.innerHTML = "";
-            lineas.sort().forEach(l => { sel.innerHTML += `<option value="${l}">${l}</option>`; });
+            [...lineas].sort().forEach(l => { 
+                sel.innerHTML += `<option value="${l}">${l}</option>`; 
+            });
         }
         
-        // 3. Configurar fecha
+        // 3. Configurar fecha y filtros
         const dateFilt = document.getElementById('main-date-filter');
-        if(dateFilt) dateFilt.value = formatearFecha();
+        if (dateFilt && typeof formatearFecha === 'function') {
+            dateFilt.value = formatearFecha();
+        }
         
         const shiftFilt = document.getElementById('shift-filter');
-        if(shiftFilt) shiftFilt.value = "TODOS";
+        if (shiftFilt) {
+            shiftFilt.value = "TODOS";
+        }
 
-        // 4. Cargar datos iniciales
+        // 4. Reset de datos y primera carga
         db = []; 
-        render(); 
-        await refreshData();
+        if (typeof render === 'function') render(); 
+        
+        // Intentar carga desde la nube
+        if (typeof refreshData === 'function') {
+            await refreshData();
+        }
 
-        // 5. Ciclos automáticos
-        setInterval(() => {
-            if (typeof pausaSincro !== 'undefined' && !pausaSincro) {
-                refreshData();
-            }
-        }, 15000); 
+        // 5. Ciclos automáticos (Sincronización y Reloj)
+        // Solo activa el intervalo si refreshData existe
+        if (typeof refreshData === 'function') {
+            setInterval(() => {
+                if (typeof pausaSincro !== 'undefined' && !pausaSincro) {
+                    refreshData();
+                }
+            }, 15000); 
+        }
         
-        setInterval(tick, 1000);
+        if (typeof tick === 'function') {
+            setInterval(tick, 1000);
+        }
         
-        console.log("🚀 Sistema inicializado correctamente");
+        console.log("✅ Sistema inicializado correctamente.");
     } catch (e) {
-        console.error("❌ Error en init:", e);
+        console.error("❌ Error crítico en init:", e);
     }
 }
-
     function tick() {
         const ahora = Date.now();
         db.forEach(l => {
@@ -444,34 +470,27 @@ async function save(loteEspecifico = null) {
     const datosEnvio = loteEspecifico ? [loteEspecifico] : db;
 
     try { 
-        console.log("📡 Enviando con modo CORS...", datosEnvio);
+        console.log("📡 Enviando datos...", datosEnvio);
 
-        const response = await fetch(SCRIPT_URL, { 
+        // Cambiamos a 'no-cors' para evitar errores de bloqueo en el navegador
+        // al enviar datos a Google Apps Script.
+        await fetch(SCRIPT_URL, { 
             method: 'POST', 
-            mode: 'cors', // Mantenemos CORS para poder leer la respuesta
-            redirect: 'follow', // CAMBIO CLAVE: Permite seguir el redireccionamiento de Google
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(datosEnvio)
         });
 
-     const resJson = await response.json();
-        if (resJson.status === "success") {
-            console.log("✅ Google Sheets confirmó el guardado con éxito.");
-            
-            // Si fue un lote específico, refrescamos la pantalla para asegurar que el 'lastUpdate' se guardó
-            if (loteEspecifico) {
-                localStorage.setItem('qc_final_v88', JSON.stringify(db));
-            }
-        } else {
-            console.error("❌ Error en la lógica del Script:", resJson.message);
-        }
+        console.log("✅ Petición enviada a la nube.");
+        
+        // Guardamos localmente para asegurar persistencia
+        localStorage.setItem('qc_final_v88', JSON.stringify(db));
 
     } catch (e) { 
-        console.error("❌ Error de comunicación (CORS):", e); 
-        // No lanzamos alert aquí para no interrumpir al inspector, solo lo dejamos en consola
+        console.error("❌ Error de comunicación:", e); 
     }
 
-    // Esperamos 4 segundos antes de quitar la pausa para dejar que Sheets se refresque internamente
+    // Esperamos 4 segundos antes de liberar el escudo
     setTimeout(() => {
         if (loader) loader.style.display = 'none';
         pausaSincro = false;
@@ -479,17 +498,47 @@ async function save(loteEspecifico = null) {
     }, 4000); 
 }
     function renderPerf() {
-        const b = document.getElementById('perf-body'); 
-        const s = document.getElementById('perf-search').value.toLowerCase(); 
-        b.innerHTML = "";
-        [...db].reverse().filter(l => l.st === 'done' && 
-            (l.user.toLowerCase().includes(s) || l.line.toLowerCase().includes(s) || l.id.toString().toLowerCase().includes(s))
-        ).forEach(l => {
-            let h = l.hFin || "--:--";
-            if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
-            b.innerHTML += `<tr><td>${l.date}</td><td>${h}</td><td>${l.id}</td><td>${l.line}</td><td>${l.user}</td><td>${l.pg}</td><td>${fmt(l.tR)}</td></tr>`;
-        });
-    }
+    // 1. Validamos que los elementos existan antes de usarlos
+    const b = document.getElementById('perf-body'); 
+    const searchInput = document.getElementById('perf-search');
+    
+    // Si no existen los elementos en el HTML, salimos de la función sin dar error
+    if (!b || !searchInput) return;
+
+    const s = searchInput.value.toLowerCase(); 
+    b.innerHTML = "";
+
+    // 2. Filtramos y dibujamos la tabla
+    [...db].reverse().filter(l => {
+        // Solo mostramos lotes terminados (st === 'done')
+        const esTerminado = (l.st === 'done');
+        
+        // Buscamos coincidencia en Usuario, Línea o ID de lote
+        const coincideBusqueda = (
+            l.user.toLowerCase().includes(s) || 
+            l.line.toLowerCase().includes(s) || 
+            l.id.toString().toLowerCase().includes(s)
+        );
+
+        return esTerminado && coincideBusqueda;
+    }).forEach(l => {
+        // Limpiamos el formato de la hora
+        let h = l.hFin || "--:--";
+        if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
+
+        // Agregamos la fila a la tabla
+        b.innerHTML += `
+            <tr>
+                <td>${l.date}</td>
+                <td>${h}</td>
+                <td>${l.id}</td>
+                <td>${l.line}</td>
+                <td>${l.user}</td>
+                <td>${l.pg}</td>
+                <td>${fmt(l.tR)}</td>
+            </tr>`;
+    });
+}
 
    function exportExcel() {
     // 1. Añadimos "Turno" a los encabezados (después de Hora_Fin)
@@ -811,19 +860,32 @@ async function refreshData() {
     }
 }
 window.addEventListener('load', async () => {
-    // 1. Primero dibujamos lo que el navegador guardó la última vez
+    console.log("🚀 Arrancando motores...");
+
+    // 1. EJECUTAR CONFIGURACIÓN INICIAL (Nombre, líneas, botones)
+    // Esto es lo que faltaba para que aparezca tu nombre.
+    await init(); 
+
+    // 2. RECUPERAR DATOS LOCALES
     const backup = localStorage.getItem('qc_final_v88');
     if (backup) {
-        db = JSON.parse(backup);
-        console.log("📦 Recuperando datos locales...");
-        render(); 
+        try {
+            db = JSON.parse(backup);
+            console.log("📦 Datos locales cargados.");
+            if (typeof render === 'function') render(); 
+        } catch (e) {
+            console.error("Error al leer backup:", e);
+        }
     }
 
-    // 2. Inmediatamente preguntamos a la nube si hay algo nuevo
-    await refreshData();
+    // 3. SINCRONIZAR CON LA NUBE
+    // Ya no necesitas el setInterval aquí porque la función init() 
+    // corregida que te pasé antes ya tiene su propio setInterval.
+    if (typeof refreshData === 'function') {
+        await refreshData();
+    }
     
-    // 3. Dejamos el reloj activado para que se actualice solo cada 15 segundos
-    setInterval(refreshData, 15000);
+    console.log("✅ Sistema listo y conectado.");
 });
 </script>
 </body>
