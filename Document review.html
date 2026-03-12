@@ -339,7 +339,7 @@ function render() {
         const estado = (l.st || "wait").toLowerCase();
         
         // --- 1. FILTRO DE BÚSQUEDA ---
-        if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
+        //if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
 
         // --- 2. LÓGICA DE FECHA INTELIGENTE ---
         let fechaLote = l.date ? String(l.date).trim() : "";
@@ -532,45 +532,44 @@ async function save(loteEspecifico = null) {
         if(t==='perf') renderPerf(); else renderAdmin();
     }
 async function refreshData() {
+    // 1. Verificamos si hay una pausa manual o si la pestaña está oculta para ahorrar recursos
     if (pausaSincro || document.hidden) return;
     
     try {
         console.log("🔄 Iniciando sincronización con la nube...");
         
-        // CAMBIO AQUÍ: Quitamos el bloque de {method: 'GET', mode: 'cors'} 
-        // Esto evita que Google bloquee la conexión desde GitHub.
-       const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), {
-    method: 'GET',
-    mode: 'no-cors', // Agregamos esto para forzar la entrada
-    cache: 'no-cache'
-});
+        // 2. FETCH SIMPLIFICADO: Eliminamos 'no-cors' para poder leer el JSON
+        // Agregamos un timestamp (?t=...) para evitar que el navegador use datos viejos (caché)
+        const response = await fetch(SCRIPT_URL + '?t=' + Date.now());
         
-        if (!response.ok) throw new Error("Respuesta de red no OK");
+        // 3. VALIDACIÓN DE RESPUESTA: Google Apps Script a veces devuelve estados especiales
+        if (response.status >= 400) throw new Error("Error en servidor: " + response.status);
         
         const data = await response.json();
         
         if (!data || !Array.isArray(data)) {
-            console.warn("⚠️ Datos inválidos.");
+            console.warn("⚠️ Datos recibidos no son válidos.");
             return;
         }
 
         const mapaFinal = new Map();
 
+        // 4. PROCESAMIENTO DE DATOS DE LA NUBE
         data.forEach(item => {
             if(!item.id) return;
             const idStr = item.id.toString().trim();
             
-           let fDoc = "";
-if (item.date) {
-    let dStr = item.date.toString();
-    if (dStr.includes('/')) {
-        const p = dStr.split('/');
-        // Esto convierte 11/03/2026 en 2026-03-11 para que el sistema lo entienda
-        if (p.length === 3) fDoc = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
-    } else {
-        fDoc = dStr.split('T')[0].substring(0,10);
-    }
-}
+            // Reparación de formato de fecha (Convierte 11/03/2026 a 2026-03-11)
+            let fDoc = "";
+            if (item.date) {
+                let dStr = item.date.toString();
+                if (dStr.includes('/')) {
+                    const p = dStr.split('/');
+                    if (p.length === 3) fDoc = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+                } else {
+                    fDoc = dStr.split('T')[0].substring(0,10);
+                }
+            }
 
             mapaFinal.set(idStr, {
                 ...item,
@@ -580,24 +579,30 @@ if (item.date) {
             });
         });
 
-        // Mantenemos lo local que no esté en la nube
+        // 5. ESCUDO DE PROTECCIÓN LOCAL (Para lotes nuevos como 453 y 565)
+        // Mantenemos lo que tenemos en el navegador si aún no aparece en la nube
         db.forEach(loteLocal => {
             const idStr = loteLocal.id.toString().trim();
-           // Si el lote no está en la nube O tiene menos de 45 segundos de vida, NO lo borres
-if (!mapaFinal.has(idStr) && (loteLocal.st !== 'done' || (Date.now() - (loteLocal.lastUpdate || 0) < 45000))) {
-    mapaFinal.set(idStr, loteLocal);
-}
+            
+            // Si el lote no está en la nube O tiene menos de 45 segundos de vida, NO lo borres de la pantalla
+            const esReciente = (Date.now() - (loteLocal.lastUpdate || 0) < 45000);
+            if (!mapaFinal.has(idStr) && (loteLocal.st !== 'done' || esReciente)) {
+                mapaFinal.set(idStr, loteLocal);
+            }
         });
 
+        // 6. ACTUALIZACIÓN FINAL
         db = Array.from(mapaFinal.values());
-        localStorage.setItem('qc_final_v88', JSON.stringify(db));
+        localStorage.setItem('qc_final_v88', JSON.stringify(db)); // Guardamos copia de seguridad local
         
+        // Ordenamos por número de lote
         db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
-        render();
+        
+        render(); // Dibujamos todo en la pantalla
         console.log("✅ Sincronización exitosa.");
 
     } catch (e) {
-        console.error("❌ Error de conexión:", e);
+        console.error("❌ Fallo de conexión con la nube:", e);
     }
 }
 async function addBR() {
