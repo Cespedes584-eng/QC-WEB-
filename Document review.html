@@ -539,6 +539,39 @@ async function save(loteEspecifico = null) {
             </tr>`;
     });
 }
+function renderAdmin() {
+    // 1. Buscamos el cuerpo de la tabla de edición
+    const b = document.getElementById('adm-body');
+    
+    // Si el elemento no existe en el HTML, salimos para no dar error
+    if (!b) {
+        console.warn("⚠️ No se encontró el elemento 'adm-body' en el HTML.");
+        return;
+    }
+    
+    // 2. Limpiamos la tabla antes de dibujar
+    b.innerHTML = "";
+    
+    // 3. Recorremos la base de datos (db) para crear las filas
+    db.forEach((l, i) => {
+        // Creamos cada fila con botones para editar y borrar
+        b.innerHTML += `
+            <tr>
+                <td>${l.date}</td>
+                <td>${l.id} <span class="pencil" style="cursor:pointer" onclick="edit(${i},'id')">✏️</span></td>
+                <td>${l.line} <span class="pencil" style="cursor:pointer" onclick="editLine(${i})">✏️</span></td>
+                <td>${l.user}</td>
+                <td>${l.pg} <span class="pencil" style="cursor:pointer" onclick="edit(${i},'pg')">✏️</span></td>
+                <td>
+                    <button onclick="del(${i})" style="background:none; border:none; color:#e74c3c; cursor:pointer; font-size:1.2rem;">
+                        🗑️
+                    </button>
+                </td>
+            </tr>`;
+    });
+    
+    console.log("🛠️ Tabla de edición renderizada.");
+}
 
    function exportExcel() {
     // 1. Añadimos "Turno" a los encabezados (después de Hora_Fin)
