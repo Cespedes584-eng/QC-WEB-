@@ -534,111 +534,52 @@ async function save(loteEspecifico = null) {
         if(t==='perf') renderPerf(); else renderAdmin();
     }
 async function refreshData() {
-    if (pausaSincro || document.hidden) return;
-    
     try {
         console.log("🔄 Iniciando sincronización con la nube...");
-// Usamos GET para leer, no POST. Y no enviamos 'body'.
-const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), { 
-    method: 'GET',
-    mode: 'cors', 
-    redirect: 'follow'
-});
         
-       // 1. Validamos la respuesta sin que se rompa el código
-        if (!response.ok) {
-            console.warn("⚠️ No se pudo leer de la nube, manteniendo datos locales.");
-            return; // Salimos de la función sin borrar nada
-        }
+        const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), {
+            method: 'GET',
+            redirect: 'follow'
+        });
+
+        if (!response.ok) return;
 
         const data = await response.json();
-        
-        // 2. Si la nube responde vacío o error, no vaciamos la pantalla
-        if (!data || !Array.isArray(data) || data.length === 0) {
-            console.log("☁️ La nube está vacía o no respondió correctamente.");
-            return; 
-        }
+        if (!data || !Array.isArray(data)) return;
 
-       data.forEach(item => {
-            if(!item.id) return;
+        const mapaFinal = new Map();
+
+        // 1. Cargar datos de la nube
+        data.forEach(item => {
+            if (!item.id) return;
             const idStr = item.id.toString().trim();
-
-            // Guardamos lo que viene de la nube en el mapa
             mapaFinal.set(idStr, {
                 ...item,
                 id: idStr,
                 st: (item.st || "wait").toLowerCase()
             });
         });
-// --- EL ESCUDO DE PROTECCIÓN MEJORADO ---
+
+        // 2. Aplicar Escudo a datos locales
         db.forEach(loteLocal => {
             const idStrLocal = loteLocal.id.toString().trim();
-            // 45 segundos de margen para que la nube se actualice
             const esReciente = (Date.now() - (loteLocal.lastUpdate || 0) < 45000);
-            
-            // BUSCAMOS SI YA ESTÁ EN LA NUBE
-            const loteNube = mapaFinal.get(idStrLocal);
-
-            // REGLA: Si el lote local es reciente O si el lote local está en proceso (work/done) 
-            // y la nube todavía dice que está en espera (wait), mandamos nosotros.
-            if (!loteNube || esReciente || (loteLocal.st !== 'wait' && loteNube.st === 'wait')) {
+            if (!mapaFinal.has(idStrLocal) || esReciente) {
                 mapaFinal.set(idStrLocal, loteLocal);
             }
         });
 
-        // Aplicamos el resultado final a la base de datos
         db = Array.from(mapaFinal.values());
-        // Actualizamos la base de datos visual
-        db = Array.from(mapaFinal.values());
+        db.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
         
-        // Ordenar por ID para que no salten de posición
-        db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
-
         localStorage.setItem('qc_final_v88', JSON.stringify(db));
-        render();
-        console.log("✅ Sincronización exitosa y escudo activo.");
-            
-           // Reparación de fecha para que el filtro de hoy funcione
-            let fDoc = "";
-            if (item.date) {
-                let dStr = item.date.toString();
-                if (dStr.includes('/')) {
-                    // Si viene como DD/MM/YYYY lo voltea a YYYY-MM-DD
-                    const p = dStr.split('/');
-                    if (p.length === 3) fDoc = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
-                } else {
-                    fDoc = dStr.split('T')[0].substring(0,10);
-                }
-            }
-
-            mapaFinal.set(idStr, {
-                ...item,
-                id: idStr,
-                date: fDoc,
-                st: (item.st || "wait").toLowerCase()
-            });
-        });
-
-        // ESCUDO: Si el lote es nuevo (menos de 45 segundos), no dejes que la nube lo borre
-        db.forEach(loteLocal => {
-            const idStr = loteLocal.id.toString().trim();
-            const esReciente = (Date.now() - (loteLocal.lastUpdate || 0) < 45000);
-            if (!mapaFinal.has(idStr) && (loteLocal.st !== 'done' || esReciente)) {
-                mapaFinal.set(idStr, loteLocal);
-            }
-        });
-
-        db = Array.from(mapaFinal.values());
-        localStorage.setItem('qc_final_v88', JSON.stringify(db));
-        db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
-        
         render();
         console.log("✅ Sincronización exitosa.");
 
-    } catch (e) {
-        console.error("❌ Error de conexión:", e);
+    } catch (error) {
+        console.error("❌ Error en refreshData:", error);
     }
-}
+} // AQUÍ SE CIERRA LA FUNCIÓN CORRECTAMENTE
 async function addBR() {
     console.log("Iniciando registro de lote...");
     
