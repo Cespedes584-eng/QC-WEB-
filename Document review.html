@@ -192,7 +192,7 @@
 
 <script>
         // Variables de configuración y estado
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxhlYBCF0IzrzbGUU-TI1IREgtqUWgjmLG4UKE6Yq4dC6LGTL4vXcQWbeUdPCoOo75Qnw/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwzegv3muP4D0GJa25biiZ3OvGdePJUSQg92BsqPR2ZAyRvqdzBKx4lN6mXT6nB0TN36Q/exec";
     const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
     
     let db = []; 
@@ -532,38 +532,34 @@ async function save(loteEspecifico = null) {
         if(t==='perf') renderPerf(); else renderAdmin();
     }
 async function refreshData() {
-    // 1. Verificamos si hay una pausa manual o si la pestaña está oculta para ahorrar recursos
     if (pausaSincro || document.hidden) return;
     
     try {
         console.log("🔄 Iniciando sincronización con la nube...");
         
-        // 2. FETCH SIMPLIFICADO: Eliminamos 'no-cors' para poder leer el JSON
-        // Agregamos un timestamp (?t=...) para evitar que el navegador use datos viejos (caché)
-        const response = await fetch(SCRIPT_URL + '?t=' + Date.now());
+        const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), {
+    method: 'GET',
+    mode: 'cors', // Agregamos modo cors explícito
+    redirect: 'follow'
+});
         
-        // 3. VALIDACIÓN DE RESPUESTA: Google Apps Script a veces devuelve estados especiales
-        if (response.status >= 400) throw new Error("Error en servidor: " + response.status);
+        if (response.status >= 400) throw new Error("Respuesta de red no OK");
         
         const data = await response.json();
-        
-        if (!data || !Array.isArray(data)) {
-            console.warn("⚠️ Datos recibidos no son válidos.");
-            return;
-        }
+        if (!data || !Array.isArray(data)) return;
 
         const mapaFinal = new Map();
 
-        // 4. PROCESAMIENTO DE DATOS DE LA NUBE
         data.forEach(item => {
             if(!item.id) return;
             const idStr = item.id.toString().trim();
             
-            // Reparación de formato de fecha (Convierte 11/03/2026 a 2026-03-11)
+           // Reparación de fecha para que el filtro de hoy funcione
             let fDoc = "";
             if (item.date) {
                 let dStr = item.date.toString();
                 if (dStr.includes('/')) {
+                    // Si viene como DD/MM/YYYY lo voltea a YYYY-MM-DD
                     const p = dStr.split('/');
                     if (p.length === 3) fDoc = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
                 } else {
@@ -579,30 +575,24 @@ async function refreshData() {
             });
         });
 
-        // 5. ESCUDO DE PROTECCIÓN LOCAL (Para lotes nuevos como 453 y 565)
-        // Mantenemos lo que tenemos en el navegador si aún no aparece en la nube
+        // ESCUDO: Si el lote es nuevo (menos de 45 segundos), no dejes que la nube lo borre
         db.forEach(loteLocal => {
             const idStr = loteLocal.id.toString().trim();
-            
-            // Si el lote no está en la nube O tiene menos de 45 segundos de vida, NO lo borres de la pantalla
             const esReciente = (Date.now() - (loteLocal.lastUpdate || 0) < 45000);
             if (!mapaFinal.has(idStr) && (loteLocal.st !== 'done' || esReciente)) {
                 mapaFinal.set(idStr, loteLocal);
             }
         });
 
-        // 6. ACTUALIZACIÓN FINAL
         db = Array.from(mapaFinal.values());
-        localStorage.setItem('qc_final_v88', JSON.stringify(db)); // Guardamos copia de seguridad local
-        
-        // Ordenamos por número de lote
+        localStorage.setItem('qc_final_v88', JSON.stringify(db));
         db.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
         
-        render(); // Dibujamos todo en la pantalla
+        render();
         console.log("✅ Sincronización exitosa.");
 
     } catch (e) {
-        console.error("❌ Fallo de conexión con la nube:", e);
+        console.error("❌ Error de conexión:", e);
     }
 }
 async function addBR() {
