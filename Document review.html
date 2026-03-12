@@ -622,89 +622,15 @@ async function refreshData() {
         db.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
         
         localStorage.setItem('qc_final_v88', JSON.stringify(db));
-        render();
-        console.log("✅ Sincronización exitosa.");
+
+        // --- LOS DISPARADORES VISUALES ---
+        render();      // Refresca la lista de edición
+        renderPerf();  // <--- ESTO ES LO QUE HACÍA FALTA PARA EL HISTORIAL
+        
+        console.log("✅ Sincronización exitosa e historial actualizado.");
 
     } catch (error) {
         console.error("❌ Error en refreshData:", error);
-    }
-} // AQUÍ SE CIERRA LA FUNCIÓN CORRECTAMENTE
-async function addBR() {
-    console.log("Iniciando registro de lote...");
-    
-    // 1. Capturar elementos de la interfaz
-    const input = document.getElementById('new-id');
-    const lineSel = document.getElementById('new-line');
-    const dateSel = document.getElementById('main-date-filter');
-
-    // 2. Validar que el ID no esté vacío
-    if (!input || !input.value.trim()) {
-        alert("Por favor, ingrese el número de lote");
-        return;
-    }
-    
-    // Extraemos solo los números
-    const idInput = input.value.replace(/[^0-9]/g, '');
-    const line = lineSel ? lineSel.value : "S/L";
-    
-    // 3. Manejo de Fecha
-    let dateStr = new Date().toISOString().split('T')[0];
-    if (dateSel && dateSel.value) {
-        dateStr = dateSel.value; 
-    }
-
-    // 4. Lógica de Turnos automática
-    const ahora = new Date();
-    const totalMinutos = (ahora.getHours() * 60) + ahora.getMinutes();
-    const turnoDetectado = (totalMinutos >= 360 && totalMinutos <= 930) ? "TA" : "TB";
-
-    // 5. Crear el objeto con EL ESCUDO ACTIVO (lastUpdate)
-    const nuevoLote = {
-        id: idInput,
-        line: line, 
-        user: "SIN ASIGNAR", 
-        st: 'wait',
-        date: dateStr, 
-        inicioWS: Date.now(),
-        lastUpdate: Date.now(), // PROTECCIÓN: Evita que la nube lo borre al inicio
-        tW: 0, tR: 0, tC: 0,
-        tR_acumulado: 0, tC_acumulado: 0, 
-        pg: 0, 
-        hFin: "", 
-        turno: turnoDetectado 
-    };
-
-    // 6. Agregar a la base de datos local (db)
-    if (typeof db === 'undefined') db = [];
-    
-    // Evitar duplicados
-    const existe = db.find(l => l.id.toString() === idInput);
-    if (existe) {
-        alert("El lote " + idInput + " ya está en la lista.");
-        return;
-    }
-
-    db.push(nuevoLote);
-    
-    // --- PASO CLAVE: Guardar en el disco duro del navegador (LocalStorage) ---
-    // Esto asegura que si das F5, el lote siga ahí.
-    localStorage.setItem('qc_final_v88', JSON.stringify(db));
-
-    // 7. Limpiar el formulario y cerrar el modal
-    input.value = "";
-    if (typeof hideModal === 'function') hideModal('modal-new');
-    
-    // 8. Refrescar la pantalla inmediatamente (Visualmente es instantáneo)
-    render(); 
-    
-    // 9. Enviar a Google Sheets
-    console.log("🚀 Lote " + idInput + " creado. Sincronizando con la nube...");
-    
-    try {
-        await save(nuevoLote); 
-        console.log("✅ Lote guardado en la nube correctamente.");
-    } catch (e) {
-        console.error("❌ Error de red, pero el lote se mantiene en la pantalla local.");
     }
 }
 function openFin(i) {
@@ -860,32 +786,20 @@ async function refreshData() {
     }
 }
 window.addEventListener('load', async () => {
-    console.log("🚀 Arrancando motores...");
-
-    // 1. EJECUTAR CONFIGURACIÓN INICIAL (Nombre, líneas, botones)
-    // Esto es lo que faltaba para que aparezca tu nombre.
+    // 1. Iniciamos nombre de usuario y configuración
     await init(); 
 
-    // 2. RECUPERAR DATOS LOCALES
+    // 2. Recuperamos el historial del disco duro del PC/Celular
     const backup = localStorage.getItem('qc_final_v88');
     if (backup) {
-        try {
-            db = JSON.parse(backup);
-            console.log("📦 Datos locales cargados.");
-            if (typeof render === 'function') render(); 
-        } catch (e) {
-            console.error("Error al leer backup:", e);
-        }
+        db = JSON.parse(backup);
+        console.log("📦 Historial local cargado.");
+        render(); 
+        renderPerf(); // <--- IMPORTANTE: Dibujamos el rendimiento de inmediato
     }
 
-    // 3. SINCRONIZAR CON LA NUBE
-    // Ya no necesitas el setInterval aquí porque la función init() 
-    // corregida que te pasé antes ya tiene su propio setInterval.
-    if (typeof refreshData === 'function') {
-        await refreshData();
-    }
-    
-    console.log("✅ Sistema listo y conectado.");
+    // 3. Buscamos actualizaciones en la nube
+    await refreshData();
 });
 </script>
 </body>
