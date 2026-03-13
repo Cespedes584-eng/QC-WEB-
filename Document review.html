@@ -74,6 +74,8 @@
     background-color: #d0d0d0;
 }
     </style>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
 </head>
 <body>
 
@@ -191,250 +193,63 @@
 </style>
 
 <script>
-        // Variables de configuración y estado
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxlL-kGgj067eENNZwXzhMQVOSEWbOEuSH3gPfrj0hG3JcV_WZqvEOehFbHyzLLK-puiQ/exec";
-    const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
-    
-    let db = []; 
-    let currentShift = "TODOS"; 
-    let pausaSincro = false; // Asegúrate de que esta variable esté declarada
-    let tempIdx = null;
+// --- CONFIGURACIÓN DE FIREBASE ---
+const firebaseConfig = {
+    databaseURL: "https://qc-control-1b547-default-rtdb.firebaseio.com/"
+};
 
-    let dbDocumentos = [];   // Copia de seguridad de la nube
-    let docEnRevision = null; // Para guardar el ID del documento que estás tocando
-    let catalogoHallazgos = JSON.parse(localStorage.getItem('qc_hallazgos_docs')) || ["Firma Faltante", "Fecha Incorrecta", "Ilegible", "Error de Cálculo"];
+// Inicializamos la conexión (Solo una vez)
+firebase.initializeApp(firebaseConfig);
+const rtdb = firebase.database();
+// --- EL RADAR: ESCUCHA CAMBIOS EN LA NUBE ---
+function iniciarSincronizacion() {
+    console.log("📡 Conectando con Firebase Realtime...");
 
-    // MOTOR DEL RELOJ: Solo una vez
-    setInterval(tick, 1000);
-function setShift(turno) {
-    currentShift = turno; 
-    
-    // 1. Quitamos la clase 'active' a todos los botones para "apagarlos"
-    const botones = document.querySelectorAll('.btn-filter-pro');
-    botones.forEach(b => b.classList.remove('active'));
-    
-    // 2. Encendemos solo el que corresponde
-    if(turno === 'TODOS') document.getElementById('btn-todos').classList.add('active');
-    else if(turno === 'TA') document.getElementById('btn-ta').classList.add('active');
-    else if(turno === 'TB') document.getElementById('btn-tb').classList.add('active');
-    
-    // 3. Refrescamos la pantalla con el nuevo filtro
-    render(); 
-}
-async function init() {
-    try {
-        console.log("🎬 Iniciando proceso de configuración...");
+    rtdb.ref('recursos').on('value', (snapshot) => {
+        const data = snapshot.val();
         
-        // 1. Identificación de usuario con manejo de errores de JSON
-        const sesionEstandar = localStorage.getItem('qc_session');
-        const usuarioLegacy = localStorage.getItem('usuario');
-        let nombreDetectado = "SIN ASIGNAR";
+        if (data) {
+            // 1. Convertimos lo que viene de la nube en una lista
+            const arrayNube = Object.values(data);
+            const mapaFinal = new Map();
 
-        if (sesionEstandar) {
-            try {
-                const u = JSON.parse(sesionEstandar);
-                nombreDetectado = u.nombre || u.user || u.usuario || "SIN ASIGNAR";
-                
-                const btnAdmin = document.getElementById('btn-admin-config');
-                if (u.isAdmin && btnAdmin) {
-                    btnAdmin.style.display = 'inline-block';
-                }
-            } catch (jsonErr) {
-                console.warn("⚠️ Sesión corrupta, usando valores por defecto.");
-            }
-        } else if (usuarioLegacy) {
-            nombreDetectado = usuarioLegacy;
-        }
-        
-        // Actualizar visualización del usuario
-        const userDisp = document.getElementById('user-display');
-        if (userDisp) {
-            userDisp.innerText = `👤 ${nombreDetectado.toUpperCase()}`;
-        }
-
-        // 2. Cargar líneas en el selector (Validando existencia de la variable 'lineas')
-        const sel = document.getElementById('new-line');
-        if (sel && typeof lineas !== 'undefined') {
-            sel.innerHTML = "";
-            [...lineas].sort().forEach(l => { 
-                sel.innerHTML += `<option value="${l}">${l}</option>`; 
+            // 2. Metemos los datos de la nube al mapa
+            arrayNube.forEach(l => {
+                const idStr = l.id.toString();
+                mapaFinal.set(idStr, l);
             });
-        }
-        
-        // 3. Configurar fecha y filtros
-        const dateFilt = document.getElementById('main-date-filter');
-        if (dateFilt && typeof formatearFecha === 'function') {
-            dateFilt.value = formatearFecha();
-        }
-        
-        const shiftFilt = document.getElementById('shift-filter');
-        if (shiftFilt) {
-            shiftFilt.value = "TODOS";
-        }
 
-        // 4. Reset de datos y primera carga
-        db = []; 
-        if (typeof render === 'function') render(); 
-        
-        // Intentar carga desde la nube
-        if (typeof refreshData === 'function') {
-            await refreshData();
-        }
-
-        // 5. Ciclos automáticos (Sincronización y Reloj)
-        // Solo activa el intervalo si refreshData existe
-        if (typeof refreshData === 'function') {
-            setInterval(() => {
-                if (typeof pausaSincro !== 'undefined' && !pausaSincro) {
-                    refreshData();
+            // 3. EL ESCUDO: Mantenemos los cambios locales si son menores a 8 segundos
+            // (Esto evita que el lote "regrese" a su estado anterior mientras la nube procesa)
+            db.forEach(lLocal => {
+                const idStr = lLocal.id.toString();
+                const esMuyReciente = (Date.now() - (lLocal.lastUpdate || 0) < 8000);
+                if (esMuyReciente) {
+                    mapaFinal.set(idStr, lLocal);
                 }
-            }, 15000); 
-        }
-        
-        if (typeof tick === 'function') {
-            setInterval(tick, 1000);
-        }
-        
-        console.log("✅ Sistema inicializado correctamente.");
-    } catch (e) {
-        console.error("❌ Error crítico en init:", e);
-    }
-}
-    function tick() {
-        const ahora = Date.now();
-        db.forEach(l => {
-            if (l.st === 'done') return; 
-            if (l.st === 'wait' && l.inicioWS) l.tW = ahora - l.inicioWS;
-            if (l.st === 'rev' && l.inicioRS) l.tR = (ahora - l.inicioRS) + (l.tR_acumulado || 0);
-            if (l.st === 'corr' && l.inicioCS) l.tC = (ahora - l.inicioCS) + (l.tC_acumulado || 0);
-        });
-        updateTimers(); 
-        document.getElementById('reloj').innerText = new Date().toLocaleTimeString();
-    }
+            });
 
-    function updateTimers() {
-        db.forEach((l, i) => {
-            if (l.st === 'done') return;
-            const mainTimer = document.getElementById(`live-${i}`);
-            if (mainTimer) {
-                const displayTime = (l.st === 'wait') ? l.tW : (l.st === 'rev' ? l.tR : l.tC);
-                mainTimer.innerText = fmt(displayTime);
-            }
-            const grid = document.getElementById(`grid-${i}`);
-            if (grid) {
-                grid.innerHTML = `
-                    <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
-                    <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
-                    <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
-                `;
-            }
-        });
-    }
-
-    function formatearFecha(f) {
-        const d = f ? new Date(f) : new Date();
-        if (isNaN(d)) return f;
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
-
-    function fmt(ms) {
-        if (isNaN(ms) || ms === null || ms < 0) return "00:00";
-        const totalSegundos = Math.floor(ms / 1000);
-        const horas = Math.floor(totalSegundos / 3600);
-        const minutos = Math.floor((totalSegundos % 3600) / 60);
-        const segundos = totalSegundos % 60;
-        if (horas > 0) return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
-        return `${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
-    }
-
-function render() {
-    const cont = { 
-        wait: document.getElementById('list-wait'), 
-        run: document.getElementById('list-run'), 
-        done: document.getElementById('list-done') 
-    };
-    if (!cont.wait || !cont.run || !cont.done) return;
-
-    // Limpiamos las columnas antes de dibujar
-    cont.wait.innerHTML = ""; cont.run.innerHTML = ""; cont.done.innerHTML = "";
-    
-    const selDate = document.getElementById('main-date-filter').value; // Formato YYYY-MM-DD
-    const searchText = document.getElementById('main-search').value.toLowerCase();
-    
-    let topB = 0, topP = 0;
-
-    db.forEach((l, i) => {
-        const estado = (l.st || "wait").toLowerCase();
-        
-        // --- 1. FILTRO DE BÚSQUEDA ---
-        //if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
-
-        // --- 2. LÓGICA DE FECHA INTELIGENTE ---
-        let fechaLote = l.date ? String(l.date).trim() : "";
-        
-        // Si la fecha viene de Google como DD/MM/YYYY, la convertimos a YYYY-MM-DD para comparar
-        if (fechaLote.includes('/')) {
-            const partes = fechaLote.split('/');
-            if (partes.length === 3) {
-                // Convertimos "10/03/2026" -> "2026-03-10"
-                fechaLote = `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}`;
-            }
-        } else {
-            // Si viene con hora (ISO), cortamos solo los primeros 10 caracteres
-            fechaLote = fechaLote.substring(0, 10);
+            // 4. Actualizamos nuestra variable global y ordenamos
+            db = Array.from(mapaFinal.values());
+            db.sort((a, b) => a.id.toString().localeCompare(b.id.toString(), undefined, { numeric: true }));
         }
 
-        // --- 3. REGLA DE VISIBILIDAD CRÍTICA ---
-        // Si el lote está FINALIZADO, aplicamos filtro de fecha.
-        // Si el lote está PENDIENTE (wait, rev, corr), se muestra SIEMPRE para que no "desaparezca".
-        if (estado === 'done') {
-            if (selDate && fechaLote !== selDate) return;
-            topB++; 
-            topP += parseInt(l.pg || 0);
-        }
-
-        // --- 4. CREACIÓN DEL CUADRO (CARD) ---
-        const isFinalizado = (estado === 'done');
-        const card = `
-        <div class="card" style="border-left: 5px solid ${isFinalizado ? '#468e5d' : (estado === 'wait' ? '#2c3e50' : '#f39c12')};">
-            <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
-            <div style="font-size:0.75em; color:#666;">${l.line} | <b>${l.user}</b></div>
-            ${isFinalizado ? `<span class="status-final">FINALIZADO</span>` : `<span class="timer-big" id="live-${i}">00:00</span>`}
-            <div class="timer-grid-3" id="grid-${i}">
-                <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
-                <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
-                <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
-            </div>
-            ${estado === 'wait' ? `<button class="btn" style="background:#27ae60; color:white" onclick="changeSt(${i},'rev')">INICIAR</button>` : 
-              (estado === 'rev' || estado === 'corr') ? `
-                <button class="btn" style="background:#f39c12; color:white; margin-bottom:5px;" onclick="changeSt(${i},'corr')">CORRECCIÓN</button>
-                <button class="btn" style="background:#2c3e50; color:white" onclick="openFin(${i})">FINALIZAR</button>` : 
-              `<div style="text-align:center; font-weight:bold; color:#27ae60;">PÁGINAS: ${l.pg}</div>`}
-        </div>`;
-
-        // Enviamos el cuadro a su columna correspondiente
-        if (estado === 'wait') cont.wait.insertAdjacentHTML('afterbegin', card);
-        else if (isFinalizado) cont.done.insertAdjacentHTML('afterbegin', card);
-        else cont.run.insertAdjacentHTML('afterbegin', card);
+        render(); 
+        if (typeof renderPerf === 'function') renderPerf();
+        if (typeof renderAdmin === 'function') renderAdmin();
     });
-
-    // Actualizamos los contadores de arriba
-    document.getElementById('top-brs').innerText = topB;
-    document.getElementById('top-pags').innerText = topP;
 }
- async function changeSt(idx, s) { 
+async function changeSt(loteId, s) { 
     const ahora = Date.now();
-    const lote = db[idx]; 
+    
+    // CAMBIO: Buscamos por ID en lugar de usar posición de índice
+    const lote = db.find(l => l.id == loteId); 
     if (!lote) return;
 
     lote.lastUpdate = ahora; 
     
     if (lote.st === 'wait' && s === 'rev') {
-        const userText = document.getElementById('user-display').innerText;
-        lote.user = userText.replace('👤 ', '').trim().toUpperCase();
+        lote.user = userActual;
     }
 
     if (lote.st === 'rev' && lote.inicioRS) {
@@ -445,211 +260,288 @@ function render() {
     }
     
     lote.st = s;
-    if (s === 'rev') { lote.inicioRS = ahora; lote.inicioCS = null; } 
+    if (s === 'rev') { lote.inicioRS = ahora; lote.inicioCS = null; }
     else if (s === 'corr') { lote.inicioCS = ahora; lote.inicioRS = null; }
     
     render(); 
-    // Aquí es donde el código fallaba. Asegúrate de pasar el objeto 'lote'
     await save(lote); 
 }
-
-async function save(loteEspecifico = null) { 
-    // Si la sincronización está pausada y no es un envío forzado de un lote, salimos
-    if (pausaSincro && loteEspecifico === null) return;
+// --- FUNCIÓN PARA CREAR UN LOTE NUEVO EN FIREBASE ---
+async function addBR() {
+    // 1. Capturamos los elementos del HTML
+    const idInput = document.getElementById('new-id');
+    const lineInput = document.getElementById('new-line');
     
-    pausaSincro = true; 
-    
-    const loader = document.getElementById('loader-save');
-    if (loader) loader.style.display = 'flex';
+    // 2. Validamos que el usuario escribió algo
+    const id = idInput.value.trim();
+    const line = lineInput.value;
 
-    // Si enviamos un solo lote, actualizamos su 'lastUpdate' antes de enviarlo
-    if (loteEspecifico) {
-        loteEspecifico.lastUpdate = Date.now(); 
-    }
+    if (!id) return alert("⚠️ ¡Falta el número de lote!");
 
-    const datosEnvio = loteEspecifico ? [loteEspecifico] : db;
+    // 3. Creamos el objeto con la estructura profesional (Nivel 2)
+    const nuevoLote = {
+    id: "12345",          // El número de lote (String)
+    line: "SOFIA 6F L1",  // Línea seleccionada
+    user: "JUAN",         // Inspector actual
+    st: "wait",           // Estados: 'wait', 'rev', 'corr', 'done'
+    date: "2024-05-20",   // Fecha de creación
+    tW: 0, tR: 0, tC: 0,  // Tiempos acumulados en milisegundos
+    tR_acumulado: 0,      // Auxiliar para pausas en revisión
+    tC_acumulado: 0,      // Auxiliar para pausas en corrección
+    inicioWS: Date.now(), // Marca de tiempo cuando entra a "Espera"
+    lastUpdate: Date.now()// Sello de seguridad para el "Escudo" de sincronización
+};
 
-    try { 
-        console.log("📡 Enviando datos...", datosEnvio);
-
-        // Cambiamos a 'no-cors' para evitar errores de bloqueo en el navegador
-        // al enviar datos a Google Apps Script.
-        await fetch(SCRIPT_URL, { 
-            method: 'POST', 
-            mode: 'no-cors', 
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(datosEnvio)
-        });
-
-        console.log("✅ Petición enviada a la nube.");
-        
-        // Guardamos localmente para asegurar persistencia
-        localStorage.setItem('qc_final_v88', JSON.stringify(db));
-
-    } catch (e) { 
-        console.error("❌ Error de comunicación:", e); 
-    }
-
-    // Esperamos 4 segundos antes de liberar el escudo
-    setTimeout(() => {
-        if (loader) loader.style.display = 'none';
-        pausaSincro = false;
-        console.log("🔄 Sincronización automática reanudada.");
-    }, 4000); 
-}
-    function renderPerf() {
-    // 1. Validamos que los elementos existan antes de usarlos
-    const b = document.getElementById('perf-body'); 
-    const searchInput = document.getElementById('perf-search');
-    
-    // Si no existen los elementos en el HTML, salimos de la función sin dar error
-    if (!b || !searchInput) return;
-
-    const s = searchInput.value.toLowerCase(); 
-    b.innerHTML = "";
-
-    // 2. Filtramos y dibujamos la tabla
-    [...db].reverse().filter(l => {
-        // Solo mostramos lotes terminados (st === 'done')
-        const esTerminado = (l.st === 'done');
-        
-        // Buscamos coincidencia en Usuario, Línea o ID de lote
-        const coincideBusqueda = (
-            l.user.toLowerCase().includes(s) || 
-            l.line.toLowerCase().includes(s) || 
-            l.id.toString().toLowerCase().includes(s)
-        );
-
-        return esTerminado && coincideBusqueda;
-    }).forEach(l => {
-        // Limpiamos el formato de la hora
-        let h = l.hFin || "--:--";
-        if (h.includes('T')) h = h.split('T')[1].substring(0, 5);
-
-        // Agregamos la fila a la tabla
-        b.innerHTML += `
-            <tr>
-                <td>${l.date}</td>
-                <td>${h}</td>
-                <td>${l.id}</td>
-                <td>${l.line}</td>
-                <td>${l.user}</td>
-                <td>${l.pg}</td>
-                <td>${fmt(l.tR)}</td>
-            </tr>`;
-    });
-}
-function renderAdmin() {
-    // 1. Buscamos el cuerpo de la tabla de edición
-    const b = document.getElementById('adm-body');
-    
-    // Si el elemento no existe en el HTML, salimos para no dar error
-    if (!b) {
-        console.warn("⚠️ No se encontró el elemento 'adm-body' en el HTML.");
-        return;
-    }
-    
-    // 2. Limpiamos la tabla antes de dibujar
-    b.innerHTML = "";
-    
-    // 3. Recorremos la base de datos (db) para crear las filas
-    db.forEach((l, i) => {
-        // Creamos cada fila con botones para editar y borrar
-        b.innerHTML += `
-            <tr>
-                <td>${l.date}</td>
-                <td>${l.id} <span class="pencil" style="cursor:pointer" onclick="edit(${i},'id')">✏️</span></td>
-                <td>${l.line} <span class="pencil" style="cursor:pointer" onclick="editLine(${i})">✏️</span></td>
-                <td>${l.user}</td>
-                <td>${l.pg} <span class="pencil" style="cursor:pointer" onclick="edit(${i},'pg')">✏️</span></td>
-                <td>
-                    <button onclick="del(${i})" style="background:none; border:none; color:#e74c3c; cursor:pointer; font-size:1.2rem;">
-                        🗑️
-                    </button>
-                </td>
-            </tr>`;
-    });
-    
-    console.log("🛠️ Tabla de edición renderizada.");
-}
-
-   function exportExcel() {
-    // 1. Añadimos "Turno" a los encabezados (después de Hora_Fin)
-    let csv = "\uFEFFFecha;Hora_Fin;Turno;Lote;Linea;Inspector;Paginas;T_Espera;T_Revision;T_Correccion\n";
-    
-    db.filter(l => l.st === 'done').forEach(l => {
-        let horaLimpia = l.hFin || "";
-        // Limpiamos la hora por si viene con formato de fecha ISO
-        if (horaLimpia.includes('T')) horaLimpia = horaLimpia.split('T')[1].substring(0, 5);
-        else if (horaLimpia.length > 8) horaLimpia = horaLimpia.substring(0, 5);
-
-        // 2. Incluimos l.turno en la línea de datos (si no tiene turno ponemos "N/A")
-        const turnoLabel = l.turno || "N/A";
-
-        csv += `${l.date};${horaLimpia};${turnoLabel};${l.id};${l.line};${l.user};${l.pg};${fmt(l.tW)};${fmt(l.tR)};${fmt(l.tC)}\n`; 
-    });
-
-    // 3. Generación del archivo
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a"); 
-    link.href = URL.createObjectURL(blob);
-    
-    // Nombre del archivo dinámico con la fecha de hoy
-    link.download = `REPORTE_QC_${formatearFecha()}.csv`; 
-    link.click();
-}
-
-    function edit(i, f) { const n = prompt("Nuevo:", db[i][f]); if(n !== null) { db[i][f] = f==='pg'?parseInt(n):n; save(); renderAdmin(); } }
-    function editLine(i) {
-        let list = "Línea:\n"; lineas.forEach((l, x) => list += `${x}: ${l}\n`);
-        const choice = prompt(list); if(choice !== null && lineas[choice]) { db[i].line = lineas[choice]; save(); renderAdmin(); }
-    }
-    function del(i) { if(confirm("¿Borrar?")) { db.splice(i,1); save(); renderAdmin(); } }
-    function showModal(id) { document.getElementById(id).style.display = 'flex'; }
-    function hideModal(id) { document.getElementById(id).style.display = 'none'; }
-    function toggleAdmin(v) { document.getElementById('admin-panel').style.display = v?'flex':'none'; if(v) renderPerf(); }
-    function switchTab(t) {
-        document.getElementById('view-edit').style.display = t==='edit'?'block':'none';
-        document.getElementById('view-perf').style.display = t==='perf'?'block':'none';
-        document.getElementById('tab-edit').className = t==='edit'?'tab active':'tab';
-        document.getElementById('tab-perf').className = t==='perf'?'tab active':'tab';
-        if(t==='perf') renderPerf(); else renderAdmin();
-    }
-// --- FUNCIÓN DE SINCRONIZACIÓN MAESTRA ---
-async function refreshData() {
-    if (typeof pausaSincro !== 'undefined' && pausaSincro) return;
     try {
-        const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), {
-            method: 'GET',
-            redirect: 'follow'
-        });
-        if (!response.ok) return;
-        const data = await response.json();
-        if (Array.isArray(data)) {
-            const mapaFinal = new Map();
-            // Cargar Nube
-            data.forEach(item => {
-                const idStr = item.id.toString().trim();
-                mapaFinal.set(idStr, {...item, id: idStr, st: item.st.toLowerCase()});
-            });
-            // Mantener local solo lo muy reciente (Escudo)
-            db.forEach(l => {
-                const idStr = l.id.toString().trim();
-                if ((Date.now() - (l.lastUpdate || 0) < 45000) && !mapaFinal.has(idStr)) {
-                    mapaFinal.set(idStr, l);
-                }
-            });
-            db = Array.from(mapaFinal.values());
-            db.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
-            localStorage.setItem('qc_final_v88', JSON.stringify(db));
-            render(); 
-            renderPerf();
-            if (typeof renderAdmin === 'function') renderAdmin();
-        }
-    } catch (e) { console.error("Error de red:", e); }
+        console.log("🚀 Intentando crear lote en Firebase...");
+
+        // 4. LA MAGIA: Guardamos en la carpeta 'recursos/NUMERO_DE_LOTE'
+        // Usamos .set() para que si el lote ya existe, lo resetee o lo cree de cero
+        await rtdb.ref('recursos/' + id).set(nuevoLote);
+        
+        // 5. Limpiamos la interfaz
+        idInput.value = "";
+        console.log("✅ Lote " + id + " creado exitosamente en la nube.");
+        
+    } catch (error) {
+        console.error("❌ Error al crear lote:", error);
+        alert("No se pudo conectar con Firebase. Revisa tu internet.");
+    }
+}
+// --- VARIABLES DE ESTADO ---
+let db = []; // Nuestra base de datos local que se sincroniza con Firebase
+const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
+
+let currentShift = "TODOS"; // Filtro de turno actual
+let userActual = localStorage.getItem('qc_user') || ""; // Nombre del inspector
+let tempIdx = null; // Para editar o mover lotes
+
+// Variables para el Historial y Documentos
+let dbDocumentos = [];   
+let docEnRevision = null; 
+let catalogoHallazgos = JSON.parse(localStorage.getItem('qc_hallazgos_docs')) || ["Firma Faltante", "Fecha Incorrecta", "Ilegible", "Error de Cálculo"];
+
+// MOTOR DEL RELOJ: Se encarga de que los tiempos de "Play" corran en pantalla
+setInterval(tick, 1000);
+
+// FUNCIÓN PARA FILTRAR POR TURNO (Día/Noche)
+function setShift(turno) {
+    currentShift = turno;
+    const botones = document.querySelectorAll('.btn-filter-pro');
+    botones.forEach(b => b.classList.remove('active'));
+    
+    if(turno === 'TODOS') document.getElementById('btn-todos').classList.add('active');
+    else if(turno === 'TA') document.getElementById('btn-ta').classList.add('active');
+    else if(turno === 'TB') document.getElementById('btn-tb').classList.add('active');
+    
+    render(); 
 }
 
-// --- FUNCIÓN EDITAR LOTES (ADMIN) ---
+// --- INICIALIZACIÓN DEL SISTEMA ---
+async function init() {
+    try {
+        console.log("🎬 Configurando entorno...");
+        
+        // 1. Identificación de usuario
+        const sesionEstandar = localStorage.getItem('qc_session');
+        const usuarioLegacy = localStorage.getItem('usuario');
+        let nombreDetectado = "SIN ASIGNAR";
+
+        if (sesionEstandar) {
+            try {
+                const u = JSON.parse(sesionEstandar);
+                nombreDetectado = u.nombre || u.user || "SIN ASIGNAR";
+                if (u.isAdmin) document.getElementById('btn-admin-config').style.display = 'inline-block';
+            } catch (e) { console.warn("Sesión corrupta"); }
+        } else if (usuarioLegacy) {
+            nombreDetectado = usuarioLegacy;
+        }
+        
+        userActual = nombreDetectado.toUpperCase();
+        document.getElementById('user-display').innerText = `👤 ${userActual}`;
+
+        // 2. Cargar líneas
+        const sel = document.getElementById('new-line');
+        if (sel) {
+            sel.innerHTML = "";
+            [...lineas].sort().forEach(l => { 
+                sel.innerHTML += `<option value="${l}">${l}</option>`; 
+            });
+        }
+        
+        // 3. Fecha inicial
+        document.getElementById('main-date-filter').value = new Date().toISOString().split('T')[0];
+
+        // 4. ARRANCAR FIREBASE (El Radar)
+        iniciarSincronizacion();
+
+        console.log("✅ Sistema vinculado a Firebase.");
+    } catch (e) {
+        console.error("❌ Error en init:", e);
+    }
+}
+
+// --- MOTOR DE TIEMPO (TICK) ---
+// Esta versión es más ligera: solo cambia el texto, no reconstruye el HTML
+function tick() {
+    const ahora = Date.now();
+    db.forEach((l) => {
+        if (l.st === 'done') return; 
+
+        // Cálculos de tiempo (Tu lógica original está perfecta)
+        if (l.st === 'wait' && l.inicioWS) l.tW = ahora - l.inicioWS;
+        if (l.st === 'rev' && l.inicioRS) l.tR = (ahora - l.inicioRS) + (Number(l.tR_acumulado) || 0);
+        if (l.st === 'corr' && l.inicioCS) l.tC = (ahora - l.inicioCS) + (Number(l.tC_acumulado) || 0);
+
+        // BUSCAR POR ID DE LOTE, NO POR ÍNDICE
+        const mainTimer = document.getElementById(`live-${l.id}`); // <--- Cambiado i por l.id
+        if (mainTimer) {
+            const displayTime = (l.st === 'wait') ? l.tW : (l.st === 'rev' ? l.tR : l.tC);
+            mainTimer.innerText = fmt(displayTime);
+        }
+        
+        const grid = document.getElementById(`grid-${l.id}`); // <--- Cambiado i por l.id
+        if (grid) {
+            const labels = grid.querySelectorAll('.t-item');
+            if(labels.length === 3) {
+                labels[0].innerHTML = `<span class="t-lbl">ESPERA</span>${fmt(l.tW)}`;
+                labels[1].innerHTML = `<span class="t-lbl">REV</span>${fmt(l.tR)}`;
+                labels[2].innerHTML = `<span class="t-lbl">CORR</span>${fmt(l.tC)}`;
+            }
+        }
+    });
+    
+    const relojDoc = document.getElementById('reloj');
+    if(relojDoc) relojDoc.innerText = new Date().toLocaleTimeString();
+}
+
+
+
+    // --- FUNCIONES DE APOYO ---
+function formatearFecha(f) {
+    const d = f ? new Date(f) : new Date();
+    if (isNaN(d)) return f;
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function fmt(ms) {
+    if (isNaN(ms) || ms === null || ms < 0) return "00:00";
+    const totalSegundos = Math.floor(ms / 1000);
+    const horas = Math.floor(totalSegundos / 3600);
+    const minutos = Math.floor((totalSegundos % 3600) / 60);
+    const segundos = totalSegundos % 60;
+    if (horas > 0) return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
+    return `${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
+}
+
+// --- RENDERIZADO PRINCIPAL ---
+function render() {
+    const cont = { 
+        wait: document.getElementById('list-wait'), 
+        run: document.getElementById('list-run'), 
+        done: document.getElementById('list-done') 
+    };
+    if (!cont.wait || !cont.run || !cont.done) return;
+
+    cont.wait.innerHTML = ""; cont.run.innerHTML = ""; cont.done.innerHTML = "";
+    const selDate = document.getElementById('main-date-filter').value;
+    const searchText = document.getElementById('main-search').value.toLowerCase();
+    
+    let topB = 0, topP = 0;
+
+    db.forEach((l) => { // Eliminamos el 'i' porque ya no lo usaremos
+        const estado = (l.st || "wait").toLowerCase();
+        if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
+
+        let fechaLote = l.date ? String(l.date).substring(0, 10) : "";
+
+        if (estado === 'done') {
+            if (selDate && fechaLote !== selDate) return;
+            topB++; 
+            topP += parseInt(l.pg || 0);
+        }
+
+        const isFinalizado = (estado === 'done');
+        const card = `
+        <div class="card" style="border-left: 5px solid ${isFinalizado ? '#468e5d' : (estado === 'wait' ? '#2c3e50' : '#f39c12')};">
+            <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
+            <div style="font-size:0.75em; color:#666;">${l.line} | <b>${l.user}</b></div>
+            
+            ${isFinalizado ? `<span class="status-final">FINALIZADO</span>` : `<span class="timer-big" id="live-${l.id}">00:00</span>`}
+            
+            <div class="timer-grid-3" id="grid-${l.id}">
+                <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
+                <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
+                <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
+            </div>
+
+            ${estado === 'wait' ? `<button class="btn" style="background:#27ae60; color:white" onclick="changeSt('${l.id}','rev')">INICIAR</button>` : 
+              (estado === 'rev' || estado === 'corr') ? `
+                <button class="btn" style="background:#f39c12; color:white; margin-bottom:5px;" onclick="changeSt('${l.id}','corr')">CORRECCIÓN</button>
+                <button class="btn" style="background:#2c3e50; color:white" onclick="openFin('${l.id}')">FINALIZAR</button>` : 
+              `<div style="text-align:center; font-weight:bold; color:#27ae60;">PÁGINAS: ${l.pg}</div>`}
+        </div>`;
+
+        if (estado === 'wait') cont.wait.insertAdjacentHTML('afterbegin', card);
+        else if (isFinalizado) cont.done.insertAdjacentHTML('afterbegin', card);
+        else cont.run.insertAdjacentHTML('afterbegin', card);
+    });
+
+    document.getElementById('top-brs').innerText = topB;
+    document.getElementById('top-pags').innerText = topP;
+    
+    // Actualizar contadores de las columnas (si tienes los elementos c-wait, c-run...)
+    if(document.getElementById('c-wait')) document.getElementById('c-wait').innerText = cont.wait.children.length;
+}
+
+async function save(loteEspecifico) { 
+    try { 
+        if (loteEspecifico) {
+            await rtdb.ref('recursos/' + loteEspecifico.id).update(loteEspecifico);
+        }
+    } catch (e) { console.error("Error Firebase:", e); }
+}
+
+function openFin(i) {
+    tempIdx = i; 
+    document.getElementById('finish-pg').value = ""; 
+    showModal('modal-finish');
+}
+
+async function confirmFinish() {
+    const p = document.getElementById('finish-pg').value;
+    if (!p || p <= 0) return alert("Ingrese total de documentos");
+
+    const lote = db[tempIdx]; 
+    const ahoraMs = Date.now();
+    
+    lote.pg = parseInt(p);
+    if (lote.st === 'rev') lote.tR_acumulado = (ahoraMs - lote.inicioRS) + (Number(lote.tR_acumulado) || 0);
+    if (lote.st === 'corr') lote.tC_acumulado = (ahoraMs - lote.inicioCS) + (Number(lote.tC_acumulado) || 0);
+
+    lote.st = 'done';
+    const ahora = new Date();
+    lote.hFin = `${String(ahora.getHours()).padStart(2,'0')}:${String(ahora.getMinutes()).padStart(2,'0')}`;
+    lote.lastUpdate = ahoraMs;
+
+    hideModal('modal-finish');
+    render(); 
+    await save(lote);
+}
+
+// --- PANEL ADMINISTRATIVO ---
+function renderPerf() {
+    const b = document.getElementById('perf-body'); 
+    if (!b) return;
+    b.innerHTML = "";
+    db.filter(l => l.st === 'done').forEach(l => {
+        b.innerHTML += `<tr><td>${l.date}</td><td>${l.hFin}</td><td>${l.id}</td><td>${l.line}</td><td>${l.user}</td><td>${l.pg}</td><td>${fmt(l.tR)}</td></tr>`;
+    });
+}
+
 function renderAdmin() {
     const b = document.getElementById('adm-body');
     if (!b) return;
@@ -661,187 +553,53 @@ function renderAdmin() {
             <td>${l.line} <span class="pencil" onclick="editLine(${i})">✏️</span></td>
             <td>${l.user}</td>
             <td>${l.pg} <span class="pencil" onclick="edit(${i},'pg')">✏️</span></td>
-            <td><button onclick="del(${i})" style="color:red; background:none; border:none; cursor:pointer">🗑️</button></td>
+            <td><button onclick="del(${i})" style="color:red; background:none; border:none;">🗑️</button></td>
         </tr>`;
     });
 }
 
-// --- ARRANQUE DEL SISTEMA (AL FINAL DEL ARCHIVO) ---
-window.addEventListener('load', async () => {
-    await init(); // Carga nombre
-    db = []; // Limpia para priorizar nube
-    render();
-    await refreshData(); // Baja los datos de los demás
-});
-function openFin(i) {
-    tempIdx = i; 
-    const inputPg = document.getElementById('finish-pg');
-    if (inputPg) inputPg.value = ""; 
-    showModal('modal-finish');
-}
-
-async function confirmFinish() {
-    const pInput = document.getElementById('finish-pg');
-    const p = pInput ? pInput.value : "";
-    
-    if (!p || p <= 0) return alert("Ingrese total de documentos");
-
-    const lote = db[tempIdx]; 
-    if (!lote) return alert("Error: Lote no encontrado.");
-
-    const ahoraMs = Date.now();
-    const ahoraFecha = new Date();
-    
-    // 1. BLOQUEO TOTAL E INMEDIATO
-    pausaSincro = true; 
-    lote.lastUpdate = ahoraMs; // Marcamos el segundo exacto del cierre
-    lote.pg = parseInt(p);
-    
-    // 2. CÁLCULO DE TIEMPOS (Tu lógica actual que está perfecta)
-    if (lote.st === 'rev' && lote.inicioRS) {
-        lote.tR_acumulado = (ahoraMs - lote.inicioRS) + (Number(lote.tR_acumulado) || 0);
-    }
-    if (lote.st === 'corr' && lote.inicioCS) {
-        lote.tC_acumulado = (ahoraMs - lote.inicioCS) + (Number(lote.tC_acumulado) || 0);
-    }
-
-    lote.st = 'done';
-    const horas = String(ahoraFecha.getHours()).padStart(2, '0');
-    const minutos = String(ahoraFecha.getMinutes()).padStart(2, '0');
-    lote.hFin = `${horas}:${minutos}`;
-
-    // 3. REFLEJO VISUAL INSTANTÁNEO
-    hideModal('modal-finish');
-    render(); 
-    
-    // 4. ENVÍO SEGURO
-    console.log(`🚀 Guardando Lote ${lote.id}...`);
-    
-    try {
-        await save(lote); 
-        console.log("✅ Datos enviados. Esperando propagación de la nube...");
-    } catch (error) {
-        console.error("Error al guardar:", error);
-    } finally {
-        // 5. EL CAMBIO CLAVE: Aumentamos el tiempo de gracia.
-        // Damos 8 segundos de silencio total. Es el tiempo promedio que 
-        // tarda Google Sheets en reflejar un cambio para que la lectura no lo "rebote".
-        setTimeout(() => {
-            pausaSincro = false;
-            console.log("🛡️ Escudo liberado. Sincronización normal reanudada.");
-        }, 8000); 
+function del(i) {
+    if (confirm("¿Eliminar lote?")) {
+        rtdb.ref('recursos/' + db[i].id).remove();
     }
 }
-function iniciarRevisionDoc(idUnico) {
-    // 1. ACTIVAR ESCUDO: Detenemos la sincronización inmediatamente
-    pausaSincro = true; 
-    console.log("🛡️ Escudo Activo. Revisando ID: " + idUnico);
 
-    // 2. BUSCAR EL DOCUMENTO: Lo buscamos en nuestra 'Caja Fuerte' (dbDocumentos)
-    // Usamos toString() por si el ID viene como número desde el Excel
-    const doc = dbDocumentos.find(d => d.id.toString() === idUnico.toString());
-
-    if (!doc) {
-        alert("❌ Error: No se encontró el documento en la memoria local.");
-        pausaSincro = false; // Si hay error, liberamos la nube
-        return;
-    }
-
-    // 3. GUARDAR IDENTIDAD: Memorizamos qué documento estamos revisando
-    docEnRevision = idUnico;
-
-    // 4. LLENAR EL MODAL: Pasamos los datos del Excel al diseño del Modal
-    // (Asegúrate que estos IDs existan en tu HTML del modal)
-    document.getElementById('m-doc-id').innerText = doc.id;
-    document.getElementById('m-doc-lote').innerText = doc.id; // O el campo que uses para el nombre
-    
-    // Limpiamos comentarios de la revisión anterior
-    if(document.getElementById('m-comentarios')) {
-        document.getElementById('m-comentarios').value = "";
-    }
-
-    // 5. MOSTRAR INTERFAZ: Abrimos el modal
-    document.getElementById('modal-review').style.display = 'block';
-    
-    // Si tienes catálogo de hallazgos, los dibujamos aquí
-    generarCheckboxesHallazgos(); 
+function edit(i, f) { 
+    const n = prompt("Nuevo valor:", db[i][f]); 
+    if(n) { db[i][f] = f==='pg'?parseInt(n):n; save(db[i]); renderAdmin(); } 
 }
-// --- PASO 3: EL MOTOR DE SINCRONIZACIÓN SEGURO ---
 
-
-// También la llamamos una vez al cargar la página para que no empiece vacío
-async function refreshData() {
-    try {
-        console.log("🔄 Iniciando sincronización con la nube...");
-        
-        const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), {
-            method: 'GET',
-            redirect: 'follow'
-        });
-
-        if (!response.ok) {
-            console.warn("⚠️ No se pudo conectar con la nube. Usando datos locales.");
-            return;
-        }
-
-        const data = await response.json();
-        if (!data || !Array.isArray(data)) return;
-
-        const mapaFinal = new Map();
-
-        // 1. Cargamos lo que viene de la nube (Google Sheets)
-        data.forEach(item => {
-            if (!item.id) return;
-            const idStr = item.id.toString().trim();
-            mapaFinal.set(idStr, {
-                ...item,
-                id: idStr,
-                st: (item.st || "wait").toLowerCase()
-            });
-        });
-
-        // 2. EL ESCUDO: Protegemos cambios locales recientes (como los lotes 453, 565)
-        db.forEach(loteLocal => {
-            const idStrLocal = loteLocal.id.toString().trim();
-            const esReciente = (Date.now() - (loteLocal.lastUpdate || 0) < 45000); // 45 segundos
-            const loteNube = mapaFinal.get(idStrLocal);
-
-            // Si el lote no está en la nube O es muy reciente O el estado local es más avanzado
-            if (!loteNube || esReciente || (loteLocal.st !== 'wait' && (!loteNube || loteNube.st === 'wait'))) {
-                mapaFinal.set(idStrLocal, loteLocal);
-            }
-        });
-
-        // 3. Actualizamos la base de datos y ordenamos
-        db = Array.from(mapaFinal.values());
-        db.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
-
-        // 4. Guardamos y dibujamos
-        localStorage.setItem('qc_final_v88', JSON.stringify(db));
-        render();
-        console.log("✅ Sincronización exitosa. Total lotes:", db.length);
-
-    } catch (error) {
-        console.error("❌ Error crítico en refreshData:", error);
-    }
+function editLine(i) {
+    let list = "Seleccione Línea (número):\n"; 
+    lineas.forEach((l, x) => list += `${x}: ${l}\n`);
+    const c = prompt(list); 
+    if(c && lineas[c]) { db[i].line = lineas[c]; save(db[i]); renderAdmin(); }
 }
-window.addEventListener('load', async () => {
-    console.log("☁️ Conectando con la base de datos central...");
-    
-    // 1. Identificar al inspector
-    await init(); 
 
-    // 2. Limpiar base de datos local para forzar descarga fresca
-    db = []; 
-    render(); 
-    if (typeof renderAdmin === 'function') renderAdmin();
-    if (typeof renderPerf === 'function') renderPerf();
+function showModal(id) { document.getElementById(id).style.display = 'flex'; }
+function hideModal(id) { document.getElementById(id).style.display = 'none'; }
+function toggleAdmin(v) { document.getElementById('admin-panel').style.display = v?'flex':'none'; if(v) renderPerf(); }
+function switchTab(t) {
+    document.getElementById('view-edit').style.display = t==='edit'?'block':'none';
+    document.getElementById('view-perf').style.display = t==='perf'?'block':'none';
+    if(t==='perf') renderPerf(); else renderAdmin();
+}
 
-    // 3. Pedir los datos a Google Sheets de inmediato
-    // Esto hará que los 2 lotes que tú subiste aparezcan en todas las pantallas
-    await refreshData();
-    
-    console.log("✅ Datos de la nube sincronizados para todos.");
+function exportExcel() {
+    let csv = "\uFEFFFecha;Hora;Lote;Linea;Inspector;Paginas;Espera;Revision;Correccion\n";
+    db.filter(l => l.st === 'done').forEach(l => {
+        csv += `${l.date};${l.hFin};${l.id};${l.line};${l.user};${l.pg};${fmt(l.tW)};${fmt(l.tR)};${fmt(l.tC)}\n`;
+    });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+    link.download = "REPORTE_QC.csv";
+    link.click();
+}
+
+// --- ARRANQUE ---
+window.addEventListener('load', () => {
+    init();
+    setInterval(tick, 1000); 
 });
 </script>
 </body>
