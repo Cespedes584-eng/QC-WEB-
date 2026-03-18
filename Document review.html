@@ -74,8 +74,8 @@
     background-color: #d0d0d0;
 }
     </style>
-    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
@@ -195,8 +195,21 @@
 <script>
 // --- CONFIGURACIÓN DE FIREBASE ---
 const firebaseConfig = {
-    databaseURL: "https://qc-control-1b547-default-rtdb.firebaseio.com/"
+   const firebaseConfig = {
+    apiKey: "AIzaSyAKr_8VXZ6q3V6DZzzGm5UqxVKxVBJC5zI",
+    authDomain: "document-review-acces.firebaseapp.com",
+    projectId: "document-review-acces",
+    storageBucket: "document-review-acces.firebasestorage.app",
+    messagingSenderId: "524984616018",
+    appId: "1:524984616018:web:a096271b82816ac201cb8b",
+    databaseURL: "https://document-review-acces-default-rtdb.firebaseio.com" 
 };
+
+// Inicialización profesional
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+const rtdb = firebase.database();
 
 // Inicializamos la conexión (Solo una vez)
 firebase.initializeApp(firebaseConfig);
@@ -268,62 +281,38 @@ async function changeSt(loteId, s) {
 }
 // --- FUNCIÓN PARA CREAR UN LOTE NUEVO EN FIREBASE ---
 async function addBR() {
-    // 1. Capturamos los elementos del HTML
     const idInput = document.getElementById('new-id');
     const lineInput = document.getElementById('new-line');
     
-    // 2. Validamos que el usuario escribió algo
     const id = idInput.value.trim();
     const line = lineInput.value;
 
     if (!id) return alert("⚠️ ¡Falta el número de lote!");
 
-    // 3. Creamos el objeto con la estructura profesional (Nivel 2)
     const nuevoLote = {
-    id: "12345",          // El número de lote (String)
-    line: "SOFIA 6F L1",  // Línea seleccionada
-    user: "JUAN",         // Inspector actual
-    st: "wait",           // Estados: 'wait', 'rev', 'corr', 'done'
-    date: "2024-05-20",   // Fecha de creación
-    tW: 0, tR: 0, tC: 0,  // Tiempos acumulados en milisegundos
-    tR_acumulado: 0,      // Auxiliar para pausas en revisión
-    tC_acumulado: 0,      // Auxiliar para pausas en corrección
-    inicioWS: Date.now(), // Marca de tiempo cuando entra a "Espera"
-    lastUpdate: Date.now()// Sello de seguridad para el "Escudo" de sincronización
-};
+        id: id,
+        line: line,
+        user: userActual, // Usa el inspector que inició sesión
+        st: "wait",
+        date: new Date().toISOString().split('T')[0],
+        tW: 0, tR: 0, tC: 0,
+        tR_acumulado: 0,
+        tC_acumulado: 0,
+        inicioWS: Date.now(),
+        lastUpdate: Date.now()
+    };
 
     try {
-        console.log("🚀 Intentando crear lote en Firebase...");
-
-        // 4. LA MAGIA: Guardamos en la carpeta 'recursos/NUMERO_DE_LOTE'
-        // Usamos .set() para que si el lote ya existe, lo resetee o lo cree de cero
+        // Guarda en la carpeta 'recursos' usando el ID del lote como nombre
         await rtdb.ref('recursos/' + id).set(nuevoLote);
-        
-        // 5. Limpiamos la interfaz
         idInput.value = "";
-        console.log("✅ Lote " + id + " creado exitosamente en la nube.");
-        
+        hideModal('modal-new');
+        console.log("✅ Lote " + id + " sincronizado.");
     } catch (error) {
-        console.error("❌ Error al crear lote:", error);
-        alert("No se pudo conectar con Firebase. Revisa tu internet.");
+        console.error("Error:", error);
+        alert("Fallo de conexión con la nube.");
     }
 }
-// --- VARIABLES DE ESTADO ---
-let db = []; // Nuestra base de datos local que se sincroniza con Firebase
-const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
-
-let currentShift = "TODOS"; // Filtro de turno actual
-let userActual = localStorage.getItem('qc_user') || ""; // Nombre del inspector
-let tempIdx = null; // Para editar o mover lotes
-
-// Variables para el Historial y Documentos
-let dbDocumentos = [];   
-let docEnRevision = null; 
-let catalogoHallazgos = JSON.parse(localStorage.getItem('qc_hallazgos_docs')) || ["Firma Faltante", "Fecha Incorrecta", "Ilegible", "Error de Cálculo"];
-
-// MOTOR DEL RELOJ: Se encarga de que los tiempos de "Play" corran en pantalla
-setInterval(tick, 1000);
-
 // FUNCIÓN PARA FILTRAR POR TURNO (Día/Noche)
 function setShift(turno) {
     currentShift = turno;
