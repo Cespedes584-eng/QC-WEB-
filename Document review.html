@@ -209,9 +209,9 @@ const firebaseConfig = {
     storageBucket: "document-review-acces.firebasestorage.app",
     messagingSenderId: "524984616018",
     appId: "1:524984616018:web:a096271b82816ac201cb8b",
+    // Esta es la línea que está causando el problema:
     databaseURL: "https://document-review-acces-default-rtdb.firebaseio.com" 
 };
-
 // Inicialización de Firebase
 if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
