@@ -140,6 +140,7 @@
         </div>
     </div>
 
+
     <div id="modal-finish" class="modal-overlay">
         <div class="modal-content">
             <h3>Finalizar Revisión</h3>
@@ -260,6 +261,12 @@ function iniciarSincronizacion() {
 async function addBR() {
     const idInput = document.getElementById('new-id');
     const lineInput = document.getElementById('new-line');
+    
+    if (!idInput || !lineInput) {
+        console.error("No se encontraron los inputs de lote o línea");
+        return;
+    }
+
     const id = idInput.value.trim();
     const line = lineInput.value;
 
@@ -268,25 +275,33 @@ async function addBR() {
     const nuevoLote = {
         id: id,
         line: line,
-        user: userActual,
+        user: userActual, // Asegúrate de que esto no sea null
         st: "wait",
         date: new Date().toISOString().split('T')[0],
-        tW: 0, tR: 0, tC: 0,
+        tW: 0, 
+        tR: 0, 
+        tC: 0,
         tR_acumulado: 0,
         tC_acumulado: 0,
         inicioWS: Date.now(),
         lastUpdate: Date.now()
     };
 
+    console.log("Intentando registrar lote:", nuevoLote);
+
     try {
+        // Guardamos en la ruta recursos/NUMERO_DE_LOTE
         await rtdb.ref('recursos/' + id).set(nuevoLote);
-        idInput.value = "";
+        console.log("✅ Lote guardado con éxito");
+        
+        idInput.value = ""; 
         hideModal('modal-new');
+        // El render se dispara solo gracias al .on('value') de iniciarSincronizacion
     } catch (error) {
-        alert("Error de conexión");
+        console.error("Error al guardar en Firebase:", error);
+        alert("Error de conexión con la base de datos");
     }
 }
-
 async function changeSt(loteId, s) { 
     const ahora = Date.now();
     const lote = db.find(l => l.id == loteId); 
