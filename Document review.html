@@ -193,11 +193,11 @@
 </style>
 
 <script>
-<script>
 // --- VARIABLES GLOBALES ---
 let db = []; 
 let userActual = "SIN ASIGNAR";
 let currentShift = "TODOS";
+let tempIdx = null; // Variable para manejar el lote que se está finalizando
 const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
 
 // --- CONFIGURACIÓN DE FIREBASE ---
@@ -211,84 +211,55 @@ const firebaseConfig = {
     databaseURL: "https://document-review-acces-default-rtdb.firebaseio.com" 
 };
 
-// Inicialización
+// Inicialización de Firebase
 if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
 }
 const rtdb = firebase.database();
-// Inicializamos la conexión (Solo una vez)
-firebase.initializeApp(firebaseConfig);
-const rtdb = firebase.database();
-// --- EL RADAR: ESCUCHA CAMBIOS EN LA NUBE ---
+
+// --- FUNCIONES DE MODALES ---
+function showModal(id) {
+    const modal = document.getElementById(id);
+    if(modal) modal.style.display = 'flex';
+}
+
+function hideModal(id) {
+    const modal = document.getElementById(id);
+    if(modal) modal.style.display = 'none';
+}
+
+// --- SINCRONIZACIÓN CON LA NUBE ---
 function iniciarSincronizacion() {
     console.log("📡 Conectando con Firebase Realtime...");
-
     rtdb.ref('recursos').on('value', (snapshot) => {
         const data = snapshot.val();
-        
         if (data) {
-            // 1. Convertimos lo que viene de la nube en una lista
             const arrayNube = Object.values(data);
             const mapaFinal = new Map();
 
-            // 2. Metemos los datos de la nube al mapa
             arrayNube.forEach(l => {
                 const idStr = l.id.toString();
                 mapaFinal.set(idStr, l);
             });
 
-            // 3. EL ESCUDO: Mantenemos los cambios locales si son menores a 8 segundos
-            // (Esto evita que el lote "regrese" a su estado anterior mientras la nube procesa)
+            // Mantener cambios locales recientes (Escudo de 8 seg)
             db.forEach(lLocal => {
                 const idStr = lLocal.id.toString();
                 const esMuyReciente = (Date.now() - (lLocal.lastUpdate || 0) < 8000);
-                if (esMuyReciente) {
-                    mapaFinal.set(idStr, lLocal);
-                }
+                if (esMuyReciente) mapaFinal.set(idStr, lLocal);
             });
 
-            // 4. Actualizamos nuestra variable global y ordenamos
             db = Array.from(mapaFinal.values());
             db.sort((a, b) => a.id.toString().localeCompare(b.id.toString(), undefined, { numeric: true }));
         }
-
         render(); 
-        if (typeof renderPerf === 'function') renderPerf();
-        if (typeof renderAdmin === 'function') renderAdmin();
     });
 }
-async function changeSt(loteId, s) { 
-    const ahora = Date.now();
-    
-    // CAMBIO: Buscamos por ID en lugar de usar posición de índice
-    const lote = db.find(l => l.id == loteId); 
-    if (!lote) return;
 
-    lote.lastUpdate = ahora; 
-    
-    if (lote.st === 'wait' && s === 'rev') {
-        lote.user = userActual;
-    }
-
-    if (lote.st === 'rev' && lote.inicioRS) {
-        lote.tR_acumulado = (ahora - lote.inicioRS) + (Number(lote.tR_acumulado) || 0);
-    }
-    if (lote.st === 'corr' && lote.inicioCS) {
-        lote.tC_acumulado = (ahora - lote.inicioCS) + (Number(lote.tC_acumulado) || 0);
-    }
-    
-    lote.st = s;
-    if (s === 'rev') { lote.inicioRS = ahora; lote.inicioCS = null; }
-    else if (s === 'corr') { lote.inicioCS = ahora; lote.inicioRS = null; }
-    
-    render(); 
-    await save(lote); 
-}
-// --- FUNCIÓN PARA CREAR UN LOTE NUEVO EN FIREBASE ---
+// --- LÓGICA DE NEGOCIO ---
 async function addBR() {
     const idInput = document.getElementById('new-id');
     const lineInput = document.getElementById('new-line');
-    
     const id = idInput.value.trim();
     const line = lineInput.value;
 
@@ -309,196 +280,44 @@ async function addBR() {
 
     try {
         await rtdb.ref('recursos/' + id).set(nuevoLote);
-        idInput.value = ""; // Limpia el texto
-        hideModal('modal-new'); // Cierra la ventana
+        idInput.value = "";
+        hideModal('modal-new');
     } catch (error) {
         alert("Error de conexión");
     }
 }
-// FUNCIÓN PARA FILTRAR POR TURNO (Día/Noche)
-function setShift(turno) {
-    currentShift = turno;
-    const botones = document.querySelectorAll('.btn-filter-pro');
-    botones.forEach(b => b.classList.remove('active'));
+
+async function changeSt(loteId, s) { 
+    const ahora = Date.now();
+    const lote = db.find(l => l.id == loteId); 
+    if (!lote) return;
+
+    lote.lastUpdate = ahora; 
+    if (lote.st === 'wait' && s === 'rev') lote.user = userActual;
+
+    if (lote.st === 'rev' && lote.inicioRS) {
+        lote.tR_acumulado = (ahora - lote.inicioRS) + (Number(lote.tR_acumulado) || 0);
+    }
+    if (lote.st === 'corr' && lote.inicioCS) {
+        lote.tC_acumulado = (ahora - lote.inicioCS) + (Number(lote.tC_acumulado) || 0);
+    }
     
-    if(turno === 'TODOS') document.getElementById('btn-todos').classList.add('active');
-    else if(turno === 'TA') document.getElementById('btn-ta').classList.add('active');
-    else if(turno === 'TB') document.getElementById('btn-tb').classList.add('active');
+    lote.st = s;
+    if (s === 'rev') { lote.inicioRS = ahora; lote.inicioCS = null; }
+    else if (s === 'corr') { lote.inicioCS = ahora; lote.inicioRS = null; }
     
     render(); 
+    await save(lote); 
 }
 
-// --- INICIALIZACIÓN DEL SISTEMA ---
-async function init() {
-    try {
-        console.log("🎬 Configurando entorno...");
-        
-        // 1. Identificación de usuario
-        const sesionEstandar = localStorage.getItem('qc_session');
-        const usuarioLegacy = localStorage.getItem('usuario');
-        let nombreDetectado = "SIN ASIGNAR";
-
-        if (sesionEstandar) {
-            try {
-                const u = JSON.parse(sesionEstandar);
-                nombreDetectado = u.nombre || u.user || "SIN ASIGNAR";
-                if (u.isAdmin) document.getElementById('btn-admin-config').style.display = 'inline-block';
-            } catch (e) { console.warn("Sesión corrupta"); }
-        } else if (usuarioLegacy) {
-            nombreDetectado = usuarioLegacy;
-        }
-        
-        userActual = nombreDetectado.toUpperCase();
-        document.getElementById('user-display').innerText = `👤 ${userActual}`;
-
-        // 2. Cargar líneas
-        const sel = document.getElementById('new-line');
-        if (sel) {
-            sel.innerHTML = "";
-            [...lineas].sort().forEach(l => { 
-                sel.innerHTML += `<option value="${l}">${l}</option>`; 
-            });
-        }
-        
-        // 3. Fecha inicial
-        document.getElementById('main-date-filter').value = new Date().toISOString().split('T')[0];
-
-        // 4. ARRANCAR FIREBASE (El Radar)
-        iniciarSincronizacion();
-
-        console.log("✅ Sistema vinculado a Firebase.");
-    } catch (e) {
-        console.error("❌ Error en init:", e);
-    }
+async function save(lote) { 
+    if (!lote || !lote.id) return;
+    try { await rtdb.ref('recursos/' + lote.id).update(lote); } 
+    catch (e) { console.error("Error Firebase:", e); }
 }
 
-// --- MOTOR DE TIEMPO (TICK) ---
-// Esta versión es más ligera: solo cambia el texto, no reconstruye el HTML
-function tick() {
-    const ahora = Date.now();
-    db.forEach((l) => {
-        if (l.st === 'done') return; 
-
-        // Cálculos de tiempo (Tu lógica original está perfecta)
-        if (l.st === 'wait' && l.inicioWS) l.tW = ahora - l.inicioWS;
-        if (l.st === 'rev' && l.inicioRS) l.tR = (ahora - l.inicioRS) + (Number(l.tR_acumulado) || 0);
-        if (l.st === 'corr' && l.inicioCS) l.tC = (ahora - l.inicioCS) + (Number(l.tC_acumulado) || 0);
-
-        // BUSCAR POR ID DE LOTE, NO POR ÍNDICE
-        const mainTimer = document.getElementById(`live-${l.id}`); // <--- Cambiado i por l.id
-        if (mainTimer) {
-            const displayTime = (l.st === 'wait') ? l.tW : (l.st === 'rev' ? l.tR : l.tC);
-            mainTimer.innerText = fmt(displayTime);
-        }
-        
-        const grid = document.getElementById(`grid-${l.id}`); // <--- Cambiado i por l.id
-        if (grid) {
-            const labels = grid.querySelectorAll('.t-item');
-            if(labels.length === 3) {
-                labels[0].innerHTML = `<span class="t-lbl">ESPERA</span>${fmt(l.tW)}`;
-                labels[1].innerHTML = `<span class="t-lbl">REV</span>${fmt(l.tR)}`;
-                labels[2].innerHTML = `<span class="t-lbl">CORR</span>${fmt(l.tC)}`;
-            }
-        }
-    });
-    
-    const relojDoc = document.getElementById('reloj');
-    if(relojDoc) relojDoc.innerText = new Date().toLocaleTimeString();
-}
-
-
-
-    // --- FUNCIONES DE APOYO ---
-function formatearFecha(f) {
-    const d = f ? new Date(f) : new Date();
-    if (isNaN(d)) return f;
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-}
-
-function fmt(ms) {
-    if (isNaN(ms) || ms === null || ms < 0) return "00:00";
-    const totalSegundos = Math.floor(ms / 1000);
-    const horas = Math.floor(totalSegundos / 3600);
-    const minutos = Math.floor((totalSegundos % 3600) / 60);
-    const segundos = totalSegundos % 60;
-    if (horas > 0) return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
-    return `${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
-}
-
-// --- RENDERIZADO PRINCIPAL ---
-function render() {
-    const cont = { 
-        wait: document.getElementById('list-wait'), 
-        run: document.getElementById('list-run'), 
-        done: document.getElementById('list-done') 
-    };
-    if (!cont.wait || !cont.run || !cont.done) return;
-
-    cont.wait.innerHTML = ""; cont.run.innerHTML = ""; cont.done.innerHTML = "";
-    const selDate = document.getElementById('main-date-filter').value;
-    const searchText = document.getElementById('main-search').value.toLowerCase();
-    
-    let topB = 0, topP = 0;
-
-    db.forEach((l) => { // Eliminamos el 'i' porque ya no lo usaremos
-        const estado = (l.st || "wait").toLowerCase();
-        if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
-
-        let fechaLote = l.date ? String(l.date).substring(0, 10) : "";
-
-        if (estado === 'done') {
-            if (selDate && fechaLote !== selDate) return;
-            topB++; 
-            topP += parseInt(l.pg || 0);
-        }
-
-        const isFinalizado = (estado === 'done');
-        const card = `
-        <div class="card" style="border-left: 5px solid ${isFinalizado ? '#468e5d' : (estado === 'wait' ? '#2c3e50' : '#f39c12')};">
-            <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
-            <div style="font-size:0.75em; color:#666;">${l.line} | <b>${l.user}</b></div>
-            
-            ${isFinalizado ? `<span class="status-final">FINALIZADO</span>` : `<span class="timer-big" id="live-${l.id}">00:00</span>`}
-            
-            <div class="timer-grid-3" id="grid-${l.id}">
-                <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
-                <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
-                <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
-            </div>
-
-            ${estado === 'wait' ? `<button class="btn" style="background:#27ae60; color:white" onclick="changeSt('${l.id}','rev')">INICIAR</button>` : 
-              (estado === 'rev' || estado === 'corr') ? `
-                <button class="btn" style="background:#f39c12; color:white; margin-bottom:5px;" onclick="changeSt('${l.id}','corr')">CORRECCIÓN</button>
-                <button class="btn" style="background:#2c3e50; color:white" onclick="openFin('${l.id}')">FINALIZAR</button>` : 
-              `<div style="text-align:center; font-weight:bold; color:#27ae60;">PÁGINAS: ${l.pg}</div>`}
-        </div>`;
-
-        if (estado === 'wait') cont.wait.insertAdjacentHTML('afterbegin', card);
-        else if (isFinalizado) cont.done.insertAdjacentHTML('afterbegin', card);
-        else cont.run.insertAdjacentHTML('afterbegin', card);
-    });
-
-    document.getElementById('top-brs').innerText = topB;
-    document.getElementById('top-pags').innerText = topP;
-    
-    // Actualizar contadores de las columnas (si tienes los elementos c-wait, c-run...)
-    if(document.getElementById('c-wait')) document.getElementById('c-wait').innerText = cont.wait.children.length;
-}
-
-async function save(loteEspecifico) { 
-    if (!loteEspecifico || !loteEspecifico.id) return;
-    try { 
-        await rtdb.ref('recursos/' + loteEspecifico.id).update(loteEspecifico);
-        console.log("☁️ Sincronizado: " + loteEspecifico.id);
-    } catch (e) { 
-        console.error("❌ Error Firebase:", e); 
-    }
-}
-function openFin(i) {
-    tempIdx = i; 
+function openFin(idLote) {
+    tempIdx = idLote; 
     document.getElementById('finish-pg').value = ""; 
     showModal('modal-finish');
 }
@@ -507,9 +326,10 @@ async function confirmFinish() {
     const p = document.getElementById('finish-pg').value;
     if (!p || p <= 0) return alert("Ingrese total de documentos");
 
-    const lote = db[tempIdx]; 
+    const lote = db.find(l => l.id == tempIdx);
+    if(!lote) return;
+
     const ahoraMs = Date.now();
-    
     lote.pg = parseInt(p);
     if (lote.st === 'rev') lote.tR_acumulado = (ahoraMs - lote.inicioRS) + (Number(lote.tR_acumulado) || 0);
     if (lote.st === 'corr') lote.tC_acumulado = (ahoraMs - lote.inicioCS) + (Number(lote.tC_acumulado) || 0);
@@ -524,71 +344,107 @@ async function confirmFinish() {
     await save(lote);
 }
 
-// --- PANEL ADMINISTRATIVO ---
-function renderPerf() {
-    const b = document.getElementById('perf-body'); 
-    if (!b) return;
-    b.innerHTML = "";
-    db.filter(l => l.st === 'done').forEach(l => {
-        b.innerHTML += `<tr><td>${l.date}</td><td>${l.hFin}</td><td>${l.id}</td><td>${l.line}</td><td>${l.user}</td><td>${l.pg}</td><td>${fmt(l.tR)}</td></tr>`;
+// --- RENDER Y TIEMPO ---
+function tick() {
+    const ahora = Date.now();
+    db.forEach((l) => {
+        if (l.st === 'done') return; 
+        if (l.st === 'wait' && l.inicioWS) l.tW = ahora - l.inicioWS;
+        if (l.st === 'rev' && l.inicioRS) l.tR = (ahora - l.inicioRS) + (Number(l.tR_acumulado) || 0);
+        if (l.st === 'corr' && l.inicioCS) l.tC = (ahora - l.inicioCS) + (Number(l.tC_acumulado) || 0);
+
+        const mainTimer = document.getElementById(`live-${l.id}`);
+        if (mainTimer) {
+            const displayTime = (l.st === 'wait') ? l.tW : (l.st === 'rev' ? l.tR : l.tC);
+            mainTimer.innerText = fmt(displayTime);
+        }
     });
+    const relojDoc = document.getElementById('reloj');
+    if(relojDoc) relojDoc.innerText = new Date().toLocaleTimeString();
 }
 
-function renderAdmin() {
-    const b = document.getElementById('adm-body');
-    if (!b) return;
-    b.innerHTML = "";
-    db.forEach((l, i) => {
-        b.innerHTML += `<tr>
-            <td>${l.date}</td>
-            <td>${l.id} <span class="pencil" onclick="edit(${i},'id')">✏️</span></td>
-            <td>${l.line} <span class="pencil" onclick="editLine(${i})">✏️</span></td>
-            <td>${l.user}</td>
-            <td>${l.pg} <span class="pencil" onclick="edit(${i},'pg')">✏️</span></td>
-            <td><button onclick="del(${i})" style="color:red; background:none; border:none;">🗑️</button></td>
-        </tr>`;
-    });
+function fmt(ms) {
+    if (!ms || ms < 0) return "00:00";
+    const totalSegundos = Math.floor(ms / 1000);
+    const horas = Math.floor(totalSegundos / 3600);
+    const minutos = Math.floor((totalSegundos % 3600) / 60);
+    const segundos = totalSegundos % 60;
+    if (horas > 0) return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
+    return `${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
 }
 
-function del(i) {
-    if (confirm("¿Eliminar lote?")) {
-        rtdb.ref('recursos/' + db[i].id).remove();
+function render() {
+    const cont = { 
+        wait: document.getElementById('list-wait'), 
+        run: document.getElementById('list-run'), 
+        done: document.getElementById('list-done') 
+    };
+    if (!cont.wait) return;
+
+    cont.wait.innerHTML = ""; cont.run.innerHTML = ""; cont.done.innerHTML = "";
+    const selDate = document.getElementById('main-date-filter').value;
+    const searchText = document.getElementById('main-search').value.toLowerCase();
+    
+    let topB = 0, topP = 0;
+
+    db.forEach((l) => {
+        const estado = (l.st || "wait").toLowerCase();
+        if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
+
+        let fechaLote = l.date ? String(l.date).substring(0, 10) : "";
+        const isFinalizado = (estado === 'done');
+
+        if (isFinalizado) {
+            if (selDate && fechaLote !== selDate) return;
+            topB++; 
+            topP += parseInt(l.pg || 0);
+        }
+
+        const card = `
+        <div class="card" style="border-left: 5px solid ${isFinalizado ? '#468e5d' : (estado === 'wait' ? '#2c3e50' : '#f39c12')};">
+            <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
+            <div style="font-size:0.75em; color:#666;">${l.line} | <b>${l.user}</b></div>
+            ${isFinalizado ? `<span class="status-final">FINALIZADO</span>` : `<span class="timer-big" id="live-${l.id}">00:00</span>`}
+            <div class="timer-grid-3">
+                <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
+                <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
+                <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
+            </div>
+            ${estado === 'wait' ? `<button class="btn" style="background:#27ae60; color:white" onclick="changeSt('${l.id}','rev')">INICIAR</button>` : 
+              (estado === 'rev' || estado === 'corr') ? `
+                <button class="btn" style="background:#f39c12; color:white; margin-bottom:5px;" onclick="changeSt('${l.id}','corr')">CORRECCIÓN</button>
+                <button class="btn" style="background:#2c3e50; color:white" onclick="openFin('${l.id}')">FINALIZAR</button>` : 
+              `<div style="text-align:center; font-weight:bold; color:#27ae60;">PÁGINAS: ${l.pg}</div>`}
+        </div>`;
+
+        if (estado === 'wait') cont.wait.insertAdjacentHTML('afterbegin', card);
+        else if (isFinalizado) cont.done.insertAdjacentHTML('afterbegin', card);
+        else cont.run.insertAdjacentHTML('afterbegin', card);
+    });
+
+    document.getElementById('top-brs').innerText = topB;
+    document.getElementById('top-pags').innerText = topP;
+}
+
+// --- INICIO ---
+async function init() {
+    const sesion = localStorage.getItem('qc_session');
+    if (sesion) {
+        const u = JSON.parse(sesion);
+        userActual = (u.nombre || "SIN NOMBRE").toUpperCase();
+        if (u.isAdmin) document.getElementById('btn-admin-config').style.display = 'inline-block';
     }
+    document.getElementById('user-display').innerText = `👤 ${userActual}`;
+
+    const sel = document.getElementById('new-line');
+    if (sel) {
+        sel.innerHTML = "";
+        [...lineas].sort().forEach(l => sel.innerHTML += `<option value="${l}">${l}</option>`);
+    }
+    document.getElementById('main-date-filter').value = new Date().toISOString().split('T')[0];
+    iniciarSincronizacion();
 }
 
-function edit(i, f) { 
-    const n = prompt("Nuevo valor:", db[i][f]); 
-    if(n) { db[i][f] = f==='pg'?parseInt(n):n; save(db[i]); renderAdmin(); } 
-}
-
-function editLine(i) {
-    let list = "Seleccione Línea (número):\n"; 
-    lineas.forEach((l, x) => list += `${x}: ${l}\n`);
-    const c = prompt(list); 
-    if(c && lineas[c]) { db[i].line = lineas[c]; save(db[i]); renderAdmin(); }
-}
-
-function showModal(id) { document.getElementById(id).style.display = 'flex'; }
-function hideModal(id) { document.getElementById(id).style.display = 'none'; }
-function toggleAdmin(v) { document.getElementById('admin-panel').style.display = v?'flex':'none'; if(v) renderPerf(); }
-function switchTab(t) {
-    document.getElementById('view-edit').style.display = t==='edit'?'block':'none';
-    document.getElementById('view-perf').style.display = t==='perf'?'block':'none';
-    if(t==='perf') renderPerf(); else renderAdmin();
-}
-
-function exportExcel() {
-    let csv = "\uFEFFFecha;Hora;Lote;Linea;Inspector;Paginas;Espera;Revision;Correccion\n";
-    db.filter(l => l.st === 'done').forEach(l => {
-        csv += `${l.date};${l.hFin};${l.id};${l.line};${l.user};${l.pg};${fmt(l.tW)};${fmt(l.tR)};${fmt(l.tC)}\n`;
-    });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
-    link.download = "REPORTE_QC.csv";
-    link.click();
-}
-
-// --- ARRANQUE ---
 window.addEventListener('load', () => {
     init();
     setInterval(tick, 1000); 
