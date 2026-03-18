@@ -193,9 +193,15 @@
 </style>
 
 <script>
+<script>
+// --- VARIABLES GLOBALES ---
+let db = []; 
+let userActual = "SIN ASIGNAR";
+let currentShift = "TODOS";
+const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
+
 // --- CONFIGURACIÓN DE FIREBASE ---
 const firebaseConfig = {
-   const firebaseConfig = {
     apiKey: "AIzaSyAKr_8VXZ6q3V6DZzzGm5UqxVKxVBJC5zI",
     authDomain: "document-review-acces.firebaseapp.com",
     projectId: "document-review-acces",
@@ -205,12 +211,11 @@ const firebaseConfig = {
     databaseURL: "https://document-review-acces-default-rtdb.firebaseio.com" 
 };
 
-// Inicialización profesional
+// Inicialización
 if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
 }
 const rtdb = firebase.database();
-
 // Inicializamos la conexión (Solo una vez)
 firebase.initializeApp(firebaseConfig);
 const rtdb = firebase.database();
@@ -292,7 +297,7 @@ async function addBR() {
     const nuevoLote = {
         id: id,
         line: line,
-        user: userActual, // Usa el inspector que inició sesión
+        user: userActual,
         st: "wait",
         date: new Date().toISOString().split('T')[0],
         tW: 0, tR: 0, tC: 0,
@@ -303,14 +308,11 @@ async function addBR() {
     };
 
     try {
-        // Guarda en la carpeta 'recursos' usando el ID del lote como nombre
         await rtdb.ref('recursos/' + id).set(nuevoLote);
-        idInput.value = "";
-        hideModal('modal-new');
-        console.log("✅ Lote " + id + " sincronizado.");
+        idInput.value = ""; // Limpia el texto
+        hideModal('modal-new'); // Cierra la ventana
     } catch (error) {
-        console.error("Error:", error);
-        alert("Fallo de conexión con la nube.");
+        alert("Error de conexión");
     }
 }
 // FUNCIÓN PARA FILTRAR POR TURNO (Día/Noche)
@@ -487,13 +489,14 @@ function render() {
 }
 
 async function save(loteEspecifico) { 
+    if (!loteEspecifico || !loteEspecifico.id) return;
     try { 
-        if (loteEspecifico) {
-            await rtdb.ref('recursos/' + loteEspecifico.id).update(loteEspecifico);
-        }
-    } catch (e) { console.error("Error Firebase:", e); }
+        await rtdb.ref('recursos/' + loteEspecifico.id).update(loteEspecifico);
+        console.log("☁️ Sincronizado: " + loteEspecifico.id);
+    } catch (e) { 
+        console.error("❌ Error Firebase:", e); 
+    }
 }
-
 function openFin(i) {
     tempIdx = i; 
     document.getElementById('finish-pg').value = ""; 
