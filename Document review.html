@@ -199,12 +199,19 @@ async function addBR() {
     
     if (!id) return alert("Falta Lote");
 
-    // 1. CORRECCIÓN DE FECHA LOCAL
-    const hoy = new Date();
-    const offset = hoy.getTimezoneOffset() * 60000; 
-    const fechaLocal = new Date(hoy - offset).toISOString().split('T')[0];
+    // 1. OBTENER FECHA LOCAL REAL (HOY)
+    const ahora = new Date();
+    const offset = ahora.getTimezoneOffset() * 60000; 
+    const hoyReal = new Date(ahora - offset).toISOString().split('T')[0];
 
-    // 2. OBTENER TURNO AUTOMÁTICO
+    // 2. VALIDACIÓN DE FECHA SELECCIONADA
+    const fechaFiltro = document.getElementById('main-date-filter').value;
+    
+    if (fechaFiltro !== hoyReal) {
+        return alert(`⚠️ BLOQUEO: Estás intentando ingresar un lote en una fecha que no es hoy (${hoyReal}). \n\nPor favor, ajusta el calendario a la fecha actual antes de registrar.`);
+    }
+
+    // 3. OBTENER TURNO AUTOMÁTICO
     const turnoDetectado = obtenerTurnoActual();
 
     const nuevo = {
@@ -212,29 +219,30 @@ async function addBR() {
         line, 
         user: "POR ASIGNAR", 
         st: "wait",
-        date: fechaLocal,
-        shift: turnoDetectado, // <--- Nuevo campo guardado en Firebase
-        tW: 0, 
-        tR: 0, 
-        tC: 0, 
-        tR_acumulado: 0, 
-        tC_acumulado: 0,
+        date: hoyReal, // Siempre guardamos la fecha real de hoy
+        shift: turnoDetectado,
+        tW: 0, tR: 0, tC: 0, tR_acumulado: 0, tC_acumulado: 0,
         inicioWS: Date.now(), 
         lastUpdate: Date.now()
     };
 
     await rtdb.ref('recursos/' + id).set(nuevo);
-    
-    // Limpieza y cierre
     document.getElementById('new-id').value = "";
     hideModal('modal-new');
-    
-    console.log(`Lote ${id} registrado en el turno ${turnoDetectado}`);
 }
 async function changeSt(id, s) {
     const ahora = Date.now();
     const lote = db.find(l => l.id == id);
     if (!lote) return;
+
+    // VALIDACIÓN: Solo permitir cambios si el lote es del día de hoy
+    const hoy = new Date();
+    const offset = hoy.getTimezoneOffset() * 60000; 
+    const hoyReal = new Date(hoy - offset).toISOString().split('T')[0];
+
+    if (lote.date !== hoyReal) {
+        return alert("⚠️ ACCESO DENEGADO: Solo puedes modificar lotes que pertenezcan a la fecha de hoy.");
+    }
 
     // ASIGNACIÓN DE USUARIO SOLO AL INICIAR
     if (lote.st === 'wait' && s === 'rev') lote.user = userActual;
@@ -251,7 +259,6 @@ async function changeSt(id, s) {
     
     await rtdb.ref('recursos/' + id).update(lote);
 }
-
 function openFin(id) { tempIdx = id; document.getElementById('finish-pg').value = ""; showModal('modal-finish'); }
 
 async function confirmFinish() {
