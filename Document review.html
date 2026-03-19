@@ -12,9 +12,7 @@
         .btn-nav { background: #455a64; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.85em; display: flex; align-items: center; gap: 6px; }
         .btn-excel { background: var(--green); }
         .clock-display { font-family: monospace; background: #000; padding: 6px 12px; border-radius: 4px; border: 1px solid #444; }
-        .stats-bar { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; background: white; padding: 15px 30px; border-bottom: 1px solid #ccc; }
-        .stat-card { border-left: 5px solid var(--green); padding-left: 20px; text-align: center; }
-        .stat-value { font-size: 2em; font-weight: 800; color: var(--dark); }
+        .stats-bar { display: flex; align-items: center; justify-content: space-between; padding: 25px 40px; background: white; border-bottom: 1px solid #ccc; }
         .workspace { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; padding: 15px; box-sizing: border-box; align-items: start; }
         .col { background: #e2e4e6; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; min-height: 200px; }
         .col-header { background: #34495e; color: white; padding: 12px; border-radius: 6px; margin-bottom: 15px; font-weight: bold; flex-shrink: 0; position: sticky; top: 80px; z-index: 10; }
@@ -36,46 +34,16 @@
         table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
         th { background: var(--dark); color: white; padding: 12px; position: sticky; top: 0; }
         td { padding: 10px; border-bottom: 1px solid #eee; text-align: center; }
-        .pencil { cursor: pointer; color: var(--blue); margin-left: 5px; }
         .fab { position: fixed; bottom: 30px; right: 30px; width: 65px; height: 65px; background: var(--green); color: white; border-radius: 50%; font-size: 35px; border: none; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 999; }
         .btn { padding: 12px; border: none; border-radius: 6px; font-weight: 800; cursor: pointer; text-transform: uppercase; width: 100%; margin-top: 8px; font-size: 0.85em; }
         .search-bar { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 6px; border: 1px solid #ccc; box-sizing: border-box; }
-/* Contenedor estilo pastilla */
-.filter-group-pro {
-    display: flex;
-    background: #eeeeee;
-    padding: 2px;
-    border-radius: 6px;
-    border: 1px solid #ddd;
-}
-
-/* Botones individuales */
-/* Botones individuales (apagados) */
-.btn-filter-pro {
-    background: #e0e0e0; /* Gris para los que no están seleccionados */
-    color: #555;
-    border: none;
-    padding: 6px 16px;
-    border-radius: 6px;
-    font-weight: bold;
-    cursor: pointer;
-    font-size: 0.8em;
-    transition: all 0.3s ease;
-}
-
-/* El botón que tocas (ENCENDIDO) */
-.btn-filter-pro.active {
-    background-color: #24303c !important; /* El oscuro de tu imagen */
-    color: white !important;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-}
-
-.btn-filter-pro:hover:not(.active) {
-    background-color: #d0d0d0;
-}
+        .filter-group-pro { display: flex; background: #eeeeee; padding: 2px; border-radius: 6px; border: 1px solid #ddd; }
+        .btn-filter-pro { background: #e0e0e0; color: #555; border: none; padding: 6px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.8em; }
+        .btn-filter-pro.active { background-color: #24303c !important; color: white !important; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
-   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
@@ -85,43 +53,39 @@
             <span style="font-weight:900;">QC BR REVIEW TRACKER</span>
         </div>
         <div class="nav-btns">
-           <div id="user-display" class="btn-nav" style="background:#34495e">👤 CARGANDO...</div>
+            <div id="user-display" class="btn-nav" style="background:#34495e">👤 CARGANDO...</div>
             <button class="btn-nav btn-excel" onclick="exportExcel()">📊 REPORTE EXCEL</button>
-            <button id="btn-admin-config" class="btn-nav" style="background:var(--blue); display: none;" onclick="toggleAdmin(true)">⚙️ PANEL Y RENDIMIENTO</button>
+            <button id="btn-admin-config" class="btn-nav" style="background:var(--blue); display: none;" onclick="toggleAdmin(true)">⚙️ PANEL</button>
             <div id="reloj" class="clock-display">00:00:00</div>
         </div>
     </div>
-<div class="stats-bar" style="display: flex; align-items: center; justify-content: space-between; padding: 25px 40px; background: white; border-bottom: 1px solid #eee;">
-    
-    <div style="flex: 1; border-left: 4px solid #2e7d32; display: flex; flex-direction: column; align-items: center;">
-        <span style="font-size: 0.8em; color: #666; font-weight: bold; text-transform: uppercase;">BRS Hoy</span>
-        <div id="top-brs" style="font-size: 2.8em; font-weight: 900; color: #24303c;">0</div>
-    </div>
-    
-    <div style="flex: 1; border-left: 4px solid #2e7d32; display: flex; flex-direction: column; align-items: center;">
-        <span style="font-size: 0.8em; color: #666; font-weight: bold; text-transform: uppercase;">Páginas Totales</span>
-        <div id="top-pags" style="font-size: 2.8em; font-weight: 900; color: #24303c;">0</div>
-    </div>
 
-    <div style="flex: 1; border-left: 4px solid #2196f3; display: flex; flex-direction: column; align-items: center;">
-        <span style="font-size: 0.8em; color: #666; font-weight: bold; text-transform: uppercase;">Historial</span>
-        <input type="date" id="main-date-filter" onchange="render()" 
-               style="border:none; font-weight:900; font-size: 1.4em; cursor:pointer; background: transparent; color: #24303c; margin-top: 5px;">
-    </div>
-
-    <div style="flex: 1; display: flex; flex-direction: column; align-items: flex-end;">
-        <span style="font-size: 0.65em; font-weight: bold; color: #aaa; text-transform: uppercase; margin-bottom: 8px;">Filtrar Turno</span>
-        <div class="filter-group-pro">
-            <button id="btn-todos" class="btn-filter-pro active" onclick="setShift('TODOS')">TODO</button>
-            <button id="btn-ta" class="btn-filter-pro" onclick="setShift('TA')">TA</button>
-            <button id="btn-tb" class="btn-filter-pro" onclick="setShift('TB')">TB</button>
+    <div class="stats-bar">
+        <div style="flex: 1; border-left: 4px solid #2e7d32; display: flex; flex-direction: column; align-items: center;">
+            <span style="font-size: 0.8em; color: #666; font-weight: bold;">BRS HOY</span>
+            <div id="top-brs" style="font-size: 2.8em; font-weight: 900; color: #24303c;">0</div>
+        </div>
+        <div style="flex: 1; border-left: 4px solid #2e7d32; display: flex; flex-direction: column; align-items: center;">
+            <span style="font-size: 0.8em; color: #666; font-weight: bold;">PÁGINAS</span>
+            <div id="top-pags" style="font-size: 2.8em; font-weight: 900; color: #24303c;">0</div>
+        </div>
+        <div style="flex: 1; border-left: 4px solid #2196f3; display: flex; flex-direction: column; align-items: center;">
+            <span style="font-size: 0.8em; color: #666; font-weight: bold;">HISTORIAL</span>
+            <input type="date" id="main-date-filter" onchange="render()" style="border:none; font-weight:900; font-size: 1.2em; cursor:pointer; background: transparent;">
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; align-items: flex-end;">
+            <div class="filter-group-pro">
+                <button id="btn-todos" class="btn-filter-pro active" onclick="setShift('TODOS')">TODO</button>
+                <button id="btn-ta" class="btn-filter-pro" onclick="setShift('TA')">TA</button>
+                <button id="btn-tb" class="btn-filter-pro" onclick="setShift('TB')">TB</button>
+            </div>
         </div>
     </div>
-</div>
+
+    <div style="padding: 10px 15px 0 15px;">
+        <input type="text" id="main-search" oninput="render()" placeholder="🔍 Buscar por Lote # ..." class="search-bar">
     </div>
-<div style="padding: 0 15px;">
-    <input type="text" id="main-search" oninput="render()" placeholder="🔍 Buscar por Lote # ..." class="search-bar">
-</div>
+
     <div class="workspace">
         <div class="col"><div class="col-header">ESPERA <span id="c-wait">0</span></div><div id="list-wait" class="list"></div></div>
         <div class="col"><div class="col-header" style="background:var(--green)">PROCESANDO <span id="c-run">0</span></div><div id="list-run" class="list"></div></div>
@@ -140,7 +104,6 @@
         </div>
     </div>
 
-
     <div id="modal-finish" class="modal-overlay">
         <div class="modal-content">
             <h3>Finalizar Revisión</h3>
@@ -153,103 +116,62 @@
     <div id="admin-panel">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
             <h2 style="margin:0;">Gestión y Rendimiento</h2>
-            <button onclick="toggleAdmin(false)" style="background:#e74c3c; color:white; border:none; padding:10px 20px; border-radius:6px; font-weight:bold; cursor:pointer;">CERRAR</button>
+            <button onclick="toggleAdmin(false)" style="background:#e74c3c; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer;">CERRAR</button>
         </div>
-        
         <div class="tabs">
             <div id="tab-perf" class="tab active" onclick="switchTab('perf')">📈 RENDIMIENTO</div>
             <div id="tab-edit" class="tab" onclick="switchTab('edit')">🛠️ EDITAR LOTES</div>
         </div>
-        
         <div id="view-perf">
-            <div style="display:flex; gap:10px; align-items:center; margin-bottom:15px;">
-                <input type="text" id="perf-search" oninput="renderPerf()" placeholder="🔍 Filtrar por Línea, Inspector o Lote..." class="search-bar" style="margin-bottom:0;">
-                <button onclick="exportExcel()" class="btn btn-excel" style="width:200px; margin-top:0;">📥 DESCARGAR EXCEL</button>
-            </div>
+            <input type="text" id="perf-search" oninput="renderPerf()" placeholder="🔍 Filtrar historial..." class="search-bar">
             <div style="overflow-y:auto; height:60vh; border:1px solid #ddd;">
                 <table>
-                    <thead><tr><th>Fecha</th><th>Hora Fin</th><th>Lote</th><th>Línea</th><th>Inspector</th><th>Págs</th><th>Tiempo Rev</th></tr></thead>
+                    <thead><tr><th>Fecha</th><th>Fin</th><th>Lote</th><th>Línea</th><th>Inspector</th><th>Págs</th><th>Tiempo</th></tr></thead>
                     <tbody id="perf-body"></tbody>
                 </table>
             </div>
         </div>
-
         <div id="view-edit" style="display:none;">
-            <input type="text" id="adm-search" oninput="renderAdmin()" placeholder="🔍 Buscar por Lote..." class="search-bar">
+            <input type="text" id="adm-search" oninput="renderAdmin()" placeholder="🔍 Buscar lote para borrar..." class="search-bar">
             <div style="overflow-y:auto; height:60vh; border:1px solid #ddd;">
                 <table>
-                    <thead><tr><th>Fecha</th><th>Lote</th><th>Línea</th><th>Inspector</th><th>Págs</th><th>Acción</th></tr></thead>
+                    <thead><tr><th>Fecha</th><th>Lote</th><th>Línea</th><th>Inspector</th><th>Acción</th></tr></thead>
                     <tbody id="adm-body"></tbody>
                 </table>
             </div>
         </div>
     </div>
-<div id="loader-save" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:5000; flex-direction:column; align-items:center; justify-content:center; color:white;">
-    <div style="border: 8px solid #f3f3f3; border-top: 8px solid #468e5d; border-radius: 50%; width: 60px; height: 60px; animation: spin 2s linear infinite;"></div>
-    <h2 style="margin-top:20px; font-family:sans-serif;">GUARDANDO EN NUBE...</h2>
-</div>
-
-<style>
-@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-</style>
 
 <script>
-// --- VARIABLES GLOBALES ---
 let db = []; 
 let userActual = "SIN ASIGNAR";
 let currentShift = "TODOS";
-let tempIdx = null; // Variable para manejar el lote que se está finalizando
+let tempIdx = null;
 const lineas = ["SOFIA 6F L1", "SOFIA 6F L2", "SOFIA 5F L2", "SOFIA 6F L3", "SOFIA EX", "SOFIA 5F", "VIA", "HW 27", "SCEPTER", "HW LONG", "HW SHORT", "REGULAR L2", "HW 21 +", "HW REGULAR"];
 
-// --- CONFIGURACIÓN DE FIREBASE ---
 const firebaseConfig = {
     apiKey: "AIzaSyAKr_8VXZ6q3V6DZzzGm5UqxVKxVBJC5zI",
     authDomain: "document-review-acces.firebaseapp.com",
     projectId: "document-review-acces",
-    storageBucket: "document-review-acces.firebasestorage.app",
-    messagingSenderId: "524984616018",
-    appId: "1:524984616018:web:a096271b82816ac201cb8b",
-    // Esta es la línea que está causando el problema:
     databaseURL: "https://document-review-acces-default-rtdb.firebaseio.com" 
 };
-// Inicialización de Firebase
-if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-}
+
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const rtdb = firebase.database();
 
-// --- FUNCIONES DE MODALES ---
-function showModal(id) {
-    const modal = document.getElementById(id);
-    if(modal) modal.style.display = 'flex';
-}
+function showModal(id) { document.getElementById(id).style.display = 'flex'; }
+function hideModal(id) { document.getElementById(id).style.display = 'none'; }
 
-function hideModal(id) {
-    const modal = document.getElementById(id);
-    if(modal) modal.style.display = 'none';
-}
-
-// --- SINCRONIZACIÓN CON LA NUBE ---
 function iniciarSincronizacion() {
-    console.log("📡 Conectando con Firebase Realtime...");
     rtdb.ref('recursos').on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
             const arrayNube = Object.values(data);
             const mapaFinal = new Map();
-
-            arrayNube.forEach(l => {
-                const idStr = l.id.toString();
-                mapaFinal.set(idStr, l);
-            });
-
-            // Mantener cambios locales recientes (Escudo de 8 seg)
+            arrayNube.forEach(l => mapaFinal.set(l.id.toString(), l));
             db.forEach(lLocal => {
-                const idStr = lLocal.id.toString();
-                const esMuyReciente = (Date.now() - (lLocal.lastUpdate || 0) < 8000);
-                if (esMuyReciente) mapaFinal.set(idStr, lLocal);
+                if (Date.now() - (lLocal.lastUpdate || 0) < 8000) mapaFinal.set(lLocal.id.toString(), lLocal);
             });
-
             db = Array.from(mapaFinal.values());
             db.sort((a, b) => a.id.toString().localeCompare(b.id.toString(), undefined, { numeric: true }));
         }
@@ -257,294 +179,161 @@ function iniciarSincronizacion() {
     });
 }
 
-// --- LÓGICA DE NEGOCIO ---
 async function addBR() {
-    const idInput = document.getElementById('new-id');
-    const lineInput = document.getElementById('new-line');
-    
-    if (!idInput || !lineInput) {
-        console.error("No se encontraron los inputs de lote o línea");
-        return;
-    }
-
-    const id = idInput.value.trim();
-    const line = lineInput.value;
-
-    if (!id) return alert("⚠️ ¡Falta el número de lote!");
-
-    const nuevoLote = {
-        id: id,
-        line: line,
-        user: userActual, // Asegúrate de que esto no sea null
-        st: "wait",
+    const id = document.getElementById('new-id').value.trim();
+    const line = document.getElementById('new-line').value;
+    if (!id) return alert("Falta Lote");
+    const nuevo = {
+        id, line, user: userActual, st: "wait",
         date: new Date().toISOString().split('T')[0],
-        tW: 0, 
-        tR: 0, 
-        tC: 0,
-        tR_acumulado: 0,
-        tC_acumulado: 0,
-        inicioWS: Date.now(),
-        lastUpdate: Date.now()
+        tW: 0, tR: 0, tC: 0, tR_acumulado: 0, tC_acumulado: 0,
+        inicioWS: Date.now(), lastUpdate: Date.now()
     };
-
-    console.log("Intentando registrar lote:", nuevoLote);
-
-    try {
-        // Guardamos en la ruta recursos/NUMERO_DE_LOTE
-        await rtdb.ref('recursos/' + id).set(nuevoLote);
-        console.log("✅ Lote guardado con éxito");
-        
-        idInput.value = ""; 
-        hideModal('modal-new');
-        // El render se dispara solo gracias al .on('value') de iniciarSincronizacion
-    } catch (error) {
-        console.error("Error al guardar en Firebase:", error);
-        alert("Error de conexión con la base de datos");
-    }
+    await rtdb.ref('recursos/' + id).set(nuevo);
+    document.getElementById('new-id').value = "";
+    hideModal('modal-new');
 }
-async function changeSt(loteId, s) { 
+
+async function changeSt(id, s) {
     const ahora = Date.now();
-    const lote = db.find(l => l.id == loteId); 
+    const lote = db.find(l => l.id == id);
     if (!lote) return;
-
-    lote.lastUpdate = ahora; 
     if (lote.st === 'wait' && s === 'rev') lote.user = userActual;
-
-    if (lote.st === 'rev' && lote.inicioRS) {
-        lote.tR_acumulado = (ahora - lote.inicioRS) + (Number(lote.tR_acumulado) || 0);
-    }
-    if (lote.st === 'corr' && lote.inicioCS) {
-        lote.tC_acumulado = (ahora - lote.inicioCS) + (Number(lote.tC_acumulado) || 0);
-    }
-    
+    if (lote.st === 'rev' && lote.inicioRS) lote.tR_acumulado = (ahora - lote.inicioRS) + (Number(lote.tR_acumulado) || 0);
+    if (lote.st === 'corr' && lote.inicioCS) lote.tC_acumulado = (ahora - lote.inicioCS) + (Number(lote.tC_acumulado) || 0);
     lote.st = s;
+    lote.lastUpdate = ahora;
     if (s === 'rev') { lote.inicioRS = ahora; lote.inicioCS = null; }
     else if (s === 'corr') { lote.inicioCS = ahora; lote.inicioRS = null; }
-    
-    render(); 
-    await save(lote); 
+    await rtdb.ref('recursos/' + id).update(lote);
 }
 
-async function save(lote) { 
-    if (!lote || !lote.id) return;
-    try { await rtdb.ref('recursos/' + lote.id).update(lote); } 
-    catch (e) { console.error("Error Firebase:", e); }
-}
-
-function openFin(idLote) {
-    tempIdx = idLote; 
-    document.getElementById('finish-pg').value = ""; 
-    showModal('modal-finish');
-}
+function openFin(id) { tempIdx = id; document.getElementById('finish-pg').value = ""; showModal('modal-finish'); }
 
 async function confirmFinish() {
     const p = document.getElementById('finish-pg').value;
-    if (!p || p <= 0) return alert("Ingrese total de documentos");
-
+    if (!p || p <= 0) return alert("Páginas inválidas");
     const lote = db.find(l => l.id == tempIdx);
-    if(!lote) return;
-
     const ahoraMs = Date.now();
     lote.pg = parseInt(p);
     if (lote.st === 'rev') lote.tR_acumulado = (ahoraMs - lote.inicioRS) + (Number(lote.tR_acumulado) || 0);
     if (lote.st === 'corr') lote.tC_acumulado = (ahoraMs - lote.inicioCS) + (Number(lote.tC_acumulado) || 0);
-
     lote.st = 'done';
-    const ahora = new Date();
-    lote.hFin = `${String(ahora.getHours()).padStart(2,'0')}:${String(ahora.getMinutes()).padStart(2,'0')}`;
+    lote.hFin = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
     lote.lastUpdate = ahoraMs;
-
+    await rtdb.ref('recursos/' + tempIdx).update(lote);
     hideModal('modal-finish');
-    render(); 
-    await save(lote);
-}
-
-// --- RENDER Y TIEMPO ---
-function tick() {
-    const ahora = Date.now();
-    db.forEach((l) => {
-        if (l.st === 'done') return; 
-        if (l.st === 'wait' && l.inicioWS) l.tW = ahora - l.inicioWS;
-        if (l.st === 'rev' && l.inicioRS) l.tR = (ahora - l.inicioRS) + (Number(l.tR_acumulado) || 0);
-        if (l.st === 'corr' && l.inicioCS) l.tC = (ahora - l.inicioCS) + (Number(l.tC_acumulado) || 0);
-
-        const mainTimer = document.getElementById(`live-${l.id}`);
-        if (mainTimer) {
-            const displayTime = (l.st === 'wait') ? l.tW : (l.st === 'rev' ? l.tR : l.tC);
-            mainTimer.innerText = fmt(displayTime);
-        }
-    });
-    const relojDoc = document.getElementById('reloj');
-    if(relojDoc) relojDoc.innerText = new Date().toLocaleTimeString();
 }
 
 function fmt(ms) {
     if (!ms || ms < 0) return "00:00";
-    const totalSegundos = Math.floor(ms / 1000);
-    const horas = Math.floor(totalSegundos / 3600);
-    const minutos = Math.floor((totalSegundos % 3600) / 60);
-    const segundos = totalSegundos % 60;
-    if (horas > 0) return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
-    return `${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
+    let s = Math.floor(ms / 1000), m = Math.floor(s / 60), h = Math.floor(m / 60);
+    return (h > 0 ? h+":" : "") + (m%60).toString().padStart(2,'0') + ":" + (s%60).toString().padStart(2,'0');
 }
 
 function render() {
-    const cont = { 
-        wait: document.getElementById('list-wait'), 
-        run: document.getElementById('list-run'), 
-        done: document.getElementById('list-done') 
-    };
-    if (!cont.wait) return;
-
-    cont.wait.innerHTML = ""; cont.run.innerHTML = ""; cont.done.innerHTML = "";
-    const selDate = document.getElementById('main-date-filter').value;
-    const searchText = document.getElementById('main-search').value.toLowerCase();
+    const lists = { wait: document.getElementById('list-wait'), run: document.getElementById('list-run'), done: document.getElementById('list-done') };
+    const counts = { wait: 0, run: 0, done: 0 };
+    Object.values(lists).forEach(l => l.innerHTML = "");
     
+    const selDate = document.getElementById('main-date-filter').value;
+    const search = document.getElementById('main-search').value.toLowerCase();
     let topB = 0, topP = 0;
 
-    db.forEach((l) => {
-        const estado = (l.st || "wait").toLowerCase();
+    db.forEach(l => {
+        if (search && !l.id.toString().toLowerCase().includes(search)) return;
         
-        // --- FILTROS ---
-        if (searchText && !l.id.toString().toLowerCase().includes(searchText)) return;
-        
-        // Lógica de Turnos (TA: 06:00-18:00, TB: 18:00-06:00)
-        if (currentShift !== 'TODOS') {
-            const hora = l.hFin ? parseInt(l.hFin.split(':')[0]) : -1;
-            const esDia = (hora >= 6 && hora < 18);
-            if (currentShift === 'TA' && !esDia) return;
-            if (currentShift === 'TB' && esDia) return;
-        }
-
-        let fechaLote = l.date ? String(l.date).substring(0, 10) : "";
-        const isFinalizado = (estado === 'done');
-
-        if (isFinalizado) {
-            if (selDate && fechaLote !== selDate) return;
-            topB++; 
-            topP += parseInt(l.pg || 0);
+        const isDone = (l.st === 'done');
+        const fLote = l.date || "";
+        if (isDone) {
+            if (selDate && fLote !== selDate) return;
+            topB++; topP += (l.pg || 0);
         }
 
         const card = `
-        <div class="card" style="border-left: 5px solid ${isFinalizado ? '#468e5d' : (estado === 'wait' ? '#2c3e50' : '#f39c12')};">
-            <div style="font-weight:bold; font-size:1.1em;">${l.id}</div>
-            <div style="font-size:0.75em; color:#666;">${l.line} | <b>${l.user}</b></div>
-            ${isFinalizado ? `<span class="status-final">FINALIZADO</span>` : `<span class="timer-big" id="live-${l.id}">00:00</span>`}
+        <div class="card" style="border-left: 5px solid ${isDone ? '#468e5d' : (l.st === 'wait' ? '#2c3e50' : '#f39c12')};">
+            <div style="font-weight:bold;">${l.id}</div>
+            <div style="font-size:0.75em; color:#666;">${l.line} | ${l.user}</div>
+            ${isDone ? `<span class="status-final">LISTO</span>` : `<span class="timer-big" id="live-${l.id}">00:00</span>`}
             <div class="timer-grid-3">
-                <div class="t-item"><span class="t-lbl">ESPERA</span>${fmt(l.tW)}</div>
-                <div class="t-item"><span class="t-lbl">REV</span>${fmt(l.tR)}</div>
-                <div class="t-item"><span class="t-lbl">CORR</span>${fmt(l.tC)}</div>
+                <div class="t-item"><span class="t-lbl">W</span>${fmt(l.tW)}</div>
+                <div class="t-item"><span class="t-lbl">R</span>${fmt(l.tR)}</div>
+                <div class="t-item"><span class="t-lbl">C</span>${fmt(l.tC)}</div>
             </div>
-            ${estado === 'wait' ? `<button class="btn" style="background:#27ae60; color:white" onclick="changeSt('${l.id}','rev')">INICIAR</button>` : 
-              (estado === 'rev' || estado === 'corr') ? `
-                <button class="btn" style="background:#f39c12; color:white; margin-bottom:5px;" onclick="changeSt('${l.id}','corr')">CORRECCIÓN</button>
-                <button class="btn" style="background:#2c3e50; color:white" onclick="openFin('${l.id}')">FINALIZAR</button>` : 
-              `<div style="text-align:center; font-weight:bold; color:#27ae60;">PÁGINAS: ${l.pg}</div>`}
+            ${l.st === 'wait' ? `<button class="btn" style="background:#27ae60; color:white" onclick="changeSt('${l.id}','rev')">INICIAR</button>` : 
+              (l.st==='rev' || l.st==='corr') ? `
+                <button class="btn" style="background:#f39c12; color:white" onclick="changeSt('${l.id}','corr')">CORREGIR</button>
+                <button class="btn" style="background:#2c3e50; color:white" onclick="openFin('${l.id}')">FIN</button>` : 
+              `<div style="font-weight:bold; color:var(--green)">PÁGS: ${l.pg}</div>`}
         </div>`;
-
-        if (estado === 'wait') cont.wait.insertAdjacentHTML('afterbegin', card);
-        else if (isFinalizado) cont.done.insertAdjacentHTML('afterbegin', card);
-        else cont.run.insertAdjacentHTML('afterbegin', card);
+        
+        lists[isDone ? 'done' : (l.st==='wait' ? 'wait' : 'run')].insertAdjacentHTML('afterbegin', card);
+        counts[isDone ? 'done' : (l.st==='wait' ? 'wait' : 'run')]++;
     });
 
     document.getElementById('top-brs').innerText = topB;
     document.getElementById('top-pags').innerText = topP;
+    document.getElementById('c-wait').innerText = counts.wait;
+    document.getElementById('c-run').innerText = counts.run;
+    document.getElementById('c-done').innerText = counts.done;
 }
 
-function setShift(turno) {
-    currentShift = turno;
-    document.querySelectorAll('.btn-filter-pro').forEach(b => b.classList.remove('active'));
-    if(turno === 'TODOS') document.getElementById('btn-todos').classList.add('active');
-    else if(turno === 'TA') document.getElementById('btn-ta').classList.add('active');
-    else if(turno === 'TB') document.getElementById('btn-tb').classList.add('active');
-    render(); 
-}
-// --- INICIO ---
-async function init() {
-    const sesion = localStorage.getItem('qc_session');
-    if (sesion) {
-        const u = JSON.parse(sesion);
-        userActual = (u.nombre || "SIN NOMBRE").toUpperCase();
-        if (u.isAdmin) document.getElementById('btn-admin-config').style.display = 'inline-block';
-    }
-    document.getElementById('user-display').innerText = `👤 ${userActual}`;
-
-    const sel = document.getElementById('new-line');
-    if (sel) {
-        sel.innerHTML = "";
-        [...lineas].sort().forEach(l => sel.innerHTML += `<option value="${l}">${l}</option>`);
-    }
-    document.getElementById('main-date-filter').value = new Date().toISOString().split('T')[0];
-    iniciarSincronizacion();
-}
-function exportExcel() {
-    // Agregamos el identificador UTF-8 para que Excel reconozca las tildes y caracteres especiales
-    let csv = "\uFEFFFecha;Hora;Lote;Linea;Inspector;Paginas;Espera;Revision;Correccion\n";
-    db.filter(l => l.st === 'done').forEach(l => {
-        csv += `${l.date};${l.hFin};${l.id};${l.line};${l.user};${l.pg};${fmt(l.tW)};${fmt(l.tR)};${fmt(l.tC)}\n`;
+function tick() {
+    const ahora = Date.now();
+    db.forEach(l => {
+        if (l.st === 'done') return;
+        if (l.st === 'wait') l.tW = ahora - l.inicioWS;
+        if (l.st === 'rev') l.tR = (ahora - l.inicioRS) + (Number(lote.tR_acumulado) || 0);
+        if (l.st === 'corr') l.tC = (ahora - l.inicioCS) + (Number(lote.tC_acumulado) || 0);
+        const el = document.getElementById(`live-${l.id}`);
+        if (el) el.innerText = fmt(l.st==='wait'? l.tW : (l.st==='rev'? l.tR : l.tC));
     });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8;'}));
-    link.download = `REPORTE_QC_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
+    document.getElementById('reloj').innerText = new Date().toLocaleTimeString();
 }
 
-function toggleAdmin(v) { 
-    const panel = document.getElementById('admin-panel');
-    if(panel) panel.style.display = v ? 'flex' : 'none'; 
-    if(v) renderPerf(); 
+function toggleAdmin(v) { document.getElementById('admin-panel').style.display = v ? 'flex' : 'none'; if(v) renderPerf(); }
+function switchTab(t) {
+    document.getElementById('view-perf').style.display = t==='perf'?'block':'none';
+    document.getElementById('view-edit').style.display = t==='edit'?'block':'none';
+    document.getElementById('tab-perf').className = 'tab' + (t==='perf'?' active':'');
+    document.getElementById('tab-edit').className = 'tab' + (t==='edit'?' active':'');
+    t==='edit' ? renderAdmin() : renderPerf();
 }
 
 function renderPerf() {
-    const body = document.getElementById('perf-body');
-    const search = document.getElementById('perf-search').value.toLowerCase(); // Añadir esto
-    if(!body) return;
-    body.innerHTML = "";
+    const b = document.getElementById('perf-body'); b.innerHTML = "";
+    const s = document.getElementById('perf-search').value.toLowerCase();
     db.filter(l => l.st === 'done').forEach(l => {
-        // Añadir lógica de filtro
-        if (search && !l.id.toString().includes(search) && !l.user.toLowerCase().includes(search)) return;
-        
-        body.innerHTML += `<tr>
-            <td>${l.date}</td><td>${l.hFin}</td><td>${l.id}</td>
-            <td>${l.line}</td><td>${l.user}</td><td>${l.pg}</td><td>${fmt(l.tR)}</td>
-        </tr>`;
+        if (s && !l.id.toString().includes(s)) return;
+        b.innerHTML += `<tr><td>${l.date}</td><td>${l.hFin}</td><td>${l.id}</td><td>${l.line}</td><td>${l.user}</td><td>${l.pg}</td><td>${fmt(l.tR)}</td></tr>`;
     });
 }
-function switchTab(tab) {
-    document.getElementById('view-perf').style.display = (tab === 'perf') ? 'block' : 'none';
-    document.getElementById('view-edit').style.display = (tab === 'edit') ? 'block' : 'none';
-    document.getElementById('tab-perf').classList.toggle('active', tab === 'perf');
-    document.getElementById('tab-edit').classList.toggle('active', tab === 'edit');
-    if(tab === 'edit') renderAdmin();
-}
-ffunction renderAdmin() {
-    const body = document.getElementById('adm-body');
-    const search = document.getElementById('adm-search').value.toLowerCase(); // Añade el filtro
-    if(!body) return;
-    body.innerHTML = "";
-    db.forEach(l => {
-        // Lógica de filtrado
-        if (search && !l.id.toString().includes(search)) return;
 
-        body.innerHTML += `<tr>
-            <td>${l.date}</td>
-            <td>${l.id}</td>
-            <td>${l.line}</td>
-            <td>${l.user}</td>
-            <td>${l.pg || 0}</td>
-            <td><button onclick="eliminarLote('${l.id}')" style="background:#e74c3c;color:white;border:none;padding:5px;cursor:pointer;border-radius:4px;">🗑️</button></td>
-        </tr>`;
+function renderAdmin() {
+    const b = document.getElementById('adm-body'); b.innerHTML = "";
+    const s = document.getElementById('adm-search').value.toLowerCase();
+    db.forEach(l => {
+        if (s && !l.id.toString().includes(s)) return;
+        b.innerHTML += `<tr><td>${l.date}</td><td>${l.id}</td><td>${l.line}</td><td>${l.user}</td><td><button onclick="borrar('${l.id}')">🗑️</button></td></tr>`;
     });
 }
-async function eliminarLote(id) {
-    if(confirm(`¿Desea eliminar el lote ${id} de la base de datos?`)) {
-        await rtdb.ref('recursos/' + id).remove();
+
+async function borrar(id) { if(confirm("¿Borrar?")) await rtdb.ref('recursos/'+id).remove(); }
+
+window.onload = () => {
+    const s = localStorage.getItem('qc_session');
+    if (s) {
+        const u = JSON.parse(s);
+        userActual = u.nombre.toUpperCase();
+        if (u.isAdmin) document.getElementById('btn-admin-config').style.display = 'block';
     }
-}
-window.addEventListener('load', () => {
-    init();
-    setInterval(tick, 1000); 
-});
+    document.getElementById('user-display').innerText = "👤 " + userActual;
+    const sel = document.getElementById('new-line');
+    lineas.sort().forEach(l => sel.innerHTML += `<option value="${l}">${l}</option>`);
+    document.getElementById('main-date-filter').value = new Date().toISOString().split('T')[0];
+    iniciarSincronizacion();
+    setInterval(tick, 1000);
+};
 </script>
 </body>
 </html>
