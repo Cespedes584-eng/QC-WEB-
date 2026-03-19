@@ -3,44 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QC Document Review</title>
+    <title>QC BR Tracker Pro</title>
     <style>
         :root { --dark: #24303c; --green: #468e5d; --blue: #3498db; --bg: #ebedef; }
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); overflow-y: auto; color: #333; min-height: 100vh; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); color: #333; overflow-x: hidden; }
         .header-top { background: var(--dark); color: white; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--green); position: sticky; top: 0; z-index: 1000; }
         .nav-btns { display: flex; gap: 10px; align-items: center; }
         .btn-nav { background: #455a64; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.85em; display: flex; align-items: center; gap: 6px; }
-        .btn-excel { background: var(--green); }
         .clock-display { font-family: monospace; background: #000; padding: 6px 12px; border-radius: 4px; border: 1px solid #444; }
-        .stats-bar { display: flex; align-items: center; justify-content: space-between; padding: 25px 40px; background: white; border-bottom: 1px solid #ccc; }
-        .workspace { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; padding: 15px; box-sizing: border-box; align-items: start; }
-        .col { background: #e2e4e6; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; min-height: 200px; }
-        .col-header { background: #34495e; color: white; padding: 12px; border-radius: 6px; margin-bottom: 15px; font-weight: bold; flex-shrink: 0; position: sticky; top: 80px; z-index: 10; }
-        .list { flex-grow: 1; display: flex; flex-direction: column; gap: 12px; }
-        .card { background: white; border-radius: 8px; padding: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border: 1px solid #ced4da; flex-shrink: 0; }
-        .timer-big { font-family: monospace; font-size: 1.5em; font-weight: bold; color: var(--blue); text-align: center; display: block; margin: 10px 0; background: #f0f7ff; border-radius: 4px; padding: 5px; }
-        .status-final { font-size: 1.2em; font-weight: 900; color: var(--green); text-align: center; display: block; margin: 15px 0; letter-spacing: 2px; text-transform: uppercase; }
-        .timer-grid-3 { background: #f8f9fa; border-radius: 4px; padding: 8px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; border: 1px solid #eee; margin-bottom: 10px; }
-        .t-item { text-align: center; font-family: monospace; font-size: 0.75em; color: #555; border-right: 1px solid #ddd; }
-        .t-item:last-child { border-right: none; }
-        .t-lbl { display: block; font-size: 0.65em; font-weight: bold; color: #999; text-transform: uppercase; }
+        .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: white; padding: 15px 25px; border-bottom: 1px solid #ccc; }
+        .stat-item { border-left: 4px solid var(--green); padding-left: 15px; display: flex; flex-direction: column; align-items: center; }
+        .workspace { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; padding: 15px; align-items: start; }
+        .col { background: #e2e4e6; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; min-height: 400px; }
+        .col-header { background: #34495e; color: white; padding: 12px; border-radius: 6px; margin-bottom: 15px; font-weight: bold; text-align: center; }
+        .card { background: white; border-radius: 8px; padding: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 12px; border: 1px solid #ced4da; }
+        .timer-big { font-family: monospace; font-size: 1.5em; font-weight: bold; color: var(--blue); text-align: center; display: block; background: #f0f7ff; padding: 5px; border-radius: 4px; margin: 8px 0; }
+        .timer-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; background: #f8f9fa; padding: 5px; border-radius: 4px; font-size: 0.7em; text-align: center; }
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; align-items: center; justify-content: center; }
-        .modal-content { background: white; padding: 30px; border-radius: 12px; width: 350px; text-align: center; }
-        .modal-input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.95rem; text-align: center; box-sizing: border-box; }
-        #admin-panel { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 1500; padding: 25px; box-sizing: border-box; flex-direction: column; overflow-y: auto; }
-        .tabs { display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 2px solid #ddd; }
-        .tab { padding: 12px 25px; cursor: pointer; background: #f0f0f0; border-radius: 8px 8px 0 0; font-weight: bold; }
+        .modal-content { background: white; padding: 25px; border-radius: 12px; width: 350px; }
+        .modal-input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+        #admin-panel { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 1500; padding: 20px; flex-direction: column; overflow-y: auto; }
+        .tabs { display: flex; gap: 5px; margin-bottom: 15px; border-bottom: 2px solid #ddd; }
+        .tab { padding: 10px 20px; cursor: pointer; background: #eee; font-weight: bold; border-radius: 5px 5px 0 0; }
         .tab.active { background: var(--green); color: white; }
         table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
-        th { background: var(--dark); color: white; padding: 12px; position: sticky; top: 0; }
-        td { padding: 10px; border-bottom: 1px solid #eee; text-align: center; }
-        .fab { position: fixed; bottom: 30px; right: 30px; width: 65px; height: 65px; background: var(--green); color: white; border-radius: 50%; font-size: 35px; border: none; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 999; }
-        .btn { padding: 12px; border: none; border-radius: 6px; font-weight: 800; cursor: pointer; text-transform: uppercase; width: 100%; margin-top: 8px; font-size: 0.85em; }
-        .search-bar { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 6px; border: 1px solid #ccc; box-sizing: border-box; }
-        .filter-group-pro { display: flex; background: #eeeeee; padding: 2px; border-radius: 6px; border: 1px solid #ddd; }
-        .btn-filter-pro { background: #e0e0e0; color: #555; border: none; padding: 6px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.8em; }
-        .btn-filter-pro.active { background-color: #24303c !important; color: white !important; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        th { background: var(--dark); color: white; padding: 10px; }
+        td { padding: 8px; border-bottom: 1px solid #eee; text-align: center; }
+        .fab { position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; background: var(--green); color: white; border-radius: 50%; font-size: 30px; border: none; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 999; }
+        .btn { padding: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 5px; }
+        .search-bar { width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 6px; border: 1px solid #ccc; box-sizing: border-box; }
+        .filter-group-pro { display: flex; background: #eee; border-radius: 6px; padding: 2px; }
+        .btn-filter-pro { border: none; padding: 5px 12px; cursor: pointer; border-radius: 4px; font-weight: bold; background: transparent; }
+        .btn-filter-pro.active { background: var(--dark); color: white; }
     </style>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
@@ -49,31 +43,21 @@
 
     <div class="header-top">
         <div class="nav-btns">
-            <button class="btn-nav" onclick="window.location.href='index.html'">🏠 VOLVER</button>
-            <span style="font-weight:900;">QC BR REVIEW TRACKER</span>
+            <button class="btn-nav" onclick="window.location.href='index.html'">🏠 INICIO</button>
+            <span style="font-weight:900;">QC BR TRACKER</span>
         </div>
         <div class="nav-btns">
-            <div id="user-display" class="btn-nav" style="background:#34495e">👤 CARGANDO...</div>
-            <button class="btn-nav btn-excel" onclick="exportExcel()">📊 REPORTE EXCEL</button>
-            <button id="btn-admin-config" class="btn-nav" style="background:var(--blue); display: none;" onclick="toggleAdmin(true)">⚙️ PANEL</button>
+            <div id="user-display" class="btn-nav" style="background:#34495e">👤...</div>
+            <button id="btn-admin-config" class="btn-nav" style="background:var(--blue); display:none;" onclick="toggleAdmin(true)">⚙️ ADMIN</button>
             <div id="reloj" class="clock-display">00:00:00</div>
         </div>
     </div>
 
     <div class="stats-bar">
-        <div style="flex: 1; border-left: 4px solid #2e7d32; display: flex; flex-direction: column; align-items: center;">
-            <span style="font-size: 0.8em; color: #666; font-weight: bold;">BRS HOY</span>
-            <div id="top-brs" style="font-size: 2.8em; font-weight: 900; color: #24303c;">0</div>
-        </div>
-        <div style="flex: 1; border-left: 4px solid #2e7d32; display: flex; flex-direction: column; align-items: center;">
-            <span style="font-size: 0.8em; color: #666; font-weight: bold;">PÁGINAS</span>
-            <div id="top-pags" style="font-size: 2.8em; font-weight: 900; color: #24303c;">0</div>
-        </div>
-        <div style="flex: 1; border-left: 4px solid #2196f3; display: flex; flex-direction: column; align-items: center;">
-            <span style="font-size: 0.8em; color: #666; font-weight: bold;">HISTORIAL</span>
-            <input type="date" id="main-date-filter" onchange="render()" style="border:none; font-weight:900; font-size: 1.2em; cursor:pointer; background: transparent;">
-        </div>
-        <div style="flex: 1; display: flex; flex-direction: column; align-items: flex-end;">
+        <div class="stat-item"><span>BRS HOY</span><b id="top-brs" style="font-size:1.8em">0</b></div>
+        <div class="stat-item"><span>PÁGINAS</span><b id="top-pags" style="font-size:1.8em">0</b></div>
+        <div class="stat-item"><span>FECHA</span><input type="date" id="main-date-filter" onchange="render()" style="border:none; font-weight:bold"></div>
+        <div class="stat-item">
             <div class="filter-group-pro">
                 <button id="btn-todos" class="btn-filter-pro active" onclick="setShift('TODOS')">TODO</button>
                 <button id="btn-ta" class="btn-filter-pro" onclick="setShift('TA')">TA</button>
@@ -83,62 +67,76 @@
     </div>
 
     <div style="padding: 10px 15px 0 15px;">
-        <input type="text" id="main-search" oninput="render()" placeholder="🔍 Buscar por Lote # ..." class="search-bar">
+        <input type="text" id="main-search" oninput="render()" placeholder="🔍 Buscar lote..." class="search-bar">
     </div>
 
     <div class="workspace">
-        <div class="col"><div class="col-header">ESPERA <span id="c-wait">0</span></div><div id="list-wait" class="list"></div></div>
-        <div class="col"><div class="col-header" style="background:var(--green)">PROCESANDO <span id="c-run">0</span></div><div id="list-run" class="list"></div></div>
-        <div class="col"><div class="col-header" style="background:#5d6d7e">FINALIZADOS <span id="c-done">0</span></div><div id="list-done" class="list"></div></div>
+        <div class="col"><div class="col-header">ESPERA (<span id="c-wait">0</span>)</div><div id="list-wait"></div></div>
+        <div class="col"><div class="col-header" style="background:var(--green)">REVISIÓN (<span id="c-run">0</span>)</div><div id="list-run"></div></div>
+        <div class="col"><div class="col-header" style="background:#5d6d7e">HISTORIAL (<span id="c-done">0</span>)</div><div id="list-done"></div></div>
     </div>
 
     <button class="fab" onclick="showModal('modal-new')">+</button>
 
     <div id="modal-new" class="modal-overlay">
         <div class="modal-content">
-            <h3>Nuevo Registro</h3>
-            <input type="text" id="new-id" placeholder="Número de Lote" class="modal-input">
+            <h3>Registrar Lote</h3>
+            <input type="text" id="new-id" placeholder="Lote #" class="modal-input">
             <select id="new-line" class="modal-input"></select>
-            <button class="btn" style="background:var(--green); color:white" onclick="addBR()">REGISTRAR LOTE</button>
+            <button class="btn" style="background:var(--green); color:white" onclick="addBR()">GUARDAR</button>
             <button class="btn" style="background:#eee" onclick="hideModal('modal-new')">CERRAR</button>
         </div>
     </div>
 
     <div id="modal-finish" class="modal-overlay">
         <div class="modal-content">
-            <h3>Finalizar Revisión</h3>
-            <input type="number" id="finish-pg" placeholder="Total de documentos" class="modal-input">
+            <h3>Finalizar</h3>
+            <input type="number" id="finish-pg" placeholder="Total páginas" class="modal-input">
             <button class="btn" style="background:var(--green); color:white" onclick="confirmFinish()">COMPLETAR</button>
             <button class="btn" style="background:#eee" onclick="hideModal('modal-finish')">CANCELAR</button>
         </div>
     </div>
 
+    <div id="modal-edit" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Editar Lote</h3>
+            <input type="hidden" id="edit-old-id">
+            <label style="font-size: 0.7em;">NÚMERO DE LOTE</label>
+            <input type="text" id="edit-id" class="modal-input">
+            <label style="font-size: 0.7em;">LÍNEA</label>
+            <select id="edit-line" class="modal-input"></select>
+            <label style="font-size: 0.7em;">INSPECTOR</label>
+            <input type="text" id="edit-user" class="modal-input">
+            <label style="font-size: 0.7em;">PÁGINAS</label>
+            <input type="number" id="edit-pg" class="modal-input">
+            <button class="btn" style="background:var(--blue); color:white" onclick="saveEdit()">ACTUALIZAR</button>
+            <button class="btn" style="background:#e74c3c; color:white; margin-top:15px" onclick="borrarLote()">ELIMINAR LOTE</button>
+            <button class="btn" style="background:#eee" onclick="hideModal('modal-edit')">CANCELAR</button>
+        </div>
+    </div>
+
     <div id="admin-panel">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <h2 style="margin:0;">Gestión y Rendimiento</h2>
-            <button onclick="toggleAdmin(false)" style="background:#e74c3c; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer;">CERRAR</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h2 style="margin:0;">Control Maestro</h2>
+            <button onclick="toggleAdmin(false)" style="background:#e74c3c; color:white; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">CERRAR</button>
         </div>
         <div class="tabs">
-            <div id="tab-perf" class="tab active" onclick="switchTab('perf')">📈 RENDIMIENTO</div>
-            <div id="tab-edit" class="tab" onclick="switchTab('edit')">🛠️ EDITAR LOTES</div>
+            <div id="tab-perf" class="tab active" onclick="switchTab('perf')">RENDIMIENTO</div>
+            <div id="tab-edit" class="tab" onclick="switchTab('edit')">EDITOR</div>
         </div>
         <div id="view-perf">
-            <input type="text" id="perf-search" oninput="renderPerf()" placeholder="🔍 Filtrar historial..." class="search-bar">
-            <div style="overflow-y:auto; height:60vh; border:1px solid #ddd;">
-                <table>
-                    <thead><tr><th>Fecha</th><th>Fin</th><th>Lote</th><th>Línea</th><th>Inspector</th><th>Págs</th><th>Tiempo</th></tr></thead>
-                    <tbody id="perf-body"></tbody>
-                </table>
-            </div>
+            <input type="text" id="perf-search" oninput="renderPerf()" placeholder="🔍 Filtrar..." class="search-bar">
+            <table>
+                <thead><tr><th>Fecha</th><th>Fin</th><th>Lote</th><th>Línea</th><th>QC</th><th>Pgs</th><th>Tiempo</th></tr></thead>
+                <tbody id="perf-body"></tbody>
+            </table>
         </div>
         <div id="view-edit" style="display:none;">
-            <input type="text" id="adm-search" oninput="renderAdmin()" placeholder="🔍 Buscar lote para borrar..." class="search-bar">
-            <div style="overflow-y:auto; height:60vh; border:1px solid #ddd;">
-                <table>
-                    <thead><tr><th>Fecha</th><th>Lote</th><th>Línea</th><th>Inspector</th><th>Acción</th></tr></thead>
-                    <tbody id="adm-body"></tbody>
-                </table>
-            </div>
+            <input type="text" id="adm-search" oninput="renderAdmin()" placeholder="🔍 Buscar lote..." class="search-bar">
+            <table>
+                <thead><tr><th>Fecha</th><th>Lote</th><th>QC</th><th>Acción</th></tr></thead>
+                <tbody id="adm-body"></tbody>
+            </table>
         </div>
     </div>
 
@@ -170,7 +168,7 @@ function iniciarSincronizacion() {
             const mapaFinal = new Map();
             arrayNube.forEach(l => mapaFinal.set(l.id.toString(), l));
             db.forEach(lLocal => {
-                if (Date.now() - (lLocal.lastUpdate || 0) < 8000) mapaFinal.set(lLocal.id.toString(), lLocal);
+                if (Date.now() - (lLocal.lastUpdate || 0) < 5000) mapaFinal.set(lLocal.id.toString(), lLocal);
             });
             db = Array.from(mapaFinal.values());
             db.sort((a, b) => a.id.toString().localeCompare(b.id.toString(), undefined, { numeric: true }));
@@ -184,7 +182,7 @@ async function addBR() {
     const line = document.getElementById('new-line').value;
     if (!id) return alert("Falta Lote");
     const nuevo = {
-        id, line, user: userActual, st: "wait",
+        id, line, user: "POR ASIGNAR", st: "wait",
         date: new Date().toISOString().split('T')[0],
         tW: 0, tR: 0, tC: 0, tR_acumulado: 0, tC_acumulado: 0,
         inicioWS: Date.now(), lastUpdate: Date.now()
@@ -198,13 +196,20 @@ async function changeSt(id, s) {
     const ahora = Date.now();
     const lote = db.find(l => l.id == id);
     if (!lote) return;
+
+    // ASIGNACIÓN DE USUARIO SOLO AL INICIAR
     if (lote.st === 'wait' && s === 'rev') lote.user = userActual;
+
+    // ACUMULAR TIEMPOS
     if (lote.st === 'rev' && lote.inicioRS) lote.tR_acumulado = (ahora - lote.inicioRS) + (Number(lote.tR_acumulado) || 0);
     if (lote.st === 'corr' && lote.inicioCS) lote.tC_acumulado = (ahora - lote.inicioCS) + (Number(lote.tC_acumulado) || 0);
+
     lote.st = s;
     lote.lastUpdate = ahora;
+
     if (s === 'rev') { lote.inicioRS = ahora; lote.inicioCS = null; }
     else if (s === 'corr') { lote.inicioCS = ahora; lote.inicioRS = null; }
+    
     await rtdb.ref('recursos/' + id).update(lote);
 }
 
@@ -225,6 +230,44 @@ async function confirmFinish() {
     hideModal('modal-finish');
 }
 
+// FUNCIONES DE EDICIÓN ADMIN
+function openEdit(id) {
+    const l = db.find(x => x.id == id);
+    if(!l) return;
+    document.getElementById('edit-old-id').value = l.id;
+    document.getElementById('edit-id').value = l.id;
+    document.getElementById('edit-line').value = l.line;
+    document.getElementById('edit-user').value = l.user;
+    document.getElementById('edit-pg').value = l.pg || 0;
+    showModal('modal-edit');
+}
+
+async function saveEdit() {
+    const oldId = document.getElementById('edit-old-id').value;
+    const newId = document.getElementById('edit-id').value;
+    const l = db.find(x => x.id == oldId);
+    
+    l.id = newId;
+    l.line = document.getElementById('edit-line').value;
+    l.user = document.getElementById('edit-user').value;
+    l.pg = parseInt(document.getElementById('edit-pg').value);
+    l.lastUpdate = Date.now();
+
+    if (oldId !== newId) {
+        await rtdb.ref('recursos/' + oldId).remove();
+    }
+    await rtdb.ref('recursos/' + newId).set(l);
+    hideModal('modal-edit');
+}
+
+async function borrarLote() {
+    const id = document.getElementById('edit-old-id').value;
+    if(confirm("¿Eliminar este lote permanentemente?")) {
+        await rtdb.ref('recursos/' + id).remove();
+        hideModal('modal-edit');
+    }
+}
+
 function fmt(ms) {
     if (!ms || ms < 0) return "00:00";
     let s = Math.floor(ms / 1000), m = Math.floor(s / 60), h = Math.floor(m / 60);
@@ -242,29 +285,27 @@ function render() {
 
     db.forEach(l => {
         if (search && !l.id.toString().toLowerCase().includes(search)) return;
-        
         const isDone = (l.st === 'done');
-        const fLote = l.date || "";
         if (isDone) {
-            if (selDate && fLote !== selDate) return;
+            if (selDate && l.date !== selDate) return;
             topB++; topP += (l.pg || 0);
         }
 
         const card = `
         <div class="card" style="border-left: 5px solid ${isDone ? '#468e5d' : (l.st === 'wait' ? '#2c3e50' : '#f39c12')};">
-            <div style="font-weight:bold;">${l.id}</div>
-            <div style="font-size:0.75em; color:#666;">${l.line} | ${l.user}</div>
-            ${isDone ? `<span class="status-final">LISTO</span>` : `<span class="timer-big" id="live-${l.id}">00:00</span>`}
+            <div style="font-weight:bold; font-size:1.1em">${l.id}</div>
+            <div style="font-size:0.75em; color:#666; margin-bottom:5px;">${l.line} | <b>${l.user}</b></div>
+            ${isDone ? `<div style="text-align:center; color:var(--green); font-weight:bold; margin:10px 0">FINALIZADO</div>` : `<span class="timer-big" id="live-${l.id}">00:00</span>`}
             <div class="timer-grid-3">
-                <div class="t-item"><span class="t-lbl">W</span>${fmt(l.tW)}</div>
-                <div class="t-item"><span class="t-lbl">R</span>${fmt(l.tR)}</div>
-                <div class="t-item"><span class="t-lbl">C</span>${fmt(l.tC)}</div>
+                <div>W: ${fmt(l.tW)}</div>
+                <div>R: ${fmt(l.tR)}</div>
+                <div>C: ${fmt(l.tC)}</div>
             </div>
-            ${l.st === 'wait' ? `<button class="btn" style="background:#27ae60; color:white" onclick="changeSt('${l.id}','rev')">INICIAR</button>` : 
+            ${l.st === 'wait' ? `<button class="btn" style="background:#27ae60; color:white" onclick="changeSt('${l.id}','rev')">INICIAR REVISIÓN</button>` : 
               (l.st==='rev' || l.st==='corr') ? `
-                <button class="btn" style="background:#f39c12; color:white" onclick="changeSt('${l.id}','corr')">CORREGIR</button>
-                <button class="btn" style="background:#2c3e50; color:white" onclick="openFin('${l.id}')">FIN</button>` : 
-              `<div style="font-weight:bold; color:var(--green)">PÁGS: ${l.pg}</div>`}
+                <button class="btn" style="background:#f39c12; color:white" onclick="changeSt('${l.id}','corr')">CORRECCIÓN</button>
+                <button class="btn" style="background:#2c3e50; color:white" onclick="openFin('${l.id}')">FINALIZAR</button>` : 
+              `<div style="text-align:center; font-weight:bold; color:var(--dark); margin-top:5px">PÁGS: ${l.pg}</div>`}
         </div>`;
         
         lists[isDone ? 'done' : (l.st==='wait' ? 'wait' : 'run')].insertAdjacentHTML('afterbegin', card);
@@ -283,8 +324,8 @@ function tick() {
     db.forEach(l => {
         if (l.st === 'done') return;
         if (l.st === 'wait') l.tW = ahora - l.inicioWS;
-        if (l.st === 'rev') l.tR = (ahora - l.inicioRS) + (Number(lote.tR_acumulado) || 0);
-        if (l.st === 'corr') l.tC = (ahora - l.inicioCS) + (Number(lote.tC_acumulado) || 0);
+        if (l.st === 'rev') l.tR = (ahora - l.inicioRS) + (Number(l.tR_acumulado) || 0);
+        if (l.st === 'corr') l.tC = (ahora - l.inicioCS) + (Number(l.tC_acumulado) || 0);
         const el = document.getElementById(`live-${l.id}`);
         if (el) el.innerText = fmt(l.st==='wait'? l.tW : (l.st==='rev'? l.tR : l.tC));
     });
@@ -314,11 +355,16 @@ function renderAdmin() {
     const s = document.getElementById('adm-search').value.toLowerCase();
     db.forEach(l => {
         if (s && !l.id.toString().includes(s)) return;
-        b.innerHTML += `<tr><td>${l.date}</td><td>${l.id}</td><td>${l.line}</td><td>${l.user}</td><td><button onclick="borrar('${l.id}')">🗑️</button></td></tr>`;
+        b.innerHTML += `<tr><td>${l.date}</td><td>${l.id}</td><td>${l.user}</td><td><button onclick="openEdit('${l.id}')">EDITAR ✏️</button></td></tr>`;
     });
 }
 
-async function borrar(id) { if(confirm("¿Borrar?")) await rtdb.ref('recursos/'+id).remove(); }
+function setShift(t) {
+    currentShift = t;
+    document.querySelectorAll('.btn-filter-pro').forEach(b => b.classList.remove('active'));
+    document.getElementById('btn-' + t.toLowerCase()).classList.add('active');
+    render();
+}
 
 window.onload = () => {
     const s = localStorage.getItem('qc_session');
@@ -329,7 +375,11 @@ window.onload = () => {
     }
     document.getElementById('user-display').innerText = "👤 " + userActual;
     const sel = document.getElementById('new-line');
-    lineas.sort().forEach(l => sel.innerHTML += `<option value="${l}">${l}</option>`);
+    const selEdit = document.getElementById('edit-line');
+    lineas.sort().forEach(l => {
+        sel.innerHTML += `<option value="${l}">${l}</option>`;
+        selEdit.innerHTML += `<option value="${l}">${l}</option>`;
+    });
     document.getElementById('main-date-filter').value = new Date().toISOString().split('T')[0];
     iniciarSincronizacion();
     setInterval(tick, 1000);
