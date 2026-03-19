@@ -38,6 +38,7 @@
     </style>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -46,11 +47,12 @@
             <button class="btn-nav" onclick="window.location.href='index.html'">🏠 INICIO</button>
             <span style="font-weight:900;">QC BR TRACKER</span>
         </div>
-        <div class="nav-btns">
-            <div id="user-display" class="btn-nav" style="background:#34495e">👤...</div>
-            <button id="btn-admin-config" class="btn-nav" style="background:var(--blue); display:none;" onclick="toggleAdmin(true)">⚙️ ADMIN</button>
-            <div id="reloj" class="clock-display">00:00:00</div>
-        </div>
+       <div class="nav-btns">
+    <div id="user-display" class="btn-nav" style="background:#34495e">👤...</div>
+    <button class="btn-nav" style="background:#27ae60;" onclick="exportExcel()">📊 EXCEL</button>
+    <button id="btn-admin-config" class="btn-nav" style="background:var(--blue); display:none;" onclick="toggleAdmin(true)">⚙️ ADMIN</button>
+    <div id="reloj" class="clock-display">00:00:00</div>
+</div>
     </div>
 
     <div class="stats-bar">
@@ -176,22 +178,59 @@ function iniciarSincronizacion() {
         render(); 
     });
 }
+function obtenerTurnoActual() {
+    const ahora = new Date();
+    const hora = ahora.getHours();
+    const minutos = ahora.getMinutes();
+    const horaDecimal = hora + (minutos / 60);
 
+    // TA: 6:00 AM (6.0) a 3:30 PM (15.5)
+    if (horaDecimal >= 6 && horaDecimal <= 15.5) {
+        return "TA";
+    } 
+    // TB: 3:31 PM (15.51) a 12:00 MD (24.0 o 0.0)
+    else {
+        return "TB";
+    }
+}
 async function addBR() {
     const id = document.getElementById('new-id').value.trim();
     const line = document.getElementById('new-line').value;
+    
     if (!id) return alert("Falta Lote");
+
+    // 1. CORRECCIÓN DE FECHA LOCAL
+    const hoy = new Date();
+    const offset = hoy.getTimezoneOffset() * 60000; 
+    const fechaLocal = new Date(hoy - offset).toISOString().split('T')[0];
+
+    // 2. OBTENER TURNO AUTOMÁTICO
+    const turnoDetectado = obtenerTurnoActual();
+
     const nuevo = {
-        id, line, user: "POR ASIGNAR", st: "wait",
-        date: new Date().toISOString().split('T')[0],
-        tW: 0, tR: 0, tC: 0, tR_acumulado: 0, tC_acumulado: 0,
-        inicioWS: Date.now(), lastUpdate: Date.now()
+        id, 
+        line, 
+        user: "POR ASIGNAR", 
+        st: "wait",
+        date: fechaLocal,
+        shift: turnoDetectado, // <--- Nuevo campo guardado en Firebase
+        tW: 0, 
+        tR: 0, 
+        tC: 0, 
+        tR_acumulado: 0, 
+        tC_acumulado: 0,
+        inicioWS: Date.now(), 
+        lastUpdate: Date.now()
     };
+
     await rtdb.ref('recursos/' + id).set(nuevo);
+    
+    // Limpieza y cierre
     document.getElementById('new-id').value = "";
     hideModal('modal-new');
+    
+    console.log(`Lote ${id} registrado en el turno ${turnoDetectado}`);
 }
-
 async function changeSt(id, s) {
     const ahora = Date.now();
     const lote = db.find(l => l.id == id);
@@ -281,44 +320,70 @@ function render() {
     
     const selDate = document.getElementById('main-date-filter').value;
     const search = document.getElementById('main-search').value.toLowerCase();
+    
+    // Inicializamos totales para el recálculo
     let topB = 0, topP = 0;
 
     db.forEach(l => {
+        // 1. Filtro por búsqueda (Lote #)
         if (search && !l.id.toString().toLowerCase().includes(search)) return;
+        
         const isDone = (l.st === 'done');
+        
+        // 2. Filtro por Fecha (Solo aplica a los FINALIZADOS)
+        if (isDone && selDate && l.date !== selDate) return;
+
+        // 3. Filtro por Turno (TA / TB / TODOS)
+        // Si el turno del lote no coincide con el seleccionado (y no es 'TODOS'), saltamos
+        if (currentShift !== "TODOS" && l.shift !== currentShift) return;
+
+        // --- Sumar a los contadores de arriba solo si pasó los filtros ---
         if (isDone) {
-            if (selDate && l.date !== selDate) return;
-            topB++; topP += (l.pg || 0);
+            topB++; 
+            topP += (Number(l.pg) || 0);
         }
 
+        // --- Construcción de la tarjeta ---
         const card = `
         <div class="card" style="border-left: 5px solid ${isDone ? '#468e5d' : (l.st === 'wait' ? '#2c3e50' : '#f39c12')};">
-            <div style="font-weight:bold; font-size:1.1em">${l.id}</div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:bold; font-size:1.1em">${l.id}</span>
+                <span style="font-size:0.65em; background:#eee; padding:2px 6px; border-radius:4px; font-weight:bold; color:#555;">${l.shift || 'S/T'}</span>
+            </div>
             <div style="font-size:0.75em; color:#666; margin-bottom:5px;">${l.line} | <b>${l.user}</b></div>
-            ${isDone ? `<div style="text-align:center; color:var(--green); font-weight:bold; margin:10px 0">FINALIZADO</div>` : `<span class="timer-big" id="live-${l.id}">00:00</span>`}
+            
+            ${isDone ? 
+                `<div style="text-align:center; color:var(--green); font-weight:bold; margin:10px 0; border:1px dashed var(--green); border-radius:4px; padding:5px;">FINALIZADO</div>` : 
+                `<span class="timer-big" id="live-${l.id}">00:00</span>`
+            }
+            
             <div class="timer-grid-3">
                 <div>W: ${fmt(l.tW)}</div>
                 <div>R: ${fmt(l.tR)}</div>
                 <div>C: ${fmt(l.tC)}</div>
             </div>
-            ${l.st === 'wait' ? `<button class="btn" style="background:#27ae60; color:white" onclick="changeSt('${l.id}','rev')">INICIAR REVISIÓN</button>` : 
-              (l.st==='rev' || l.st==='corr') ? `
-                <button class="btn" style="background:#f39c12; color:white" onclick="changeSt('${l.id}','corr')">CORRECCIÓN</button>
-                <button class="btn" style="background:#2c3e50; color:white" onclick="openFin('${l.id}')">FINALIZAR</button>` : 
-              `<div style="text-align:center; font-weight:bold; color:var(--dark); margin-top:5px">PÁGS: ${l.pg}</div>`}
+
+            ${l.st === 'wait' ? 
+                `<button class="btn" style="background:#27ae60; color:white" onclick="changeSt('${l.id}','rev')">INICIAR REVISIÓN</button>` : 
+                (l.st==='rev' || l.st==='corr') ? `
+                    <button class="btn" style="background:#f39c12; color:white" onclick="changeSt('${l.id}','corr')">CORRECCIÓN</button>
+                    <button class="btn" style="background:#2c3e50; color:white" onclick="openFin('${l.id}')">FINALIZAR</button>` : 
+                `<div style="text-align:center; font-weight:bold; color:var(--dark); margin-top:5px">PÁGS: ${l.pg}</div>`
+            }
         </div>`;
         
+        // Enviamos la tarjeta a la lista correspondiente
         lists[isDone ? 'done' : (l.st==='wait' ? 'wait' : 'run')].insertAdjacentHTML('afterbegin', card);
         counts[isDone ? 'done' : (l.st==='wait' ? 'wait' : 'run')]++;
     });
 
+    // Actualizamos elementos de la interfaz
     document.getElementById('top-brs').innerText = topB;
     document.getElementById('top-pags').innerText = topP;
     document.getElementById('c-wait').innerText = counts.wait;
     document.getElementById('c-run').innerText = counts.run;
     document.getElementById('c-done').innerText = counts.done;
 }
-
 function tick() {
     const ahora = Date.now();
     db.forEach(l => {
@@ -358,14 +423,58 @@ function renderAdmin() {
         b.innerHTML += `<tr><td>${l.date}</td><td>${l.id}</td><td>${l.user}</td><td><button onclick="openEdit('${l.id}')">EDITAR ✏️</button></td></tr>`;
     });
 }
+function exportExcel() {
+    const selDate = document.getElementById('main-date-filter').value;
+    
+    // 1. Filtramos los datos igual que en el render
+    const datosFiltrados = db.filter(l => {
+        const coincideFecha = l.st === 'done' ? (l.date === selDate) : true;
+        const coincideTurno = currentShift === "TODOS" || l.shift === currentShift;
+        return coincideFecha && coincideTurno;
+    }).map(l => ({
+        "FECHA": l.date,
+        "LOTE": l.id,
+        "LINEA": l.line,
+        "TURNO": l.shift || "N/A",
+        "INSPECTOR": l.user,
+        "ESTADO": l.st.toUpperCase(),
+        "PAGINAS": l.pg || 0,
+        "HORA FIN": l.hFin || "---",
+        "TIEMPO REV (Min)": (l.tR / 60000).toFixed(2),
+        "TIEMPO CORR (Min)": (l.tC / 60000).toFixed(2)
+    }));
 
+    if (datosFiltrados.length === 0) return alert("No hay datos para exportar con los filtros actuales.");
+
+    // 2. Crear el libro de Excel
+    const hoja = XLSX.utils.json_to_sheet(datosFiltrados);
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Reporte QC");
+
+    // 3. Descargar
+    const nombreArchivo = `Reporte_QC_${selDate}_${currentShift}.xlsx`;
+    XLSX.writeFile(libro, nombreArchivo);
+}
 function setShift(t) {
-    currentShift = t;
-    document.querySelectorAll('.btn-filter-pro').forEach(b => b.classList.remove('active'));
-    document.getElementById('btn-' + t.toLowerCase()).classList.add('active');
+    currentShift = t; // 'TA', 'TB' o 'TODOS'
+    
+    // 1. Quitamos la clase 'active' de todos los botones de turno
+    document.querySelectorAll('.btn-filter-pro').forEach(b => {
+        b.classList.remove('active');
+    });
+
+    // 2. Aplicamos 'active' al botón correspondiente
+    // Esto asume que tus IDs son: btn-todos, btn-ta, btn-tb
+    const idBoton = 'btn-' + t.toLowerCase();
+    const boton = document.getElementById(idBoton);
+    
+    if (boton) {
+        boton.classList.add('active');
+    }
+
+    // 3. Ejecutamos el render para que los contadores y la lista se actualicen
     render();
 }
-
 window.onload = () => {
     const s = localStorage.getItem('qc_session');
     if (s) {
@@ -374,13 +483,22 @@ window.onload = () => {
         if (u.isAdmin) document.getElementById('btn-admin-config').style.display = 'block';
     }
     document.getElementById('user-display').innerText = "👤 " + userActual;
+
     const sel = document.getElementById('new-line');
     const selEdit = document.getElementById('edit-line');
     lineas.sort().forEach(l => {
         sel.innerHTML += `<option value="${l}">${l}</option>`;
         selEdit.innerHTML += `<option value="${l}">${l}</option>`;
     });
-    document.getElementById('main-date-filter').value = new Date().toISOString().split('T')[0];
+
+    // --- CORRECCIÓN DE FECHA LOCAL ---
+    const hoy = new Date();
+    const offset = hoy.getTimezoneOffset() * 60000; // Ajuste en milisegundos
+    const fechaLocal = new Date(hoy - offset).toISOString().split('T')[0];
+    
+    document.getElementById('main-date-filter').value = fechaLocal;
+    // ---------------------------------
+
     iniciarSincronizacion();
     setInterval(tick, 1000);
 };
