@@ -505,7 +505,7 @@ body.dark-mode .btn-historial-v3:hover {
 
     <script>
         let pausaSincro = false;
-        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbza1hCnmzq7U1mOAqUpBf5JOOrc3M7RzO9pkCCe2_3az9wJalAdh04iIJlPPz9UYc-m/exec";
+        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbzYdOjQMeRH_DVAOkQNIvgEN1U6NePlW5Z35RKplO8CQN31prKzkMlE2zEdXlTpmyYh/exec";
         const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
 
         let catalogoDefectos = JSON.parse(localStorage.getItem('qc_catalogo_v2')) || {};
@@ -514,30 +514,32 @@ body.dark-mode .btn-historial-v3:hover {
         let indexSel = null;
         let adminEditTemp = { idx: null, valor: null };
 
-        function guardarCatalogo() {
-    // 1. Guardar en tu navegador (Para que TÚ lo veas al instante)
-    localStorage.setItem('qc_catalogo_v2', JSON.stringify(catalogoDefectos));
+       async function cargarCatalogoDesdeNube() {
+    try {
+        // Pedimos el catálogo a Google
+        const response = await fetch(SHEETS_URL + "?action=get_config");
+        const data = await response.json();
 
-    // 2. Preparar el "paquete" para la nube de Google Sheets
-    const params = new URLSearchParams();
-    params.append('action', 'save_config');
-    params.append('clave', 'CATALOGO_DEFECTOS'); // Usamos la clave que ya tienes en la hoja
-    params.append('valor', JSON.stringify(catalogoDefectos));
-
-    // 3. Envío directo a la nube
-    fetch(SHEETS_URL, {
-        method: 'POST',
-        mode: 'no-cors', // Evita errores de seguridad de Google
-        body: params
-    })
-    .then(() => {
-        console.log("✅ ¡Sincronizado! Los datos ya están en la nube de Google Sheets.");
-    })
-    .catch(err => {
-        console.error("❌ Error de sincronización:", err);
-        alert("No se pudo subir a la nube. Revisa tu conexión.");
-    });
+        if (data && data.valor) {
+            // Actualizamos la variable con lo que hay en la nube
+            catalogoDefectos = JSON.parse(data.valor);
+            
+            // Actualizamos el respaldo local
+            localStorage.setItem('qc_catalogo_v2', JSON.stringify(catalogoDefectos));
+            
+            console.log("✅ Catálogo descargado de la nube con éxito.");
+            
+            // Si tienes una función que dibuja la lista en pantalla, llámala aquí:
+            // actualizarInterfazCatalogo(); 
+        }
+    } catch (error) {
+        console.warn("Usando catálogo local (offline o error de red)");
+    }
 }
+window.addEventListener('load', cargarCatalogoDesdeNube);
+
+// ESTO ES CLAVE: Se ejecuta solo al abrir la app
+window.addEventListener('load', cargarCatalogoDesdeNube);
 
   function inicializarSistema() {
     const sesion = localStorage.getItem('qc_session');
