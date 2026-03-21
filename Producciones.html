@@ -539,20 +539,38 @@ body.dark-mode .btn-historial-v3:hover {
     });
 }
 
-          function inicializarSistema() {
+  function inicializarSistema() {
     const sesion = localStorage.getItem('qc_session');
-    if (sesion) {
-        const data = JSON.parse(sesion);
-        document.getElementById('user-display').innerText = `👤 ${data.name}`;
-        document.getElementById('r-inspector').value = data.name.toUpperCase();
-        if (data.isAdmin) document.getElementById('btn-admin-access').style.display = 'inline-block';
+
+    // 1. VALIDACIÓN CRÍTICA: Si no hay sesión, abortamos y pedimos login
+    if (!sesion) {
+        console.warn("⚠️ Acceso no autorizado. Abriendo login...");
+        abrirModal('modal-login'); // Asegúrate de que el ID sea el de tu modal de inicio
+        return; // <--- DETIENE LA EJECUCIÓN AQUÍ
     }
 
+    // 2. Si hay sesión, configuramos la interfaz
+    const data = JSON.parse(sesion);
+    
+    // Verificación extra: que el nombre no esté vacío
+    if (!data.name || data.name.trim() === "") {
+        localStorage.removeItem('qc_session'); // Limpiamos basura
+        location.reload(); 
+        return;
+    }
 
+    document.getElementById('user-display').innerText = `👤 ${data.name}`;
+    document.getElementById('r-inspector').value = data.name.toUpperCase();
+    
+    if (data.isAdmin) {
+        document.getElementById('btn-admin-access').style.display = 'inline-block';
+    }
+
+    // 3. Inicialización de estados (tu lógica de líneas)
     estados = lineasArr.map(nom => ({ 
         activo: false, 
         lote: '', 
-        loteAnterior: '', // <--- ¡AQUÍ ESTÁ EL CAMBIO!
+        loteAnterior: '', 
         inspector: '', 
         inicio: null, 
         horaInicioReal: '', 
@@ -566,12 +584,14 @@ body.dark-mode .btn-historial-v3:hover {
     const selL = document.getElementById('r-linea');
     if (selL) selL.innerHTML = lineasArr.map((n, i) => `<option value="${i}">${n}</option>`).join('');
 
+    // 4. Arranque de procesos de datos
     cargarHistorialNube();
     render();
     setInterval(tick, 1000);
     setInterval(sincronizarConNube, 10000);
+    
+    console.log("✅ Sistema inicializado para:", data.name);
 }
-
 
         async function cargarHistorialNube() {
             try {
@@ -1357,6 +1377,34 @@ if (localStorage.getItem('qc_theme') === 'dark') {
     document.body.classList.add('dark-mode');
     document.getElementById('dark-mode-toggle').innerText = "☀️";
 }
+
+// ... (Aquí terminan todas tus otras funciones como abrirModal, finalizarLote, etc.)
+
+        // 1. Pegas la función que crea la sesión (la que no tenías)
+        function loginManual() {
+            const input = document.getElementById('login-name');
+            const nombre = input.value.trim().toUpperCase();
+
+            if (nombre.length < 3) {
+                alert("⚠️ Error: Debe ingresar su nombre completo.");
+                return;
+            }
+
+            const sesion = {
+                name: nombre,
+                id: "584",
+                isAdmin: (nombre.includes("MARLON")) 
+            };
+
+            localStorage.setItem('qc_session', JSON.stringify(sesion));
+            cerrarModal('modal-login');
+            inicializarSistema(); 
+        }
+
+        // 2. Pegas el disparador al puro final
+        window.onload = function() {
+            inicializarSistema(); 
+        };
 
 
 </script>
