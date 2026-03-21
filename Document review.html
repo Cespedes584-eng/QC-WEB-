@@ -391,15 +391,27 @@ function render() {
     document.getElementById('c-run').innerText = counts.run;
     document.getElementById('c-done').innerText = counts.done;
 }
-function tick() {
+ffunction tick() {
     const ahora = Date.now();
     db.forEach(l => {
         if (l.st === 'done') return;
+        
+        // Cálculo de tiempos internos
         if (l.st === 'wait') l.tW = ahora - l.inicioWS;
         if (l.st === 'rev') l.tR = (ahora - l.inicioRS) + (Number(l.tR_acumulado) || 0);
         if (l.st === 'corr') l.tC = (ahora - l.inicioCS) + (Number(l.tC_acumulado) || 0);
+        
+        // Actualización visual del cronómetro grande
         const el = document.getElementById(`live-${l.id}`);
-        if (el) el.innerText = fmt(l.st==='wait'? l.tW : (l.st==='rev'? l.tR : l.tC));
+        if (el) {
+            // Esta es la línea clave: añadimos l.st === 'corr'
+            let tiempoAMostrar = 0;
+            if (l.st === 'wait') tiempoAMostrar = l.tW;
+            else if (l.st === 'rev') tiempoAMostrar = l.tR;
+            else if (l.st === 'corr') tiempoAMostrar = l.tC;
+            
+            el.innerText = fmt(tiempoAMostrar);
+        }
     });
     document.getElementById('reloj').innerText = new Date().toLocaleTimeString();
 }
