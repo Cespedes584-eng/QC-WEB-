@@ -541,6 +541,7 @@ window.addEventListener('load', cargarCatalogoDesdeNube);
 // ESTO ES CLAVE: Se ejecuta solo al abrir la app
 window.addEventListener('load', cargarCatalogoDesdeNube);
 
+
   function inicializarSistema() {
     const sesion = localStorage.getItem('qc_session');
 
@@ -1110,18 +1111,55 @@ async function finalizarLote(ok) {
             document.getElementById('lista-defectos-configurados-tabla').innerHTML = lista.map((d, i) => `<tr><td>${d}</td><td><button onclick="eliminarDefecto('${l}','${p}',${i})">🗑️</button></td></tr>`).join('');
         }
 
-        function agregarDefectoNuevo() {
-            const l = document.getElementById('admin-def-linea').value;
-            const p = document.getElementById('admin-def-proceso').value;
-            const v = document.getElementById('admin-def-nombre').value.trim();
-            if (!v) return;
-            if (!catalogoDefectos[l]) catalogoDefectos[l] = {};
-            if (!catalogoDefectos[l][p]) catalogoDefectos[l][p] = [];
-            catalogoDefectos[l][p].push(v);
-            guardarCatalogo();
-            document.getElementById('admin-def-nombre').value = "";
-            renderizarListaDefectosAdmin();
-        }
+      function agregarDefectoNuevo() {
+    const l = document.getElementById('admin-def-linea').value;
+    const p = document.getElementById('admin-def-proceso').value;
+    const v = document.getElementById('admin-def-nombre').value.trim();
+    
+    if (!v) {
+        alert("Por favor escribe el nombre del defecto");
+        return;
+    }
+
+    // Estructura del objeto
+    if (!catalogoDefectos[l]) catalogoDefectos[l] = {};
+    if (!catalogoDefectos[l][p]) catalogoDefectos[l][p] = [];
+    
+    // Agregamos el defecto
+    catalogoDefectos[l][p].push(v);
+
+    // LLAMAMOS A GUARDAR (La función que te faltaba)
+    guardarCatalogo(); 
+
+    // Limpiamos la interfaz
+    document.getElementById('admin-def-nombre').value = "";
+    if (typeof renderizarListaDefectosAdmin === 'function') {
+        renderizarListaDefectosAdmin();
+    }
+}
+function guardarCatalogo() {
+    // 1. Guardamos en la memoria del navegador
+    localStorage.setItem('qc_catalogo_v2', JSON.stringify(catalogoDefectos));
+
+    // 2. Preparamos los datos para Google Sheets
+    const params = new URLSearchParams();
+    params.append('action', 'save_config');
+    params.append('clave', 'CATALOGO_DEFECTOS');
+    params.append('valor', JSON.stringify(catalogoDefectos));
+
+    // 3. Enviamos a la URL de tu script de Google
+    fetch(SHEETS_URL, {
+        method: 'POST',
+        mode: 'no-cors', 
+        body: params
+    })
+    .then(() => {
+        console.log("✅ Datos enviados a la nube correctamente");
+    })
+    .catch(err => {
+        console.error("❌ Error al enviar a la nube:", err);
+    });
+}
 
         function eliminarDefecto(l, p, i) {
             catalogoDefectos[l][p].splice(i, 1);
