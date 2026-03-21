@@ -235,29 +235,48 @@ async function changeSt(id, s) {
     const lote = db.find(l => l.id == id);
     if (!lote) return;
 
-    // VALIDACIÓN: Solo permitir cambios si el lote es del día de hoy
+    // 1. VALIDACIÓN DE FECHA
     const hoy = new Date();
     const offset = hoy.getTimezoneOffset() * 60000; 
     const hoyReal = new Date(hoy - offset).toISOString().split('T')[0];
 
     if (lote.date !== hoyReal) {
-        return alert("⚠️ ACCESO DENEGADO: Solo puedes modificar lotes que pertenezcan a la fecha de hoy.");
+        return alert("⚠️ ACCESO DENEGADO: Solo puedes modificar lotes de hoy.");
     }
 
-    // ASIGNACIÓN DE USUARIO SOLO AL INICIAR
-    if (lote.st === 'wait' && s === 'rev') lote.user = userActual;
+    // 2. ASIGNACIÓN DE USUARIO (Solo la primera vez que pasa a revisión)
+    if (lote.st === 'wait' && s === 'rev') {
+        lote.user = userActual;
+    }
 
-    // ACUMULAR TIEMPOS
-    if (lote.st === 'rev' && lote.inicioRS) lote.tR_acumulado = (ahora - lote.inicioRS) + (Number(lote.tR_acumulado) || 0);
-    if (lote.st === 'corr' && lote.inicioCS) lote.tC_acumulado = (ahora - lote.inicioCS) + (Number(lote.tC_acumulado) || 0);
+    // 3. ACUMULAR TIEMPO DEL ESTADO QUE ESTÁ TERMINANDO/PAUSANDO
+    if (lote.st === 'rev' && lote.inicioRS) {
+        lote.tR_acumulado = (ahora - lote.inicioRS) + (Number(lote.tR_acumulado) || 0);
+        lote.inicioRS = null; // Pausamos el cronómetro de revisión
+    }
+    
+    if (lote.st === 'corr' && lote.inicioCS) {
+        lote.tC_acumulado = (ahora - lote.inicioCS) + (Number(lote.tC_acumulado) || 0);
+        lote.inicioCS = null; // Pausamos el cronómetro de corrección
+    }
 
+    // 4. ACTIVAR EL NUEVO ESTADO
     lote.st = s;
     lote.lastUpdate = ahora;
 
-    if (s === 'rev') { lote.inicioRS = ahora; lote.inicioCS = null; }
-    else if (s === 'corr') { lote.inicioCS = ahora; lote.inicioRS = null; }
+    if (s === 'rev') {
+        lote.inicioRS = ahora; // Inicia o Reanuda Revisión
+    } else if (s === 'corr') {
+        lote.inicioCS = ahora; // Inicia Corrección
+    }
     
-    await rtdb.ref('recursos/' + id).update(lote);
+    // 5. ACTUALIZAR FIREBASE
+    try {
+        await rtdb.ref('recursos/' + id).update(lote);
+        // El render se dispara automáticamente por el .on('value') de iniciarSincronizacion
+    } catch (e) {
+        console.error("Error al sincronizar:", e);
+    }
 }
 function openFin(id) { tempIdx = id; document.getElementById('finish-pg').value = ""; showModal('modal-finish'); }
 
@@ -328,31 +347,21 @@ function render() {
     const selDate = document.getElementById('main-date-filter').value;
     const search = document.getElementById('main-search').value.toLowerCase();
     
-    // Inicializamos totales para el recálculo
     let topB = 0, topP = 0;
 
     db.forEach(l => {
-        // 1. Filtro por búsqueda (Lote #)
         if (search && !l.id.toString().toLowerCase().includes(search)) return;
-        
         const isDone = (l.st === 'done');
-        
-        // 2. Filtro por Fecha (Solo aplica a los FINALIZADOS)
         if (isDone && selDate && l.date !== selDate) return;
-
-        // 3. Filtro por Turno (TA / TB / TODOS)
-        // Si el turno del lote no coincide con el seleccionado (y no es 'TODOS'), saltamos
         if (currentShift !== "TODOS" && l.shift !== currentShift) return;
 
-        // --- Sumar a los contadores de arriba solo si pasó los filtros ---
         if (isDone) {
             topB++; 
             topP += (Number(l.pg) || 0);
         }
 
-        // --- Construcción de la tarjeta ---
         const card = `
-        <div class="card" style="border-left: 5px solid ${isDone ? '#468e5d' : (l.st === 'wait' ? '#2c3e50' : '#f39c12')};">
+        <div class="card" style="border-left: 5px solid ${isDone ? '#468e5d' : (l.st === 'wait' ? '#2c3e50' : (l.st === 'rev' ? '#27ae60' : '#3498db'))};">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-weight:bold; font-size:1.1em">${l.id}</span>
                 <span style="font-size:0.65em; background:#eee; padding:2px 6px; border-radius:4px; font-weight:bold; color:#555;">${l.shift || 'S/T'}</span>
@@ -372,19 +381,20 @@ function render() {
 
             ${l.st === 'wait' ? 
                 `<button class="btn" style="background:#27ae60; color:white" onclick="changeSt('${l.id}','rev')">INICIAR REVISIÓN</button>` : 
-                (l.st==='rev' || l.st==='corr') ? `
-                    <button class="btn" style="background:#f39c12; color:white" onclick="changeSt('${l.id}','corr')">CORRECCIÓN</button>
-                    <button class="btn" style="background:#2c3e50; color:white" onclick="openFin('${l.id}')">FINALIZAR</button>` : 
+                (l.st==='rev') ? `
+                    <button class="btn" style="background:#f39c12; color:white" onclick="changeSt('${l.id}','corr')">⚠️ CORRECCIÓN</button>
+                    <button class="btn" style="background:#2c3e50; color:white" onclick="openFin('${l.id}')">FINALIZAR</button>` :
+                (l.st==='corr') ? `
+                    <button class="btn" style="background:#3498db; color:white" onclick="changeSt('${l.id}','rev')">▶️ REANUDAR REV.</button>
+                    <button class="btn" style="background:#2c3e50; color:white" onclick="openFin('${l.id}')">FINALIZAR</button>` :
                 `<div style="text-align:center; font-weight:bold; color:var(--dark); margin-top:5px">PÁGS: ${l.pg}</div>`
             }
         </div>`;
         
-        // Enviamos la tarjeta a la lista correspondiente
         lists[isDone ? 'done' : (l.st==='wait' ? 'wait' : 'run')].insertAdjacentHTML('afterbegin', card);
         counts[isDone ? 'done' : (l.st==='wait' ? 'wait' : 'run')]++;
     });
 
-    // Actualizamos elementos de la interfaz
     document.getElementById('top-brs').innerText = topB;
     document.getElementById('top-pags').innerText = topP;
     document.getElementById('c-wait').innerText = counts.wait;
@@ -393,32 +403,50 @@ function render() {
 }
 function tick() {
     const ahora = Date.now();
-    if (!db || !Array.isArray(db)) return; // Seguridad para evitar errores si db está vacío
+    if (!db || !Array.isArray(db)) return;
 
     db.forEach(l => {
         if (l.st === 'done') return;
         
-        // Cálculos de tiempo por estado
-        if (l.st === 'wait') {
-            l.tW = ahora - (l.inicioWS || ahora);
-        } else if (l.st === 'rev') {
-            l.tR = (ahora - (l.inicioRS || ahora)) + (Number(l.tR_acumulado) || 0);
-        } else if (l.st === 'corr') {
-            l.tC = (ahora - (l.inicioCS || ahora)) + (Number(l.tC_acumulado) || 0);
+        // 1. Calculamos los tiempos actuales (Acumulado + Tiempo en curso)
+        // Usamos || 0 para evitar errores de "NaN" si el dato es nuevo
+        let tEspera = (Number(l.tW_acumulado) || 0);
+        let tRevision = (Number(l.tR_acumulado) || 0);
+        let tCorreccion = (Number(l.tC_acumulado) || 0);
+
+        // Solo sumamos el tiempo que está corriendo en este preciso momento
+        if (l.st === 'wait' && l.inicioWS) tEspera += (ahora - l.inicioWS);
+        if (l.st === 'rev' && l.inicioRS) tRevision += (ahora - l.inicioRS);
+        if (l.st === 'corr' && l.inicioCS) tCorreccion += (ahora - l.inicioCS);
+
+        // Guardamos en el objeto local para que otras funciones tengan el dato real
+        l.tW = tEspera;
+        l.tR = tRevision;
+        l.tC = tCorreccion;
+
+        // 2. Actualizamos el CRONÓMETRO GRANDE
+        const elGrande = document.getElementById(`live-${l.id}`);
+        if (elGrande) {
+            let mostrar = (l.st === 'wait') ? tEspera : (l.st === 'rev' ? tRevision : tCorreccion);
+            elGrande.innerText = fmt(mostrar);
         }
-        
-        // Actualización del cronómetro en la tarjeta
-        const el = document.getElementById(`live-${l.id}`);
-        if (el) {
-            let tiempoAMostrar = 0;
-            if (l.st === 'wait') tiempoAMostrar = l.tW;
-            else if (l.st === 'rev') tiempoAMostrar = l.tR;
-            else if (l.st === 'corr') tiempoAMostrar = l.tC;
-            
-            el.innerText = fmt(tiempoAMostrar);
+
+        // 3. OPCIONAL: Actualizar los tiempos pequeños (W, R, C) en tiempo real
+        // Esto hace que la tarjeta se vea "viva" en todas sus secciones
+        const card = document.querySelector(`[id="live-${l.id}"]`)?.parentElement;
+        if (card) {
+            const grid = card.querySelector('.timer-grid-3');
+            if (grid) {
+                grid.innerHTML = `
+                    <div>W: ${fmt(tEspera)}</div>
+                    <div>R: ${fmt(tRevision)}</div>
+                    <div>C: ${fmt(tCorreccion)}</div>
+                `;
+            }
         }
     });
     
+    // Reloj global de la cabecera
     const relojEl = document.getElementById('reloj');
     if (relojEl) relojEl.innerText = new Date().toLocaleTimeString();
 }
