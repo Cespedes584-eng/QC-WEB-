@@ -506,7 +506,18 @@ body.dark-mode .btn-historial-v3:hover {
     <script>
         let pausaSincro = false;
         const SHEETS_URL = "https://script.google.com/macros/s/AKfycbyUl_jQFipM9DPn7UhEo5IVce4k4Gjrm3NroK-GegI7PPrqYpArJg_t5AjvZ35XQPj9/exec";
-        const lineasArr = ["SOFIA 6F L1", "SOFIA 6F L2 / 5F L2", "SOFIA 6F L3 / EX", "SOFIA 5F / SOFIA 6F L2", "VIA / HW 27", "SCEPTER", "HW LONG", "HW SHORT / REGULAR L2", "HW 21 +", "HW REGULAR"];
+        const lineasArr = [
+    "SOFIA 6F L1", 
+    "SOFIA 6F L2 / 5F L2", 
+    "SOFIA 6F L3 / EX", 
+    "SOFIA 5F / SOFIA 6F L2", 
+    "VIA / HW 27", 
+    "SCEPTER", 
+    "HW LONG / HW SHORT L2",      // Cambio solicitado
+    "HW SHORT / HW 21+",         // Cambio solicitado
+    "HW 21+ / HW REGULAR L2",    // Cambio solicitado (ahora híbrida)
+    "HW REGULAR"
+];
 
         let catalogoDefectos = JSON.parse(localStorage.getItem('qc_catalogo_v2')) || {};
         let estados = [];
@@ -924,11 +935,13 @@ async function finalizarLote(ok) {
     const selProceso = document.getElementById('r-proceso');
     const selAnsi = document.getElementById('r-ansi');
 
-    // 1. Lógica de productos híbridos (tu código actual)
-    if (nom.includes(" / ")) {
-        document.getElementById('r-producto-especifico').innerHTML = nom.split(" / ").map(p => `<option value="${p.trim()}">${p.trim()}</option>`).join('');
-        cont.style.display = 'block';
-    } else {
+    // Dentro de verificarHibrida()
+if (nom.includes(" / ")) {
+    // Esto cortará el nombre por la diagonal y creará las opciones
+    document.getElementById('r-producto-especifico').innerHTML = nom.split(" / ").map(p => `<option value="${p.trim()}">${p.trim()}</option>`).join('');
+    cont.style.display = 'block';
+}
+else {
         cont.style.display = 'none';
     }
 
