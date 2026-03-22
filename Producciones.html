@@ -1387,8 +1387,9 @@ async function guardarEstadoPizarraEnNube() {
         console.error("Error crítico en guardarEstadoPizarraEnNube:", error);
     }
 }
-/// --- FUNCIONES DE FILTRO CORREGIDAS (Sustituye este bloque completo) ---
+// --- FUNCIONES DE FILTRO CORREGIDAS ---
 
+// Filtro para la pestaña de Administración
 function filtrarLotesAdmin() {
     const input = document.getElementById('input-busqueda');
     if (!input) return;
@@ -1403,6 +1404,7 @@ function filtrarLotesAdmin() {
     });
 }
 
+// Filtro para el Historial de cada línea
 function filtrarLoteHistorialIndividual() {
     const input = document.getElementById('busqueda-lote-historial');
     if (!input) return;
@@ -1410,7 +1412,7 @@ function filtrarLoteHistorialIndividual() {
     const filas = document.querySelectorAll('#hist-linea-body tr');
 
     filas.forEach(fila => {
-        // En tu tabla el lote es la columna 4 (índice 3)
+        // CORRECCIÓN: En tu HTML el LOTE es la columna 4 (índice 3)
         if (fila.cells[3]) {
             const textoLote = fila.cells[3].textContent.toLowerCase();
             fila.style.display = textoLote.includes(busqueda) ? "" : "none";
@@ -1418,6 +1420,7 @@ function filtrarLoteHistorialIndividual() {
     });
 }
 
+// Función para los botones de "Hoy" y "Todo"
 function filtrarPorFecha(rango) {
     if (!window.dbHistorial) return;
     const hoy = new Date().toLocaleDateString('es-ES');
@@ -1430,47 +1433,8 @@ function filtrarPorFecha(rango) {
     generarReporteYield(filtrados);
 }
 
-// --- FUNCIÓN DE APERTURA (Asegúrate que esté fuera de cualquier otra llave) ---
-
-function abrirHistorialIndividual(idx) {
-    console.log("Intentando abrir historial para índice:", idx);
-    
-    if (typeof lineasArr === 'undefined' || !window.dbHistorial) {
-        alert("⚠️ Datos no cargados. Reintente en 2 segundos.");
-        return;
-    }
-
-    const nombreLinea = lineasArr[idx];
-    const titulo = document.getElementById('hist-linea-titulo');
-    if (titulo) titulo.innerText = "HISTORIAL: " + nombreLinea;
-
-    const filtrados = dbHistorial.filter(r => 
-        String(r.linea || "").trim().toUpperCase() === String(nombreLinea || "").trim().toUpperCase()
-    ).reverse();
-
-    const body = document.getElementById('hist-linea-body');
-    if (body) {
-        if (filtrados.length === 0) {
-            body.innerHTML = `<tr><td colspan="9" style="padding:20px; text-align:center;">No hay registros previos</td></tr>`;
-        } else {
-            body.innerHTML = filtrados.map(r => `
-                <tr>
-                    <td>${r.fecha}</td>
-                    <td>${r.hora || '--:--'}</td>
-                    <td>${r.horaFin || '--:--'}</td>
-                    <td style="font-weight:bold;">${r.lote}</td>
-                    <td>${r.proceso}</td>
-                    <td>${r.ansi || '-'}</td>
-                    <td>${r.inspector}</td>
-                    <td style="font-weight:bold; color:${String(r.resultado).includes('ACEPTADO') ? '#28a745' : '#dc3545'}">
-                        ${r.resultado}
-                    </td>
-                    <td style="font-size:0.85em;">${r.detalle || '-'}</td>
-                </tr>`).join('');
-        }
-    }
-
-    abrirModal('modal-historial-linea');
+// ESTA LLAVE ES LA QUE CIERRA 'abrirAdmin' O LA FUNCIÓN SUPERIOR. 
+// MANTENLA SIEMPRE AQUÍ.
 }
 function toggleDarkMode() {
     const body = document.body;
