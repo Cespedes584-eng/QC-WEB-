@@ -1258,40 +1258,38 @@ function generarGestionLotes() {
             } else alert("Solo el responsable puede finalizar.");
         }
 
-        function abrirRechazos() { cerrarModal('modal-fin'); abrirModal('modal-rechazos'); generarDefectos(); }
-// --- 1. GESTIÓN DE MODALES ---
+        // --- 1. GESTIÓN DE MODALES ---
+// --- 1. GESTIÓN DE MODALES Y NAVEGACIÓN ---
 function abrirRechazos() { 
     cerrarModal('modal-fin'); 
     abrirModal('modal-rechazos'); 
-    generarDefectos(); 
+    if (typeof generarDefectos === 'function') generarDefectos(); 
 }
 
 function abrirAdmin() { 
     abrirModal('modal-admin'); 
-    mostrarTab('yield');
-} // <-- LLAVE DE CIERRE AGREGADA AQUÍ
-
-// --- 2. EXPORTACIÓN ---
-function exportarExcelGeneral() {
-    let csv = "\uFEFFsep=;\nFecha;Hora Inicio;Hora Fin;Linea;Producto;Inspector;Lote;Proceso;ANSI;Resultado;Tiempo;Detalle\n";
-    
-    dbHistorial.forEach(r => {
-        let detalleLimpio = (r.detalle || "").replace(/;/g, ",");
-        csv += `${r.fecha || ""};${r.hora || ""};${r.horaFin || '--:--'};${r.linea || ""};${r.producto || ""};${r.inspector || ""};${r.lote || ""};${r.proceso || ""};${r.ansi || ""};${r.resultado || ""};${r.tiempo || ""};${detalleLimpio}\n`;
-    });
-    
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `Reporte_QC_${new Date().toLocaleDateString()}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (typeof mostrarTab === 'function') mostrarTab('yield');
 }
 
-// --- 3. HISTORIAL INDIVIDUAL (Ahora sí será visible) ---
+// --- 2. EXPORTACIÓN GENERAL ---
+function exportarExcelGeneral() {
+    try {
+        let csv = "\uFEFFsep=;\nFecha;Hora Inicio;Hora Fin;Linea;Producto;Inspector;Lote;Proceso;ANSI;Resultado;Tiempo;Detalle\n";
+        dbHistorial.forEach(r => {
+            let detalleLimpio = (r.detalle || "").replace(/;/g, ",");
+            csv += `${r.fecha || ""};${r.hora || ""};${r.horaFin || '--:--'};${r.linea || ""};${r.producto || ""};${r.inspector || ""};${r.lote || ""};${r.proceso || ""};${r.ansi || ""};${r.resultado || ""};${r.tiempo || ""};${detalleLimpio}\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `Reporte_QC_${new Date().toLocaleDateString()}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } catch (e) { console.error("Error al exportar:", e); }
+}
+
+// --- 3. HISTORIAL INDIVIDUAL (Corregido y Visible) ---
 function abrirHistorialIndividual(idx) {
     const nombreLinea = lineasArr[idx];
     if (!nombreLinea) return console.error("Índice de línea no válido:", idx);
@@ -1330,32 +1328,10 @@ function abrirHistorialIndividual(idx) {
                 <td style="font-size:0.85em;">${r.detalle || '-'}</td>
             </tr>`).join('');
     }
-
     abrirModal('modal-historial-linea');
 }
 
-function exportarHistorialIndividual() {
-    const tituloElem = document.getElementById('hist-linea-titulo');
-    if (!tituloElem) return;
-    
-    const nombreLinea = tituloElem.innerText.replace("HISTORIAL: ", "").trim();
-    const filtrados = dbHistorial.filter(r => String(r.linea).trim().toUpperCase() === nombreLinea.toUpperCase()).reverse();
-
-    if (filtrados.length === 0) return alert("No hay datos para exportar");
-
-    let csv = "\uFEFFsep=;\nFecha;Hora Inicio;Hora Fin;Linea;Producto;Inspector;Lote;Proceso;ANSI;Resultado;Tiempo;Detalle\n";
-    filtrados.forEach(r => {
-       csv += `${r.fecha};${r.hora || '--:--'};${r.horaFin || '--:--'};${r.linea};${r.producto || ''};${r.inspector};${r.lote};${r.proceso};${r.ansi};${r.resultado};${r.tiempo};${r.detalle}\n`;
-    });
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `Historial_${nombreLinea.replace(/ /g, "_")}.csv`;
-    link.click();
-}
-
-// --- 4. PERSISTENCIA ---
+// --- 4. PERSISTENCIA Y SINCRONIZACIÓN ---
 async function guardarEstadoPizarraEnNube() {
     try {
         const sesion = JSON.parse(localStorage.getItem('qc_session'));
@@ -1364,7 +1340,6 @@ async function guardarEstadoPizarraEnNube() {
             estados: estados, 
             lastUpdateBy: sesion?.name || "Sistema" 
         };
-        
         return fetch(SHEETS_URL, { 
             method: 'POST', 
             mode: 'no-cors', 
@@ -1372,7 +1347,7 @@ async function guardarEstadoPizarraEnNube() {
             body: JSON.stringify(payload) 
         });
     } catch (error) {
-        console.error("Error crítico en guardarEstadoPizarraEnNube:", error);
+        console.error("Error en guardarEstadoPizarraEnNube:", error);
     }
 }
 // --- FUNCIONES DE FILTRO CORREGIDAS ---
@@ -1421,9 +1396,7 @@ function filtrarPorFecha(rango) {
     generarReporteYield(filtrados);
 }
 
-// ESTA LLAVE ES LA QUE CIERRA 'abrirAdmin' O LA FUNCIÓN SUPERIOR. 
-// MANTENLA SIEMPRE AQUÍ.
-}
+
 function toggleDarkMode() {
     const body = document.body;
     body.classList.toggle('dark-mode'); // Cambia la clase en el body
