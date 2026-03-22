@@ -1212,29 +1212,51 @@ function filtrarPorFecha(rango) {
 
     // Le enviamos los datos filtrados a la función que dibuja la tabla
     generarReporteYield(filtrados);
-}
-      function generarGestionLotes() {
-    const tbody = document.getElementById('gestion-table-body');
-    if (!tbody) return; // Seguridad por si el elemento no existe en el DOM
+}function generarGestionLotes() {
+    try {
+        const tbody = document.getElementById('gestion-table-body');
+        if (!tbody) {
+            console.error("No se encontró el elemento 'gestion-table-body'");
+            return;
+        }
 
-    // Invertimos el historial para ver lo más reciente arriba y mostramos los últimos 50
-    tbody.innerHTML = [...dbHistorial].reverse().slice(0, 50).map((r, i) => `
-        <tr class="fade-in">
-            <td style="font-weight:bold;">${r.lote || "-"}</td>
-            <td>${r.proceso || "-"}</td>
+        // Si no hay datos, limpiamos la tabla y salimos
+        if (!dbHistorial || dbHistorial.length === 0) {
+            tbody.innerHTML = "<tr><td colspan='9'>No hay registros disponibles</td></tr>";
+            return;
+        }
+
+        // Creamos una copia para no afectar el array original al usar reverse
+        const copiaHistorial = [...dbHistorial].reverse().slice(0, 50);
+
+        const html = copiaHistorial.map((r, i) => {
+            // Calculamos el índice original para el botón borrar
+            const indiceOriginal = dbHistorial.length - 1 - i;
             
-            <td style="color:#00ffc3; font-family:monospace; font-weight:bold;">${r.hora || "-"}</td>
-            <td style="color:#ffae00; font-family:monospace; font-weight:bold;">${r.horaFin || "-"}</td>
-            
-            <td>${r.ansi || "-"}</td>
-            <td style="font-weight:bold; color:${r.resultado === 'APROBADO' ? '#00ffc3' : '#ff4d4d'}">
-                ${r.resultado || "-"}
-            </td>
-            <td style="font-size:0.85em; color:#bbb;">${r.detalle || "-"}</td>
-            <td>
-                <button class="btn-delete" onclick="borrarRegistro(${dbHistorial.length - 1 - i})">🗑️</button>
-            </td>
-        </tr>`).join('');
+            return `
+                <tr class="fade-in">
+                    <td style="font-weight:bold;">${r.lote || "-"}</td>
+                    <td>${r.proceso || "-"}</td>
+                    
+                    <td style="color:#00ffc3; font-family:monospace; font-weight:bold;">${r.hora || "-"}</td>
+                    <td style="color:#ffae00; font-family:monospace; font-weight:bold;">${r.horaFin || "-"}</td>
+                    
+                    <td>${r.ansi || "-"}</td>
+                    <td style="font-weight:bold; color:${r.resultado === 'APROBADO' ? '#00ffc3' : '#ff4d4d'}">
+                        ${r.resultado || "-"}
+                    </td>
+                    <td style="font-size:0.85em; color:#bbb;">${r.detalle || "-"}</td>
+                    <td>
+                        <button class="btn-delete" onclick="borrarRegistro(${indiceOriginal})">🗑️</button>
+                    </td>
+                </tr>`;
+        }).join('');
+
+        tbody.innerHTML = html;
+
+    } catch (error) {
+        console.error("Error en generarGestionLotes:", error);
+    }
 }
 
         async function borrarRegistro(idx) {
