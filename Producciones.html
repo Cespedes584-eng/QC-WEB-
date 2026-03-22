@@ -1199,18 +1199,15 @@ function generarReporteYield(datos = dbHistorial) {
     }).join('');
 }
 function filtrarPorFecha(rango) {
-    const hoy = new Date().toLocaleDateString();
+    const hoy = new Date().toLocaleDateString('es-ES');
     const spanRango = document.getElementById('rango-actual');
     
-    let filtrados;
-    if (rango === 'hoy') {
-        filtrados = dbHistorial.filter(r => r.fecha === hoy);
-        if (spanRango) spanRango.innerText = "📍 Viendo: Hoy";
-    } else {
-        filtrados = dbHistorial;
-        if (spanRango) spanRango.innerText = "📍 Viendo: Todo";
-    }
+    let filtrados = (rango === 'hoy') ? dbHistorial.filter(r => r.fecha === hoy) : dbHistorial;
+    
+    if (spanRango) spanRango.innerText = (rango === 'hoy') ? "📍 Viendo: Hoy" : "📍 Viendo: Todo";
 
+    generarReporteYield(filtrados);
+}
     // Le enviamos los datos filtrados a la función que dibuja la tabla
     generarReporteYield(filtrados);
 
@@ -1305,32 +1302,38 @@ function exportarExcelGeneral() {
     link.click();
     document.body.removeChild(link);
 }
-        function abrirAdmin() { abrirModal('modal-admin'); mostrarTab('yield'); }
+        function abrirAdmin() { 
+    abrirModal('modal-admin'); 
+    mostrarTab('yield');
         
-        function abrirHistorialIndividual(idx) {
+       function abrirHistorialIndividual(idx) {
     const nom = lineasArr[idx];
-    document.getElementById('hist-linea-titulo').innerText = "Historial: " + nom;
-    const filtrados = dbHistorial.filter(r => r.linea === nom).reverse();
+    const titulo = document.getElementById('hist-linea-titulo');
+    if (titulo) titulo.innerText = "Historial: " + nom;
     
-    document.getElementById('hist-linea-body').innerHTML = filtrados.map(r => `
-        <tr>
-            <td style="line-height: 1.2; min-width: 90px;">
-                ${r.fecha} <br> 
-                <span style="font-size: 0.85em; color: #555; font-weight: bold;">
-                     Fin: ${r.horaFin || '--:--'}
-                </span>
-            </td>
-            <td>${r.lote}</td>
-            <td>${r.proceso}</td>
-            <td>${r.ansi}</td>
-            <td>${r.inspector}</td>
-            <td style="font-weight: bold; color: ${r.resultado === 'ACEPTADO' ? '#28a745' : '#dc3545'};">
-                ${r.resultado}
-            </td>
-            <td>${r.tiempo}</td>
-            <td>${r.detalle}</td>
-        </tr>`).join('');
-        
+    const filtrados = dbHistorial.filter(r => r.linea === nom).reverse();
+    const body = document.getElementById('hist-linea-body');
+    
+    if (body) {
+        body.innerHTML = filtrados.map(r => `
+            <tr>
+                <td style="line-height: 1.2; min-width: 90px;">
+                    ${r.fecha} <br> 
+                    <span style="font-size: 0.85em; color: #555; font-weight: bold;">
+                       Fin: ${r.horaFin || '--:--'}
+                    </span>
+                </td>
+                <td>${r.lote}</td>
+                <td>${r.proceso}</td>
+                <td>${r.ansi || '-'}</td>
+                <td>${r.inspector}</td>
+                <td style="font-weight: bold; color: ${r.resultado === 'ACEPTADO' ? '#28a745' : '#dc3545'};">
+                    ${r.resultado}
+                </td>
+                <td>${r.tiempo}</td>
+                <td>${r.detalle || '-'}</td>
+            </tr>`).join('');
+    }
     abrirModal('modal-historial-linea');
 }
 function exportarHistorialIndividual() {
@@ -1393,7 +1396,6 @@ function filtrarLotesAdmin() {
     const filas = document.querySelectorAll('#gestion-table-body tr');
 
     filas.forEach(fila => {
-        // El Lote es la columna 0
         const textoLote = fila.cells[0].textContent.toLowerCase();
         fila.style.display = textoLote.includes(busqueda) ? "" : "none";
     });
@@ -1405,8 +1407,8 @@ function filtrarLoteHistorialIndividual() {
     const filas = document.querySelectorAll('#hist-linea-body tr');
 
     filas.forEach(fila => {
-        // CAMBIO AQUÍ: Ahora el Lote es la celda 3 debido a las nuevas columnas de tiempo
-        const textoLote = fila.cells[3].textContent.toLowerCase();
+        // En el historial individual, el lote suele ser la segunda celda (índice 1)
+        const textoLote = fila.cells[1].textContent.toLowerCase();
         fila.style.display = textoLote.includes(busqueda) ? "" : "none";
     });
 }
