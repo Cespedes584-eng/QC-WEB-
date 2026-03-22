@@ -1291,16 +1291,17 @@ function exportarExcelGeneral() {
     mostrarTab('yield');
         
 function abrirHistorialIndividual(idx) {
-    // 1. Verificación rápida
-    console.log("Abriendo historial para índice:", idx);
-    
+    // 1. Obtener nombre de la línea desde el array global
     const nombreLinea = lineasArr[idx];
-    const titulo = document.getElementById('hist-linea-titulo');
-    if (titulo) titulo.innerText = "Historial: " + nombreLinea;
+    console.log("Cargando historial para:", nombreLinea);
 
-    // 2. Filtrar datos (aseguramos que dbHistorial exista)
-    if (!window.dbHistorial) {
-        console.error("dbHistorial no está definido aún.");
+    // 2. Actualizar el título del modal
+    const titulo = document.getElementById('hist-linea-titulo');
+    if (titulo) titulo.innerText = "HISTORIAL: " + nombreLinea.toUpperCase();
+
+    // 3. Filtrar datos (Asegurando que dbHistorial sea accesible)
+    if (!window.dbHistorial || dbHistorial.length === 0) {
+        alert("⚠️ No hay datos en el historial todavía.");
         return;
     }
 
@@ -1308,30 +1309,30 @@ function abrirHistorialIndividual(idx) {
         String(r.linea || "").trim().toUpperCase() === String(nombreLinea || "").trim().toUpperCase()
     ).reverse();
 
-    // 3. Renderizar en la tabla
+    // 4. Inyectar filas en el TBODY
     const body = document.getElementById('hist-linea-body');
-    if (body) {
-        if (filtrados.length === 0) {
-            body.innerHTML = `<tr><td colspan="9" style="padding:20px; text-align:center; color:gray;">No hay registros previos</td></tr>`;
-        } else {
-            body.innerHTML = filtrados.map(r => `
-                <tr>
-                    <td>${r.fecha}</td>
-                    <td>${r.hora || '--:--'}</td>
-                    <td>${r.horaFin || '--:--'}</td>
-                    <td style="font-weight:bold;">${r.lote}</td>
-                    <td>${r.proceso}</td>
-                    <td>${r.ansi || '-'}</td>
-                    <td>${r.inspector}</td>
-                    <td style="font-weight:bold; color:${String(r.resultado).includes('ACEPTADO') ? '#28a745' : '#dc3545'}">
-                        ${r.resultado}
-                    </td>
-                    <td style="font-size:0.85em;">${r.detalle || '-'}</td>
-                </tr>`).join('');
-        }
+    if (!body) return console.error("No se encontró hist-linea-body");
+
+    if (filtrados.length === 0) {
+        body.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:20px; color:#999;">No hay registros previos para esta línea</td></tr>`;
+    } else {
+        body.innerHTML = filtrados.map(r => `
+            <tr>
+                <td>${r.fecha}</td>
+                <td style="font-family:monospace;">${r.hora || '--:--'}</td>
+                <td style="font-family:monospace;">${r.horaFin || '--:--'}</td>
+                <td style="font-weight:bold;">${r.lote}</td>
+                <td>${r.proceso}</td>
+                <td>${r.ansi || '-'}</td>
+                <td>${r.inspector}</td>
+                <td style="font-weight:bold; color:${String(r.resultado).includes('ACEPTADO') ? '#28a745' : '#dc3545'}">
+                    ${r.resultado}
+                </td>
+                <td style="font-size:0.85em;">${r.detalle || '-'}</td>
+            </tr>`).join('');
     }
 
-    // 4. MOSTRAR EL MODAL
+    // 5. Abrir el modal (Usamos el ID exacto que me pasaste)
     abrirModal('modal-historial-linea');
 }
 
@@ -1397,26 +1398,13 @@ function filtrarLotesAdmin() {
         fila.style.display = textoLote.includes(busqueda) ? "" : "none";
     });
 }
-function filtrarLoteHistorialIndividual() {
-    const input = document.getElementById('busqueda-lote-historial');
+// --- FUNCIONES DE FILTRO CORREGIDAS ---
+
+// 1. Filtro para la pestaña de Administración (Lote es la columna 0)
+function filtrarLotesAdmin() {
+    const input = document.getElementById('input-busqueda');
     if (!input) return;
     const busqueda = input.value.toLowerCase();
-    const filas = document.querySelectorAll('#hist-linea-body tr');
-
-    filas.forEach(fila => {
-        // En el historial individual, el lote suele ser la segunda celda (índice 1)
-        const textoLote = fila.cells[1].textContent.toLowerCase();
-        fila.style.display = textoLote.includes(busqueda) ? "" : "none";
-    });
-}
-// Filtro para la pestaña de Administración
-// --- FUNCIONES DE FILTRO ---
-
-// --- SUSTITUYE DESDE AQUÍ HACIA ABAJO ---
-
-// Filtro para la pestaña de Administración
-function filtrarLotesAdmin() {
-    const busqueda = document.getElementById('input-busqueda').value.toLowerCase();
     const filas = document.querySelectorAll('#gestion-table-body tr');
 
     filas.forEach(fila => {
@@ -1425,7 +1413,7 @@ function filtrarLotesAdmin() {
     });
 }
 
-// Filtro para el Historial de cada línea
+// 2. Filtro para el Historial Individual (Lote es la columna 3)
 function filtrarLoteHistorialIndividual() {
     const input = document.getElementById('busqueda-lote-historial');
     if (!input) return;
@@ -1433,13 +1421,19 @@ function filtrarLoteHistorialIndividual() {
     const filas = document.querySelectorAll('#hist-linea-body tr');
 
     filas.forEach(fila => {
-        const textoLote = fila.cells[1].textContent.toLowerCase();
-        fila.style.display = textoLote.includes(busqueda) ? "" : "none";
+        // CAMBIO CLAVE: En tu tabla de historial, el Lote es la cuarta celda (índice 3)
+        // Antes tenías índice 1 (que es la hora de inicio)
+        if (fila.cells[3]) {
+            const textoLote = fila.cells[3].textContent.toLowerCase();
+            fila.style.display = textoLote.includes(busqueda) ? "" : "none";
+        }
     });
 }
 
-// Función para los botones de "Hoy" y "Todo"
+// 3. Función para los botones de "Hoy" y "Todo"
 function filtrarPorFecha(rango) {
+    if (!window.dbHistorial) return;
+    
     const hoy = new Date().toLocaleDateString('es-ES');
     const spanRango = document.getElementById('rango-actual');
     
@@ -1448,9 +1442,7 @@ function filtrarPorFecha(rango) {
     if (spanRango) spanRango.innerText = (rango === 'hoy') ? "📍 Viendo: Hoy" : "📍 Viendo: Todo";
 
     generarReporteYield(filtrados);
-}
-}
-function toggleDarkMode() {
+}function toggleDarkMode() {
     const body = document.body;
     body.classList.toggle('dark-mode'); // Cambia la clase en el body
     
