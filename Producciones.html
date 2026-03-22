@@ -1462,45 +1462,39 @@ function toggleDarkMode() {
 
 // --- BLOQUE FINAL DE CONTROL ---
 
-// 1. Función para crear la sesión de usuario
-function loginManual() {
-    const input = document.getElementById('login-name');
-    if (!input) return;
-    
-    const nombre = input.value.trim().toUpperCase();
-
-    if (nombre.length < 3) {
-        alert("⚠️ Error: Debe ingresar su nombre completo.");
-        return;
-    }
-
-    const sesion = {
-        name: nombre,
-        id: "584", // ID genérico de planta
-        isAdmin: (nombre.includes("MARLON")) 
-    };
-
-    localStorage.setItem('qc_session', JSON.stringify(sesion));
-    cerrarModal('modal-login');
-    inicializarSistema(); 
+ // Y esto dentro de tu inicializarSistema() o al final:
+if (localStorage.getItem('qc_theme') === 'dark') {
+    document.body.classList.add('dark-mode');
+    document.getElementById('dark-mode-toggle').innerText = "☀️";
 }
 
-// 2. Disparador de inicio (Configura el tema y arranca el sistema)
-window.onload = function() {
-    // Aplicar tema oscuro si estaba guardado
-    if (localStorage.getItem('qc_theme') === 'dark') {
-        document.body.classList.add('dark-mode');
-        const btnDark = document.getElementById('dark-mode-toggle');
-        if (btnDark) btnDark.innerText = "☀️";
-    }
-    
-    // Ejecutar la inicialización general
-    if (typeof inicializarSistema === 'function') {
-        inicializarSistema();
-    } else {
-        console.error("La función inicializarSistema() no está definida.");
-    }
-};
+// ... (Aquí terminan todas tus otras funciones como abrirModal, finalizarLote, etc.)
+
+        // 1. Pegas la función que crea la sesión (la que no tenías)
+        function loginManual() {
+            const input = document.getElementById('login-name');
+            const nombre = input.value.trim().toUpperCase();
+
+            if (nombre.length < 3) {
+                alert("⚠️ Error: Debe ingresar su nombre completo.");
+                return;
+            }
+
+            const sesion = {
+                name: nombre,
+                id: "584",
+                isAdmin: (nombre.includes("MARLON")) 
+            };
+
+            localStorage.setItem('qc_session', JSON.stringify(sesion));
+            cerrarModal('modal-login');
+            inicializarSistema(); 
+        }
+
+        // 2. Pegas el disparador al puro final
+        window.onload = function() {
+            inicializarSistema(); 
+        };
 </script>
 </body>
 </html>
