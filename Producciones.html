@@ -1291,30 +1291,31 @@ function exportarExcelGeneral() {
     mostrarTab('yield');
         
 function abrirHistorialIndividual(idx) {
-    // 1. Obtener nombre de la línea desde el array global
+    // 1. Obtener nombre de la línea
     const nombreLinea = lineasArr[idx];
-    console.log("Cargando historial para:", nombreLinea);
+    if (!nombreLinea) return console.error("Índice de línea no válido:", idx);
 
-    // 2. Actualizar el título del modal
+    // 2. Actualizar el título
     const titulo = document.getElementById('hist-linea-titulo');
     if (titulo) titulo.innerText = "HISTORIAL: " + nombreLinea.toUpperCase();
 
-    // 3. Filtrar datos (Asegurando que dbHistorial sea accesible)
-    if (!window.dbHistorial || dbHistorial.length === 0) {
+    // 3. Validar historial (Referencia directa a la variable global)
+    if (!dbHistorial || dbHistorial.length === 0) {
         alert("⚠️ No hay datos en el historial todavía.");
         return;
     }
 
+    // Filtrado robusto (tu lógica original)
     const filtrados = dbHistorial.filter(r => 
         String(r.linea || "").trim().toUpperCase() === String(nombreLinea || "").trim().toUpperCase()
     ).reverse();
 
-    // 4. Inyectar filas en el TBODY
+    // 4. Inyectar filas
     const body = document.getElementById('hist-linea-body');
     if (!body) return console.error("No se encontró hist-linea-body");
 
     if (filtrados.length === 0) {
-        body.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:20px; color:#999;">No hay registros previos para esta línea</td></tr>`;
+        body.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:20px; color:#999;">No hay registros previos para esta línea</td></tr>`;
     } else {
         body.innerHTML = filtrados.map(r => `
             <tr>
@@ -1328,14 +1329,13 @@ function abrirHistorialIndividual(idx) {
                 <td style="font-weight:bold; color:${String(r.resultado).includes('ACEPTADO') ? '#28a745' : '#dc3545'}">
                     ${r.resultado}
                 </td>
-                <td style="font-size:0.85em;">${r.detalle || '-'}</td>
+                <td>${r.tiempo || '00:00'}</td> <td style="font-size:0.85em;">${r.detalle || '-'}</td>
             </tr>`).join('');
     }
 
-    // 5. Abrir el modal (Usamos el ID exacto que me pasaste)
+    // 5. Abrir el modal
     abrirModal('modal-historial-linea');
 }
-
 function exportarHistorialIndividual() {
     const tituloElem = document.getElementById('hist-linea-titulo');
     if (!tituloElem) return;
