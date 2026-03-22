@@ -1199,15 +1199,21 @@ function generarReporteYield(datos = dbHistorial) {
     }).join('');
 }
 function filtrarPorFecha(rango) {
-    const hoy = new Date().toLocaleDateString('es-ES');
+    const hoy = new Date().toLocaleDateString();
     const spanRango = document.getElementById('rango-actual');
     
-    let filtrados = (rango === 'hoy') ? dbHistorial.filter(r => r.fecha === hoy) : dbHistorial;
-    
-    if (spanRango) spanRango.innerText = (rango === 'hoy') ? "📍 Viendo: Hoy" : "📍 Viendo: Todo";
+    let filtrados;
+    if (rango === 'hoy') {
+        filtrados = dbHistorial.filter(r => r.fecha === hoy);
+        if (spanRango) spanRango.innerText = "📍 Viendo: Hoy";
+    } else {
+        filtrados = dbHistorial;
+        if (spanRango) spanRango.innerText = "📍 Viendo: Todo";
+    }
 
+    // Le enviamos los datos filtrados a la función que dibuja la tabla
     generarReporteYield(filtrados);
-} 
+
 function generarGestionLotes() {
     try {
         const tbody = document.getElementById('gestion-table-body');
