@@ -930,52 +930,35 @@ async function finalizarLote(ok) {
     }
 }
  function verificarHibrida() {
-    const idx = document.getElementById('r-linea').value;
-    const nom = lineasArr[idx];
-    const cont = document.getElementById('contenedor-hibrida');
-    const selProceso = document.getElementById('r-proceso');
-    const selAnsi = document.getElementById('r-ansi');
+    const idx = document.getElementById('r-linea').value;
+    const nom = lineasArr[idx];
+    const cont = document.getElementById('contenedor-hibrida');
+    const selProceso = document.getElementById('r-proceso');
+    const selAnsi = document.getElementById('r-ansi');
 
-    // Dentro de verificarHibrida()
-if (nom.includes(" / ")) {
-    // Esto cortará el nombre por la diagonal y creará las opciones
-    document.getElementById('r-producto-especifico').innerHTML = nom.split(" / ").map(p => `<option value="${p.trim()}">${p.trim()}</option>`).join('');
-    cont.style.display = 'block';
+    // 1. Manejo de productos híbridos (con diagonal)
+    if (nom.includes(" / ")) {
+        document.getElementById('r-producto-especifico').innerHTML = 
+            nom.split(" / ").map(p => `<option value="${p.trim()}">${p.trim()}</option>`).join('');
+        cont.style.display = 'block';
+    } else {
+        cont.style.display = 'none';
+    }
+
+    // 2. Carga de procesos según la línea
+    let opciones = `<option value="Shaft">Shaft</option><option value="Final">Final</option><option value="HubBonding">Hub Bonding</option><option value="Pre-Empaque">Pre-Empaque</option>`;
+    if (nom.toUpperCase().includes("SCEPTER")) opciones += `<option value="Guidewire">Guidewire</option>`;
+    selProceso.innerHTML = opciones;
+
+    // 3. Lógica para ocultar ANSI si es Pre-Empaque
+    selProceso.onchange = function() {
+        selAnsi.style.display = (this.value === "Pre-Empaque") ? "none" : "block";
+    };
+    
+    // Ejecutar reseteo inicial
+    selAnsi.style.display = (selProceso.value === "Pre-Empaque") ? "none" : "block";
 }
-else {
-        cont.style.display = 'none';
-    }
 
-    // 2. Lógica de procesos (tu código actual)
-    let opciones = `<option value="Shaft">Shaft</option><option value="Final">Final</option><option value="HubBonding">Hub Bonding</option><option value="Pre-Empaque">Pre-Empaque</option>`;
-    if (nom.toUpperCase().includes("SCEPTER")) opciones += `<option value="Guidewire">Guidewire</option>`;
-    selProceso.innerHTML = opciones;
-
-    // --- NUEVO: Lógica para ocultar ANSI si es Pre-Empaque ---
-    // Agregamos un listener para cuando cambien el proceso manualmente
-    selProceso.onchange = function() {
-        if (this.value === "Pre-Empaque") {
-            selAnsi.style.display = "none";
-            // Opcional: podrías poner una etiqueta que diga "No aplica"
-        } else {
-            selAnsi.style.display = "block";
-        }
-    };
-    
-    // Ejecutar una vez al abrir para resetear el estado
-    selAnsi.style.display = (selProceso.value === "Pre-Empaque") ? "none" : "block";
-// Lógica para ocultar ANSI si es Pre-Empaque
-    selProceso.onchange = function() {
-        if (this.value === "Pre-Empaque") {
-            selAnsi.style.display = "none";
-        } else {
-            selAnsi.style.display = "block";
-        }
-    };
-    
-    // Resetear el estado al abrir el modal
-    selAnsi.style.display = (selProceso.value === "Pre-Empaque") ? "none" : "block";
-}
 async function sincronizarConNube() {
     // No sincronizar si hay un modal abierto o la pestaña está oculta
     if (pausaSincro || document.querySelector('.modal[style*="block"]') || document.hidden) return;
@@ -1308,45 +1291,47 @@ function exportarExcelGeneral() {
     mostrarTab('yield');
         
 function abrirHistorialIndividual(idx) {
-    console.log("Intentando abrir historial para índice:", idx);
+    // 1. Verificación rápida
+    console.log("Abriendo historial para índice:", idx);
+    
     const nombreLinea = lineasArr[idx];
     const titulo = document.getElementById('hist-linea-titulo');
-    
     if (titulo) titulo.innerText = "Historial: " + nombreLinea;
-    
-    // Filtro robusto para evitar errores de mayúsculas o espacios
-    const filtrados = dbHistorial.filter(r => {
-        const lineaBD = String(r.linea || "").trim().toUpperCase();
-        const lineaBuscada = String(nombreLinea || "").trim().toUpperCase();
-        return lineaBD === lineaBuscada;
-    }).reverse();
 
+    // 2. Filtrar datos (aseguramos que dbHistorial exista)
+    if (!window.dbHistorial) {
+        console.error("dbHistorial no está definido aún.");
+        return;
+    }
+
+    const filtrados = dbHistorial.filter(r => 
+        String(r.linea || "").trim().toUpperCase() === String(nombreLinea || "").trim().toUpperCase()
+    ).reverse();
+
+    // 3. Renderizar en la tabla
     const body = document.getElementById('hist-linea-body');
     if (body) {
         if (filtrados.length === 0) {
-            body.innerHTML = `<tr><td colspan="9" style="padding:20px; color:gray; text-align:center;">No hay registros previos</td></tr>`;
+            body.innerHTML = `<tr><td colspan="9" style="padding:20px; text-align:center; color:gray;">No hay registros previos</td></tr>`;
         } else {
             body.innerHTML = filtrados.map(r => `
                 <tr>
-                    <td style="line-height: 1.2; min-width: 90px;">
-                        ${r.fecha} <br> 
-                        <span style="font-size: 0.85em; color: #555; font-weight: bold;">
-                           Fin: ${r.horaFin || r.hora || '--:--'}
-                        </span>
-                    </td>
+                    <td>${r.fecha}</td>
                     <td>${r.hora || '--:--'}</td>
                     <td>${r.horaFin || '--:--'}</td>
-                    <td>${r.lote}</td>
+                    <td style="font-weight:bold;">${r.lote}</td>
                     <td>${r.proceso}</td>
                     <td>${r.ansi || '-'}</td>
                     <td>${r.inspector}</td>
-                    <td style="font-weight: bold; color: ${String(r.resultado).includes('ACEPTADO') ? '#28a745' : '#dc3545'};">
+                    <td style="font-weight:bold; color:${String(r.resultado).includes('ACEPTADO') ? '#28a745' : '#dc3545'}">
                         ${r.resultado}
                     </td>
-                    <td>${r.detalle || '-'}</td>
+                    <td style="font-size:0.85em;">${r.detalle || '-'}</td>
                 </tr>`).join('');
         }
     }
+
+    // 4. MOSTRAR EL MODAL
     abrirModal('modal-historial-linea');
 }
 
