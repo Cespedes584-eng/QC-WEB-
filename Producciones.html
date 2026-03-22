@@ -1208,7 +1208,6 @@ function filtrarPorFecha(rango) {
 
     generarReporteYield(filtrados);
 } 
-
 function generarGestionLotes() {
     try {
         const tbody = document.getElementById('gestion-table-body');
@@ -1395,20 +1394,20 @@ function filtrarLotesAdmin() {
 }
 function filtrarLoteHistorialIndividual() {
     const input = document.getElementById('busqueda-lote-historial');
-    if (!input) return; // Si el input no existe, no hace nada (evita error)
-    
+    if (!input) return;
     const busqueda = input.value.toLowerCase();
     const filas = document.querySelectorAll('#hist-linea-body tr');
 
     filas.forEach(fila => {
-        // Usamos cells[1] porque en tu tabla el Lote es la segunda columna
-        if (fila.cells.length > 1) {
-            const textoLote = fila.cells[1].textContent.toLowerCase();
-            fila.style.display = textoLote.includes(busqueda) ? "" : "none";
-        }
+        // CAMBIO AQUÍ: Ahora el Lote es la celda 3 debido a las nuevas columnas de tiempo
+        const textoLote = fila.cells[3].textContent.toLowerCase();
+        fila.style.display = textoLote.includes(busqueda) ? "" : "none";
     });
 }
+// Filtro para la pestaña de Administración
+// --- FUNCIONES DE FILTRO ---
 
+// --- SUSTITUYE DESDE AQUÍ HACIA ABAJO ---
 
 // Filtro para la pestaña de Administración
 function filtrarLotesAdmin() {
@@ -1460,41 +1459,41 @@ function toggleDarkMode() {
     }
 }
 
-// --- BLOQUE FINAL DE CONTROL ---
-
- // Y esto dentro de tu inicializarSistema() o al final:
+// Y esto dentro de tu inicializarSistema() o al final:
 if (localStorage.getItem('qc_theme') === 'dark') {
-    document.body.classList.add('dark-mode');
-    document.getElementById('dark-mode-toggle').innerText = "☀️";
+    document.body.classList.add('dark-mode');
+    document.getElementById('dark-mode-toggle').innerText = "☀️";
 }
 
 // ... (Aquí terminan todas tus otras funciones como abrirModal, finalizarLote, etc.)
 
-        // 1. Pegas la función que crea la sesión (la que no tenías)
-        function loginManual() {
-            const input = document.getElementById('login-name');
-            const nombre = input.value.trim().toUpperCase();
+        // 1. Pegas la función que crea la sesión (la que no tenías)
+        function loginManual() {
+            const input = document.getElementById('login-name');
+            const nombre = input.value.trim().toUpperCase();
 
-            if (nombre.length < 3) {
-                alert("⚠️ Error: Debe ingresar su nombre completo.");
-                return;
-            }
+            if (nombre.length < 3) {
+                alert("⚠️ Error: Debe ingresar su nombre completo.");
+                return;
+            }
 
-            const sesion = {
-                name: nombre,
-                id: "584",
-                isAdmin: (nombre.includes("MARLON")) 
-            };
+            const sesion = {
+                name: nombre,
+                id: "584",
+                isAdmin: (nombre.includes("MARLON")) 
+            };
 
-            localStorage.setItem('qc_session', JSON.stringify(sesion));
-            cerrarModal('modal-login');
-            inicializarSistema(); 
-        }
+            localStorage.setItem('qc_session', JSON.stringify(sesion));
+            cerrarModal('modal-login');
+            inicializarSistema(); 
+        }
 
-        // 2. Pegas el disparador al puro final
-        window.onload = function() {
-            inicializarSistema(); 
-        };
+        // 2. Pegas el disparador al puro final
+        window.onload = function() {
+            inicializarSistema(); 
+        };
+
+
 </script>
 </body>
 </html>
