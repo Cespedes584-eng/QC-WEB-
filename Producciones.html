@@ -832,6 +832,7 @@ async function iniciarLote() {
         }, 8000); 
     }
 }
+
 function generarDefectos() {
     const qty = document.getElementById('rech-qty').value;
     const contenedor = document.getElementById('contenedor-defectos');
@@ -1306,15 +1307,14 @@ function exportarExcelGeneral() {
     abrirModal('modal-admin'); 
     mostrarTab('yield');
         
-      // --- 1. FUNCIÓN PARA ABRIR EL MODAL DE HISTORIAL ---
 function abrirHistorialIndividual(idx) {
-    // Obtenemos el nombre de la línea usando el índice que viene del botón
+    console.log("Intentando abrir historial para índice:", idx);
     const nombreLinea = lineasArr[idx];
     const titulo = document.getElementById('hist-linea-titulo');
     
     if (titulo) titulo.innerText = "Historial: " + nombreLinea;
     
-    // Filtramos el historial global (dbHistorial) para mostrar solo esta línea
+    // Filtro robusto para evitar errores de mayúsculas o espacios
     const filtrados = dbHistorial.filter(r => {
         const lineaBD = String(r.linea || "").trim().toUpperCase();
         const lineaBuscada = String(nombreLinea || "").trim().toUpperCase();
@@ -1322,10 +1322,9 @@ function abrirHistorialIndividual(idx) {
     }).reverse();
 
     const body = document.getElementById('hist-linea-body');
-    
     if (body) {
         if (filtrados.length === 0) {
-            body.innerHTML = `<tr><td colspan="9" style="padding:20px; color:gray;">No hay registros previos para esta línea</td></tr>`;
+            body.innerHTML = `<tr><td colspan="9" style="padding:20px; color:gray; text-align:center;">No hay registros previos</td></tr>`;
         } else {
             body.innerHTML = filtrados.map(r => `
                 <tr>
@@ -1348,37 +1347,34 @@ function abrirHistorialIndividual(idx) {
                 </tr>`).join('');
         }
     }
-    
-    // Abrimos el modal (asegúrate de que el ID sea correcto)
     abrirModal('modal-historial-linea');
 }
+
 function exportarHistorialIndividual() {
-    // 1. Obtenemos el nombre de la línea desde el título del modal
-    const titulo = document.getElementById('hist-linea-titulo').innerText;
-    const nombreLinea = titulo.replace("Historial: ", "").trim();
+    const tituloElem = document.getElementById('hist-linea-titulo');
+    if (!tituloElem) return;
+    
+    const nombreLinea = tituloElem.innerText.replace("Historial: ", "").trim();
+    const filtrados = dbHistorial.filter(r => String(r.linea).trim().toUpperCase() === nombreLinea.toUpperCase()).reverse();
 
-    // 2. Filtramos los datos de dbHistorial igual que lo hace la tabla
-    const filtrados = dbHistorial.filter(r => r.linea === nombreLinea).reverse();
+    if (filtrados.length === 0) return alert("No hay datos para exportar");
 
-    if (filtrados.length === 0) {
-        alert("No hay datos para exportar");
-        return;
-    }
-
-    // 3. Creamos el CSV con el mismo orden que tu Excel General, incluyendo Hora Fin
     let csv = "\uFEFFsep=;\nFecha;Hora Inicio;Hora Fin;Linea;Producto;Inspector;Lote;Proceso;ANSI;Resultado;Tiempo;Detalle\n";
-
     filtrados.forEach(r => {
-        // Usamos punto y coma para que Excel lo abra correctamente
        csv += `${r.fecha};${r.hora || '--:--'};${r.horaFin || '--:--'};${r.linea};${r.producto || ''};${r.inspector};${r.lote};${r.proceso};${r.ansi};${r.resultado};${r.tiempo};${r.detalle}\n`;
     });
 
-    // 4. Descarga del archivo
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `Historial_${nombreLinea}.csv`;
+    link.download = `Historial_${nombreLinea.replace(/ /g, "_")}.csv`;
     link.click();
+}
+
+// --- 3. FUNCIÓN ADMIN (También aparecía como 'not defined' en tu imagen) ---
+function abrirAdmin() {
+    abrirModal('modal-admin');
+    mostrarTab('yield');
 }
 async function guardarEstadoPizarraEnNube() {
     try {
