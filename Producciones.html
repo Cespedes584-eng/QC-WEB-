@@ -404,21 +404,21 @@ body.dark-mode .btn-historial-v3:hover {
             </div>
 
             <div id="sec-gestion" style="display:none;">
-                <input type="text" id="input-busqueda" class="search-bar" placeholder="🔍 Buscar por Lote # ..." onkeyup="filtrarLotesAdmin()">
-                <table class="airport-table">
-                    <thead>
-                        <tr>
-                            <th>Lote</th>
-                            <th>Proceso</th>
-                            <th>ANSI</th>
-                            <th>Resultado</th>
-                            <th>Detalle</th>
-                            <th>Acción</th>
-                        </tr>
-                    </thead>
-                    <tbody id="gestion-table-body"></tbody>
-                </table>
-            </div>
+    <input type="text" id="input-busqueda" class="search-bar" placeholder="🔍 Buscar por Lote # ..." onkeyup="filtrarLotesAdmin()">
+    <table class="airport-table">
+        <thead>
+            <tr>
+                <th>Lote</th>
+                <th>Proceso</th>
+                <th>Inicio</th>   <th>Fin</th>      <th>ANSI</th>
+                <th>Resultado</th>
+                <th>Detalle</th>
+                <th>Acción</th>
+            </tr>
+        </thead>
+        <tbody id="gestion-table-body"></tbody>
+    </table>
+</div>
 
             <div id="sec-defectos" style="display:none;">
                 <h3>Configuración de Defectos</h3>
@@ -486,18 +486,17 @@ body.dark-mode .btn-historial-v3:hover {
             </div>
             <input type="text" id="busqueda-lote-historial" class="search-bar" placeholder="🔍 Filtrar Lote..." onkeyup="filtrarLoteHistorialIndividual()">
             <table class="airport-table">
-                <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Lote</th>
-                        <th>Proceso</th>
-                        <th>ANSI</th>
-                        <th>Inspector</th>
-                        <th>Resultado</th>
-                        <th>Tiempo</th>
-                        <th>Detalle</th>
-                    </tr>
-                </thead>
+               <thead>
+    <tr>
+        <th>Fecha</th>
+        <th>Inicio</th> <th>Fin</th>    <th>Lote</th>
+        <th>Proceso</th>
+        <th>ANSI</th>
+        <th>Inspector</th>
+        <th>Resultado</th>
+        <th>Detalle</th>
+    </tr>
+</thead>
                 <tbody id="hist-linea-body"></tbody>
             </table>
         </div>
@@ -514,7 +513,7 @@ body.dark-mode .btn-historial-v3:hover {
     "VIA / HW 27", 
     "SCEPTER", 
     "HW LONG / HW SHORT L2",      // Cambio solicitado
-    "HW SHORT / HW 21+",         // Cambio solicitado
+    "HW SHORT / HW 21+ L2",         // Cambio solicitado
     "HW 21+ / HW REGULAR L2",    // Cambio solicitado (ahora híbrida)
     "HW REGULAR"
 ];
@@ -1214,18 +1213,29 @@ function filtrarPorFecha(rango) {
     // Le enviamos los datos filtrados a la función que dibuja la tabla
     generarReporteYield(filtrados);
 }
-        function generarGestionLotes() {
-            const tbody = document.getElementById('gestion-table-body');
-            tbody.innerHTML = [...dbHistorial].reverse().slice(0, 50).map((r, i) => `
-                <tr>
-                    <td>${r.lote}</td>
-                    <td>${r.proceso}</td>
-                    <td>${r.ansi}</td>
-                    <td>${r.resultado}</td>
-                    <td>${r.detalle}</td>
-                    <td><button onclick="borrarRegistro(${dbHistorial.length - 1 - i})">🗑️</button></td>
-                </tr>`).join('');
-        }
+      function generarGestionLotes() {
+    const tbody = document.getElementById('gestion-table-body');
+    if (!tbody) return; // Seguridad por si el elemento no existe en el DOM
+
+    // Invertimos el historial para ver lo más reciente arriba y mostramos los últimos 50
+    tbody.innerHTML = [...dbHistorial].reverse().slice(0, 50).map((r, i) => `
+        <tr class="fade-in">
+            <td style="font-weight:bold;">${r.lote || "-"}</td>
+            <td>${r.proceso || "-"}</td>
+            
+            <td style="color:#00ffc3; font-family:monospace; font-weight:bold;">${r.hora || "-"}</td>
+            <td style="color:#ffae00; font-family:monospace; font-weight:bold;">${r.horaFin || "-"}</td>
+            
+            <td>${r.ansi || "-"}</td>
+            <td style="font-weight:bold; color:${r.resultado === 'APROBADO' ? '#00ffc3' : '#ff4d4d'}">
+                ${r.resultado || "-"}
+            </td>
+            <td style="font-size:0.85em; color:#bbb;">${r.detalle || "-"}</td>
+            <td>
+                <button class="btn-delete" onclick="borrarRegistro(${dbHistorial.length - 1 - i})">🗑️</button>
+            </td>
+        </tr>`).join('');
+}
 
         async function borrarRegistro(idx) {
             if (!confirm("¿Eliminar registro?")) return;
@@ -1245,20 +1255,31 @@ function filtrarPorFecha(rango) {
 
         function abrirRechazos() { cerrarModal('modal-fin'); abrirModal('modal-rechazos'); generarDefectos(); }
 function exportarExcelGeneral() {
-    // 1. Agregamos "Hora Fin" en los encabezados después de "Hora"
+    // 1. Definimos los encabezados con "Hora Inicio" y "Hora Fin" por separado
+    // Mantenemos el sep=; para que Excel abra las columnas automáticamente
     let csv = "\uFEFFsep=;\nFecha;Hora Inicio;Hora Fin;Linea;Producto;Inspector;Lote;Proceso;ANSI;Resultado;Tiempo;Detalle\n";
     
     dbHistorial.forEach(r => {
-        // 2. Insertamos r.horaFin en la cadena de datos
-        // Usamos (r.horaFin || "--:--") para que los registros viejos no salgan vacíos
-        csv += `${r.fecha};${r.hora};${r.horaFin || '--:--'};${r.linea};${r.producto};${r.inspector};${r.lote};${r.proceso};${r.ansi};${r.resultado};${r.tiempo};${r.detalle}\n`;
+        // Limpiamos el detalle de posibles puntos y comas que puedan romper las columnas del CSV
+        let detalleLimpio = (r.detalle || "").replace(/;/g, ",");
+
+        // 2. Insertamos r.hora y r.horaFin en sus respectivas columnas
+        // Usamos (r.horaFin || "--:--") para registros que no tengan hora de cierre
+        csv += `${r.fecha || ""};${r.hora || ""};${r.horaFin || '--:--'};${r.linea || ""};${r.producto || ""};${r.inspector || ""};${r.lote || ""};${r.proceso || ""};${r.ansi || ""};${r.resultado || ""};${r.tiempo || ""};${detalleLimpio}\n`;
     });
     
+    // 3. Generamos el archivo con codificación correcta
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "Reporte_QC_Final.csv";
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Reporte_QC_${new Date().toLocaleDateString()}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
 }
         function abrirAdmin() { abrirModal('modal-admin'); mostrarTab('yield'); }
         
@@ -1342,34 +1363,29 @@ async function guardarEstadoPizarraEnNube() {
     }
 }
 function filtrarLotesAdmin() {
-    const busqueda = document.getElementById('input-busqueda').value.toLowerCase();
+    const input = document.getElementById('input-busqueda');
+    if (!input) return;
+    const busqueda = input.value.toLowerCase();
     const filas = document.querySelectorAll('#gestion-table-body tr');
 
     filas.forEach(fila => {
-        // Obtenemos el texto de la primera celda (Lote)
+        // El Lote es la columna 0
         const textoLote = fila.cells[0].textContent.toLowerCase();
-        
-        if (textoLote.includes(busqueda)) {
-            fila.style.display = "";
-        } else {
-            fila.style.display = "none";
-        }
+        fila.style.display = textoLote.includes(busqueda) ? "" : "none";
     });
-}   
+}
 function filtrarLoteHistorialIndividual() {
-    const busqueda = document.getElementById('busqueda-lote-historial').value.toLowerCase();
+    const input = document.getElementById('busqueda-lote-historial');
+    if (!input) return;
+    const busqueda = input.value.toLowerCase();
     const filas = document.querySelectorAll('#hist-linea-body tr');
 
     filas.forEach(fila => {
-        // Buscamos en la celda del Lote (columna 1)
-        const textoLote = fila.cells[1].textContent.toLowerCase();
-        
-        if (textoLote.includes(busqueda)) {
-            fila.style.display = "";
-        } else {
-            fila.style.display = "none";
-        }
+        // CAMBIO AQUÍ: Ahora el Lote es la celda 3 debido a las nuevas columnas de tiempo
+        const textoLote = fila.cells[3].textContent.toLowerCase();
+        fila.style.display = textoLote.includes(busqueda) ? "" : "none";
     });
+}
 // Filtro para la pestaña de Administración
 // --- FUNCIONES DE FILTRO ---
 
