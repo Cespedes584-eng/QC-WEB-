@@ -1208,32 +1208,34 @@ function generarGestionLotes() {
             tbody.innerHTML = "<tr><td colspan='9'>No hay registros disponibles</td></tr>";
             return;
         }
+const html = copiaHistorial.map((r, i) => {
+    const indiceOriginal = dbHistorial.length - 1 - i;
+    
+    // Lógica: Solo si es RECHAZADO se pone rojo, de lo contrario negro (#000)
+    const esRechazo = String(r.resultado).toUpperCase().includes("RECHAZADO");
+    const colorResultado = esRechazo ? "#dc3545" : "#000";
 
-        // Creamos una copia para no afectar el array original al usar reverse
-        const copiaHistorial = [...dbHistorial].reverse().slice(0, 50);
-
-        const html = copiaHistorial.map((r, i) => {
-            // Calculamos el índice original para el botón borrar
-            const indiceOriginal = dbHistorial.length - 1 - i;
+    return `
+        <tr class="fade-in">
+            <td style="font-weight:bold; color:#000;">${r.lote || "-"}</td>
+            <td style="color:#000;">${r.proceso || "-"}</td>
             
-            return `
-                <tr class="fade-in">
-                    <td style="font-weight:bold;">${r.lote || "-"}</td>
-                    <td>${r.proceso || "-"}</td>
-                    
-                    <td style="color:#00ffc3; font-family:monospace; font-weight:bold;">${r.hora || "-"}</td>
-                    <td style="color:#ffae00; font-family:monospace; font-weight:bold;">${r.horaFin || "-"}</td>
-                    
-                    <td>${r.ansi || "-"}</td>
-                    <td style="font-weight:bold; color:${r.resultado === 'APROBADO' ? '#00ffc3' : '#ff4d4d'}">
-                        ${r.resultado || "-"}
-                    </td>
-                    <td style="font-size:0.85em; color:#bbb;">${r.detalle || "-"}</td>
-                    <td>
-                        <button class="btn-delete" onclick="borrarRegistro(${indiceOriginal})">🗑️</button>
-                    </td>
-                </tr>`;
-        }).join('');
+            <td style="color:#000; font-family:monospace; font-weight:bold;">${r.hora || "-"}</td>
+            <td style="color:#000; font-family:monospace; font-weight:bold;">${r.horaFin || "-"}</td>
+            
+            <td style="color:#000;">${r.ansi || "-"}</td>
+            
+            <td style="font-weight:bold; color:${colorResultado};">
+                ${r.resultado || "-"}
+            </td>
+            
+            <td style="font-size:0.85em; color:#000;">${r.detalle || "-"}</td>
+            
+            <td>
+                <button class="btn-delete" onclick="borrarRegistro(${indiceOriginal})" style="border:none; background:none; cursor:pointer;">🗑️</button>
+            </td>
+        </tr>`;
+}).join('');
 
         tbody.innerHTML = html;
 
