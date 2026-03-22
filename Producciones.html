@@ -1398,13 +1398,26 @@ function filtrarLotesAdmin() {
         fila.style.display = textoLote.includes(busqueda) ? "" : "none";
     });
 }
-// --- FUNCIONES DE FILTRO CORREGIDAS ---
-
-// 1. Filtro para la pestaña de Administración (Lote es la columna 0)
-function filtrarLotesAdmin() {
-    const input = document.getElementById('input-busqueda');
+function filtrarLoteHistorialIndividual() {
+    const input = document.getElementById('busqueda-lote-historial');
     if (!input) return;
     const busqueda = input.value.toLowerCase();
+    const filas = document.querySelectorAll('#hist-linea-body tr');
+
+    filas.forEach(fila => {
+        // En el historial individual, el lote suele ser la segunda celda (índice 1)
+        const textoLote = fila.cells[1].textContent.toLowerCase();
+        fila.style.display = textoLote.includes(busqueda) ? "" : "none";
+    });
+}
+// Filtro para la pestaña de Administración
+// --- FUNCIONES DE FILTRO ---
+
+// --- SUSTITUYE DESDE AQUÍ HACIA ABAJO ---
+
+// Filtro para la pestaña de Administración
+function filtrarLotesAdmin() {
+    const busqueda = document.getElementById('input-busqueda').value.toLowerCase();
     const filas = document.querySelectorAll('#gestion-table-body tr');
 
     filas.forEach(fila => {
@@ -1413,7 +1426,7 @@ function filtrarLotesAdmin() {
     });
 }
 
-// 2. Filtro para el Historial Individual (Lote es la columna 3)
+// Filtro para el Historial de cada línea
 function filtrarLoteHistorialIndividual() {
     const input = document.getElementById('busqueda-lote-historial');
     if (!input) return;
@@ -1421,19 +1434,13 @@ function filtrarLoteHistorialIndividual() {
     const filas = document.querySelectorAll('#hist-linea-body tr');
 
     filas.forEach(fila => {
-        // CAMBIO CLAVE: En tu tabla de historial, el Lote es la cuarta celda (índice 3)
-        // Antes tenías índice 1 (que es la hora de inicio)
-        if (fila.cells[3]) {
-            const textoLote = fila.cells[3].textContent.toLowerCase();
-            fila.style.display = textoLote.includes(busqueda) ? "" : "none";
-        }
+        const textoLote = fila.cells[1].textContent.toLowerCase();
+        fila.style.display = textoLote.includes(busqueda) ? "" : "none";
     });
 }
 
-// 3. Función para los botones de "Hoy" y "Todo"
+// Función para los botones de "Hoy" y "Todo"
 function filtrarPorFecha(rango) {
-    if (!window.dbHistorial) return;
-    
     const hoy = new Date().toLocaleDateString('es-ES');
     const spanRango = document.getElementById('rango-actual');
     
@@ -1442,7 +1449,9 @@ function filtrarPorFecha(rango) {
     if (spanRango) spanRango.innerText = (rango === 'hoy') ? "📍 Viendo: Hoy" : "📍 Viendo: Todo";
 
     generarReporteYield(filtrados);
-}function toggleDarkMode() {
+}
+}
+function toggleDarkMode() {
     const body = document.body;
     body.classList.toggle('dark-mode'); // Cambia la clase en el body
     
