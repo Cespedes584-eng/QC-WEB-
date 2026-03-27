@@ -321,10 +321,43 @@ body.dark-mode .btn-block {
 body.dark-mode .btn-historial-v3:hover {
     background: rgba(70, 142, 93, 0.1) !important;
 }
-</style>
+/* --- AGREGAR ESTO AL FINAL DE TU <style> --- */
+
+.table-moderna td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #f1f3f5;
+    vertical-align: middle;
+}
+
+.table-moderna tbody tr:hover {
+    background-color: #f0f4f8 !important; /* Un azul muy claro al pasar el mouse */
+    transition: background 0.2s ease;
+}
+
+.badge-status {
+    padding: 5px 12px;
+    border-radius: 50px; /* Estilo píldora */
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    display: inline-block;
+    text-align: center;
+    min-width: 80px;
+}
+
+.mono-text {
+    font-family: 'Courier New', monospace;
+    font-weight: 600;
+    color: #2c3e50;
+    background: #f1f3f5;
+    padding: 2px 5px;
+    border-radius: 4px;
+}
+</style> <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
 
 </head>
-
 <body onload="inicializarSistema()">
 <div id="dark-mode-toggle" onclick="toggleDarkMode()" 
      style="position: fixed; bottom: 30px; left: 30px; width: 45px; height: 45px; 
@@ -345,6 +378,7 @@ body.dark-mode .btn-historial-v3:hover {
             <div id="user-display" class="user-info">USUARIO</div>
             <button class="btn-excel-header" onclick="exportarExcelGeneral()">📊 EXCEL</button>
             <div id="reloj">00:00:00</div>
+
         </div>
     </div>
 
@@ -372,15 +406,18 @@ body.dark-mode .btn-historial-v3:hover {
         </div>
     </div>
 
-    <div id="modal-admin" class="airport-modal">
-        <div style="background: white; margin: 10px auto; width: 98%; max-width: 1150px; border-radius: 8px; padding: 25px; height: 90vh; overflow-y: auto; position: relative;">
-            <button style="position:absolute; top:15px; right:20px; font-size:25px; border:none; background:none; cursor:pointer;" onclick="cerrarModal('modal-admin')">×</button>
-            <h2 style="color:var(--primary-dark); margin-top:0;">Panel de Control Admin</h2>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px;">
-                <button class="btn-main" style="height: 45px;" onclick="mostrarTab('yield')">📊 Rendimiento Yield</button>
-                <button class="btn-main" style="height: 45px;" onclick="mostrarTab('gestion')">⚙️ Gestión de Datos</button>
-                <button class="btn-main" style="height: 45px; background: #6c757d;" onclick="mostrarTab('defectos')">🛠️ Config. Defectos</button>
-            </div>
+   <div id="modal-admin" class="airport-modal">
+    <div style="background: white; margin: 10px auto; width: 98%; max-width: 1150px; border-radius: 8px; padding: 25px; height: 90vh; overflow-y: auto; position: relative;">
+        <button style="position:absolute; top:15px; right:20px; font-size:25px; border:none; background:none; cursor:pointer;" onclick="cerrarModal('modal-admin')">×</button>
+        <h2 style="color:var(--primary-dark); margin-top:0;">Panel de Control Admin</h2>
+        
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px;">
+            <button class="btn-main" style="height: 45px;" onclick="mostrarTab('yield')">📊 Rendimiento Yield</button>
+            <button class="btn-main" style="height: 45px;" onclick="mostrarTab('gestion')">⚙️ Gestión de Datos</button>
+            <button class="btn-main" style="height: 45px; background: #6c757d;" onclick="mostrarTab('defectos')">🛠️ Config. Defectos</button>
+            
+            <button class="btn-main" style="height: 45px; background: #2c3e50; grid-column: span 3;" onclick="abrirHistorialMaestro()">📜 VER HISTORIAL  (TODAS LAS LÍNEAS)</button>
+        </div>
 
             <div id="sec-yield">
                 <input type="text" id="busqueda-inspector" class="search-bar" placeholder="🔍 Buscar Inspector..." onkeyup="filtrarYield()">
@@ -477,30 +514,59 @@ body.dark-mode .btn-historial-v3:hover {
         </div>
     </div>
 
-    <div id="modal-historial-linea" class="airport-modal">
-        <div style="background: white; margin: 20px auto; width: 95%; max-width: 1000px; border-radius: 8px; padding: 25px; height: 80vh; overflow-y: auto; position: relative;">
-            <button style="position:absolute; top:15px; right:20px; font-size:25px; border:none; background:none; cursor:pointer;" onclick="cerrarModal('modal-historial-linea')">×</button>
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <h3 id="hist-linea-titulo"></h3>
-                <button id="btn-descarga-individual" onclick="exportarHistorialIndividual()" class="btn-excel-header">📥 DESCARGAR</button>
+  <div id="modal-historial-linea" class="airport-modal">
+    <div style="background: white; margin: 20px auto; width: 95%; max-width: 1100px; border-radius: 12px; padding: 45px 25px 25px 25px; height: 85vh; overflow-y: auto; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+        
+        <button style="position:absolute; top:10px; right:15px; font-size:24px; border:none; background:none; cursor:pointer; color:#bbb; font-weight:bold;" 
+                onclick="cerrarModal('modal-historial-linea')"
+                onmouseover="this.style.color='#555'"
+                onmouseout="this.style.color='#bbb'">✕</button>
+        
+       <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 25px; padding-bottom: 10px; border-bottom: 1px solid #eee;">
+    
+    <h3 id="hist-linea-titulo" style="color: #2c3e50; margin: 0; font-size: 1.4rem; font-weight: 700; letter-spacing: 0.5px;"></h3>
+    
+    <button id="btn-descarga-individual" 
+            onclick="exportarHistorialIndividual()" 
+            style="background-color: #1f7a44; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; transition: background 0.3s;">
+        <span style="font-size: 1.1rem;">📥</span> DESCARGAR EXCEL
+    </button>
+</div>
+
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+            <button onclick="filtrarHistorialRapido('hoy')" class="btn-filtro-mini">📍 Ver Hoy</button>
+            <button onclick="filtrarHistorialRapido('todo')" class="btn-filtro-mini grey">📚 Ver Todo</button>
+            
+            <div style="position: relative; margin-left: auto;">
+                <span style="position: absolute; left: 10px; top: 8px; color: #aaa;">🔍</span>
+                <input type="text" id="busqueda-lote-historial" onkeyup="filtrarLoteHistorialIndividual()" 
+                       placeholder="Filtrar por lote..." 
+                       style="padding: 8px 10px 8px 35px; border: 1px solid #ddd; border-radius: 20px; width: 200px; outline: none;">
             </div>
-            <input type="text" id="busqueda-lote-historial" class="search-bar" placeholder="🔍 Filtrar Lote..." onkeyup="filtrarLoteHistorialIndividual()">
-            <table class="airport-table">
-               <thead>
-    <tr>
-        <th>Fecha</th>
-        <th>Inicio</th> <th>Fin</th>    <th>Lote</th>
-        <th>Proceso</th>
-        <th>ANSI</th>
-        <th>Inspector</th>
-        <th>Resultado</th>
-        <th>Detalle</th>
-    </tr>
-</thead>
-                <tbody id="hist-linea-body"></tbody>
+        </div>
+
+        <div style="overflow-x:auto; border-radius: 12px; border: 1px solid #e1e4e8; box-shadow: 0 4px 12px rgba(0,0,0,0.05); background: white;">
+            <table class="table-moderna" style="width:100%; border-collapse: collapse; min-width: 950px; font-family: 'Segoe UI', Roboto, sans-serif;">
+                <thead>
+                    <tr style="background: #2c3e50; color: white; text-align: left;">
+                        <th style="padding:12px;">Fecha</th>
+                        <th style="padding:12px;">Inicio</th> 
+                        <th style="padding:12px;">Fin</th>    
+                        <th style="padding:12px;">Lote</th>
+                        <th style="padding:12px;">Proceso</th>
+                        <th style="padding:12px;">ANSI</th>
+                        <th style="padding:12px;">Inspector</th>
+                        <th style="padding:12px;">Resultado</th>
+                        <th style="padding:12px;">Tiempo</th>
+                        <th style="padding:12px;">Detalle</th>
+                    </tr>
+                </thead>
+                <tbody id="hist-linea-body" style="font-size: 0.92rem; color: #444;">
+                </tbody>
             </table>
         </div>
     </div>
+</div>
 
     <script>
         let pausaSincro = false;
@@ -1295,8 +1361,7 @@ function exportarExcelGeneral() {
     } catch (e) { console.error("Error al exportar:", e); }
 }
 
-// --- 3. HISTORIAL INDIVIDUAL (Corregido y Visible) ---
-function abrirHistorialIndividual(idx) {
+function abrirHistorialIndividual(idx, filtroFecha = 'todo') {
     const nombreLinea = lineasArr[idx];
     if (!nombreLinea) return console.error("Índice de línea no válido:", idx);
 
@@ -1308,35 +1373,151 @@ function abrirHistorialIndividual(idx) {
         return;
     }
 
-    const filtrados = dbHistorial.filter(r => 
+    // 1. APLICAR FILTROS (Línea + Fecha opcional)
+    const hoy = new Date().toLocaleDateString('es-ES');
+    let filtrados = dbHistorial.filter(r => 
         String(r.linea || "").trim().toUpperCase() === String(nombreLinea || "").trim().toUpperCase()
-    ).reverse();
+    );
+
+    if (filtroFecha === 'hoy') {
+        filtrados = filtrados.filter(r => r.fecha === hoy);
+    }
+
+    filtrados = [...filtrados].reverse();
 
     const body = document.getElementById('hist-linea-body');
     if (!body) return console.error("No se encontró hist-linea-body");
 
     if (filtrados.length === 0) {
-        body.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:20px; color:#999;">No hay registros previos para esta línea</td></tr>`;
+        body.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:20px; color:#999;">No hay registros para este filtro</td></tr>`;
     } else {
-        body.innerHTML = filtrados.map(r => `
-            <tr>
-                <td>${r.fecha}</td>
-                <td style="font-family:monospace;">${r.hora || '--:--'}</td>
-                <td style="font-family:monospace;">${r.horaFin || '--:--'}</td>
-                <td style="font-weight:bold;">${r.lote}</td>
-                <td>${r.proceso}</td>
-                <td>${r.ansi || '-'}</td>
-                <td>${r.inspector}</td>
-                <td style="font-weight:bold; color:${String(r.resultado).includes('ACEPTADO') ? '#28a745' : '#dc3545'}">
-                    ${r.resultado}
-                </td>
-                <td>${r.tiempo || '00:00'}</td> 
-                <td style="font-size:0.85em;">${r.detalle || '-'}</td>
-            </tr>`).join('');
+        body.innerHTML = filtrados.map(r => {
+            // --- LÓGICA DE ALERTAS ---
+            const esShaftTarde = (r.proceso === "Shaft" && (r.hora || "") > "18:30");
+            const esFinalTarde = (r.proceso === "Final" && (r.hora || "") > "23:00");
+            const colorHora = (esShaftTarde || esFinalTarde) ? "#dc3545" : "inherit";
+
+            const tiempoNum = parseInt(r.tiempo) || 0;
+            const limiteMax = obtenerLimiteTiempo(r.producto, r.proceso, r.ansi);
+            const colorTiempo = (limiteMax > 0 && tiempoNum > limiteMax) ? "#dc3545" : "inherit";
+
+            // --- RETORNO CON DISEÑO MEJORADO ---
+            return `
+                <tr class="fila-historial">
+                    <td style="color: #7f8c8d;">${r.fecha}</td>
+                    
+                    <td>
+                        <span class="mono-text" style="color: ${colorHora}; font-weight: ${colorHora !== 'inherit' ? 'bold' : 'normal'}">
+                            ${r.hora || '--:--'}
+                        </span>
+                    </td>
+                    
+                    <td>
+                        <span class="mono-text">${r.horaFin || '--:--'}</span>
+                    </td>
+
+                   <td style="font-weight: bold; color: #000000;">${r.lote}</td>
+                    
+                    <td><span style="background: #e9ecef; padding: 2px 8px; border-radius: 4px; font-size: 0.85em;">${r.proceso}</span></td>
+                    <td style="font-size: 0.85rem;">${r.ansi || '-'}</td>
+                    <td style="font-size: 0.8rem; color: #7f8c8d;">${r.inspector}</td>
+                    
+                    <td>
+                        <span class="badge-status" style="background: ${String(r.resultado).includes('ACEPTADO') ? '#d4edda' : '#f8d7da'}; color: ${String(r.resultado).includes('ACEPTADO') ? '#155724' : '#721c24'};">
+                            ${r.resultado}
+                        </span>
+                    </td>
+                    
+                    <td style="font-weight: bold; color: ${colorTiempo};">
+                        ${r.tiempo || '0'} <small>min</small>
+                    </td>
+                    
+                    <td style="font-size: 0.8rem; color: #95a5a6; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${r.detalle}">
+                        ${r.detalle || '-'}
+                    </td>
+                </tr>`;
+        }).join('');
     }
+
+    document.getElementById('modal-historial-linea').setAttribute('data-current-idx', idx);
     abrirModal('modal-historial-linea');
 }
+function filtrarHistorialRapido(rango) {
+    // Recuperamos el índice de la línea que guardamos al abrir el modal
+    const idx = document.getElementById('modal-historial-linea').getAttribute('data-current-idx');
+    if (idx !== null) {
+        abrirHistorialIndividual(parseInt(idx), rango);
+    }
+}
 
+// Función auxiliar para la lógica de tu tabla de minutos
+function obtenerLimiteTiempo(producto, proceso, ansi) {
+    if (!producto || !proceso || !ansi) return 0;
+    
+    const p = producto.toUpperCase().trim();
+    const proc = proceso.toUpperCase().trim();
+    const a = ansi.toLowerCase().trim();
+
+    let nivel = "Normal"; 
+    if (a.includes("riguroso")) nivel = "riguroso";
+    else if (a.includes("reducido")) nivel = "Reducido";
+
+    const tabla = {
+        "riguroso": { 
+            "SHAFT": {
+                "SOFIA 6F L3": 160, "SOFIA 5F L3": 160, "SOFIA EX": 0,
+                "HW 27+": 100, "HW SHORT": 80, "HW LONG": 100, 
+                "HW REGULAR": 120, "HW 21+": 120 
+            }, 
+            "FINAL": {
+                "SOFIA 6F L3": 100, "SOFIA 5F L3": 40, "SOFIA EX": 100,
+                "HW 27+": 60, "HW SHORT": 100, "HW LONG": 80, 
+                "HW REGULAR": 80, "HW 21+": 60 
+            } 
+        },
+        "Normal": { 
+            "SHAFT": {
+                "SOFIA 6F L3": 104, "SOFIA 5F L3": 104, "SOFIA EX": 0,
+                "HW 27+": 65, "HW SHORT": 52, "HW LONG": 65, 
+                "HW REGULAR": 78, "HW 21+": 78 
+            }, 
+            "FINAL": {
+                "SOFIA 6F L3": 65, "SOFIA 5F L3": 26, "SOFIA EX": 65,
+                "HW 27+": 39, "HW SHORT": 65, "HW LONG": 52, 
+                "HW REGULAR": 52, "HW 21+": 39 
+            } 
+        },
+        "Reducido": { 
+            "SHAFT": {
+                "SOFIA 6F L3": 40, "SOFIA 5F L3": 40, "SOFIA EX": 0,
+                "HW 27+": 25, "HW SHORT": 20, "HW LONG": 25, 
+                "HW REGULAR": 30, "HW 21+": 30 
+            }, 
+            "FINAL": {
+                "SOFIA 6F L3": 25, "SOFIA 5F L3": 10, "SOFIA EX": 25,
+                "HW 27+": 15, "HW SHORT": 25, "HW LONG": 20, 
+                "HW REGULAR": 20, "HW 21+": 15 
+            } 
+        }
+    };
+
+    // Buscamos el proceso (Shaft o Final)
+    let procClave = "";
+    if (proc.includes("SHAFT")) procClave = "SHAFT";
+    else if (proc.includes("FINAL")) procClave = "FINAL";
+
+    if (tabla[nivel] && tabla[nivel][procClave]) {
+        // Buscamos la coincidencia exacta del nombre del producto
+        // Esto evita confusiones entre 'REGULAR' y 'HW REGULAR'
+        for (let nombreEstandar in tabla[nivel][procClave]) {
+            if (p.includes(nombreEstandar)) {
+                return tabla[nivel][procClave][nombreEstandar];
+            }
+        }
+    }
+    
+    return 0;
+}
 // --- 4. PERSISTENCIA Y SINCRONIZACIÓN ---
 async function guardarEstadoPizarraEnNube() {
     try {
@@ -1376,19 +1557,14 @@ function filtrarLotesAdmin() {
 // Filtro para el Historial de cada línea
 function filtrarLoteHistorialIndividual() {
     const input = document.getElementById('busqueda-lote-historial');
-    if (!input) return;
-    const busqueda = input.value.toLowerCase();
-    const filas = document.querySelectorAll('#hist-linea-body tr');
+    const filter = input.value.toUpperCase();
+    const rows = document.querySelectorAll('#hist-linea-body tr');
 
-    filas.forEach(fila => {
-        // CORRECCIÓN: En tu HTML el LOTE es la columna 4 (índice 3)
-        if (fila.cells[3]) {
-            const textoLote = fila.cells[3].textContent.toLowerCase();
-            fila.style.display = textoLote.includes(busqueda) ? "" : "none";
-        }
+    rows.forEach(row => {
+        const text = row.cells[3] ? row.cells[3].textContent.toUpperCase() : "";
+        row.style.display = text.indexOf(filter) > -1 ? "" : "none";
     });
 }
-
 // Función para los botones de "Hoy" y "Todo"
 function filtrarPorFecha(rango) {
     if (!window.dbHistorial) return;
@@ -1451,7 +1627,435 @@ if (localStorage.getItem('qc_theme') === 'dark') {
             inicializarSistema(); 
         };
 
+function exportarHistorialIndividual() {
+    // 1. Si la librería no existe, la creamos dinámicamente
+    if (typeof XLSX === 'undefined') {
+        console.log("Cargando librería XLSX dinámicamente...");
+        const script = document.createElement('script');
+        script.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+        script.onload = () => {
+            console.log("Librería cargada. Reintentando descarga...");
+            ejecutarExportacionReal(); // Llama a la exportación cuando termine de cargar
+        };
+        document.head.appendChild(script);
+    } else {
+        ejecutarExportacionReal();
+    }
+}
 
+// Esta es la función que hace el trabajo pesado
+function ejecutarExportacionReal() {
+    try {
+        const tabla = document.querySelector("#modal-historial-linea table");
+        if (!tabla) {
+            alert("No se encontró la tabla en el modal.");
+            return;
+        }
+
+        const tituloEle = document.getElementById('hist-linea-titulo');
+        let nombreBase = tituloEle ? tituloEle.innerText : "Reporte_QC";
+        nombreBase = nombreBase.replace(/HISTORIAL: /g, "").replace(/[: ]/g, "_");
+
+        // Convertir tabla a Excel
+        const worksheet = XLSX.utils.table_to_sheet(tabla);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Historial");
+
+        // Generar archivo
+        XLSX.writeFile(workbook, `${nombreBase}.xlsx`);
+        console.log("Excel generado exitosamente.");
+
+    } catch (error) {
+        console.error("Error al exportar:", error);
+        alert("Error técnico al generar el archivo: " + error.message);
+    }
+}
+</script> 
+
+<div id="modal-historial-maestro" class="modal" style="display:none; z-index: 6000;">
+    <div style="background: white; margin: 5vh auto; width: 95%; max-width: 1300px; border-radius: 12px; padding: 25px; height: 85vh; overflow-y: auto; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+        
+        <button style="position:absolute; top:15px; right:20px; font-size:30px; border:none; background:none; cursor:pointer;" onclick="cerrarModal('modal-historial-maestro')">×</button>
+        
+     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 15px;">
+    <h2 style="margin:0; color:#2c3e50;">📊 PANEL MAESTRO DE HISTORIAL</h2>
+    
+    <div style="display:flex; gap:10px;">
+        <button onclick="alternarVista('flujo')" id="btn-vista-flujo" style="background:#2c3e50; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:bold;">📈 FLUJO</button>
+        
+        <button onclick="alternarVista('tabla')" id="btn-vista-tabla" style="background:#7f8c8d; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:bold; display:none;">📋 TABLAS</button>
+        
+      <button onclick="exportarExcelSeguro()" style="background:#1f7a44; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:bold;">
+    📥 EXPORTAR EXCEL
+</button>
+    </div>
+</div>
+
+<div id="contenedor-flujo-maestro" style="display:none; padding:20px; background:white;">
+    <h3 style="text-align:center; color:#2c3e50;">Ingreso Diario de Lotes (6 AM - 12 MD)</h3>
+    <div style="height:450px;">
+        <canvas id="graficoFlujoMaestro"></canvas>
+    </div>
+</div>
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; gap: 20px;">
+            <label style="font-weight: bold;">Turno:</label>
+          <select id="filtro-turno-maestro" onchange="generarGraficoFlujo()" style="padding: 8px; border-radius: 5px;">
+    <option value="todos">Ambos turno </option>
+    <option value="TA">Turno A </option>
+    <option value="TB">Turno B </option>
+</select>
+        </div>
+
+        <div id="contenedor-tablas-maestras"></div>
+    </div>
+</div>
+
+<script>
+    function abrirHistorialMaestro() {
+        cerrarModal('modal-admin'); 
+        abrirModal('modal-historial-maestro');
+        renderizarContenidoMaestro();
+    }
+function exportarTodoElMaestro() {
+    try {
+        if (typeof XLSX === 'undefined') {
+            alert("La librería Excel no está lista.");
+            return;
+        }
+
+        const wb = XLSX.utils.book_new();
+        const contenedores = document.querySelectorAll('#contenedor-tablas-maestras div');
+
+        if (contenedores.length === 0) {
+            alert("No hay datos para exportar.");
+            return;
+        }
+
+        contenedores.forEach((div) => {
+            const nombreLinea = div.querySelector('div').innerText.replace('📍 LÍNEA: ', '').trim();
+            const tabla = div.querySelector('table');
+            const ws = XLSX.utils.table_to_sheet(tabla);
+            XLSX.utils.book_append_sheet(wb, ws, nombreLinea.substring(0, 31)); // Excel limita nombres de hoja a 31 caracteres
+        });
+
+        XLSX.writeFile(wb, `REPORTE_GLOBAL_QC_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
+    } catch (e) {
+        alert("Error al exportar todo: " + e.message);
+    }
+}
+// 1. Función Maestra de Renderizado
+async function renderizarContenidoMaestro() {
+    const contenedor = document.getElementById('contenedor-tablas-maestras');
+    const turnoSel = document.getElementById('filtro-turno-maestro').value;
+    
+    // 1. Limpieza y determinación del "Hoy Operativo"
+    contenedor.innerHTML = "<div style='text-align:center; padding:20px;'>📂 Cargando historial...</div>";
+    
+    const ahora = new Date();
+    let dH = ahora.getDate();
+    let mH = ahora.getMonth() + 1;
+    let aH = ahora.getFullYear();
+
+    // Si es madrugada (antes de las 6am), operativamente sigue siendo "ayer"
+    if (ahora.getHours() < 6) {
+        const ayer = new Date(ahora);
+        ayer.setDate(ayer.getDate() - 1);
+        dH = ayer.getDate(); mH = ayer.getMonth() + 1; aH = ayer.getFullYear();
+    }
+    const hoyID = `${dH}/${mH}/${aH}`;
+
+    try {
+        const respuesta = await fetch(SHEETS_URL);
+        const resJson = await respuesta.json();
+        const datos = resJson.historial || []; 
+
+        contenedor.innerHTML = "";
+        const lineas = {};
+
+        // Procesar datos de Google Sheets
+        [...datos].reverse().forEach(reg => {
+            if (!reg.fecha) return;
+
+            let fechaReg = String(reg.fecha).trim().replace(/-/g, '/'); // "26/3/2026"
+            const horaInicioStr = reg.hora || "00:00";
+            const hRegNum = parseInt(horaInicioStr.split(':')[0]);
+
+            // Ajuste de Día Operativo para lotes de madrugada (como los de las 00:05)
+            let fechaOpReg = fechaReg;
+            if (hRegNum < 6) {
+                const [d, m, a] = fechaReg.split('/').map(Number);
+                const fObj = new Date(a, m - 1, d);
+                fObj.setDate(fObj.getDate() - 1);
+                fechaOpReg = `${fObj.getDate()}/${fObj.getMonth() + 1}/${fObj.getFullYear()}`;
+            }
+
+            // Filtro de Seguridad: Solo lo de hoy y el turno seleccionado
+            if (turnoSel !== "todos") {
+                if (fechaOpReg !== hoyID) return; 
+                const turnoReg = (hRegNum >= 6 && hRegNum < 18) ? "TA" : "TB";
+                if (turnoSel !== turnoReg) return;
+            }
+
+            const nombreLinea = reg.linea || "OTRA";
+            if (!lineas[nombreLinea]) lineas[nombreLinea] = [];
+            lineas[nombreLinea].push(reg);
+        });
+
+        // 2. Generar las tablas por línea
+        for (const nombre in lineas) {
+            let html = `
+                <div style="margin-bottom:30px; overflow-x:auto;">
+                    <div style="background:#2c3e50; color:white; padding:12px; border-radius:8px 8px 0 0; font-weight:bold;">📍 LÍNEA: ${nombre}</div>
+                    <table style="width:100%; border-collapse:collapse; min-width: 900px;">
+                        <thead>
+                            <tr style="background:#f8f9fa; border-bottom:2px solid #dee2e6; text-align:center;">
+                                <th style="width:9%;">Inicio</th><th style="width:9%;">Fin</th>
+                                <th style="width:14%;">Lote</th><th style="width:18%;">Producto</th>
+                                <th style="width:12%;">Proceso</th><th style="width:12%;">Estado</th>
+                                <th style="width:11%;">Tiempo</th><th style="width:15%;">Resultado</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+            lineas[nombre].forEach(r => {
+                const horaReg = r.hora || "00:00";
+                const hNum = parseInt(horaReg.split(':')[0]);
+                const proceso = String(r.proceso || "").toLowerCase();
+                const esTA = (hNum >= 6 && hNum < 18);
+
+                // --- LÓGICA DE COLORES DE HORARIO (Inicio) ---
+                let colorInicio = "black";
+                if (esTA) {
+                    // Turno A: Shaft > 08:00 o Final > 14:00
+                    if (proceso.includes("shaft") && esHoraMayor(horaReg, "08:00")) colorInicio = "red";
+                    else if (proceso.includes("final") && esHoraMayor(horaReg, "14:00")) colorInicio = "red";
+                } else {
+                    // Turno B: Shaft > 18:00 o Final > 23:00 (incluye madrugada)
+                    if (proceso.includes("shaft") && (esHoraMayor(horaReg, "18:00") || hNum < 6)) colorInicio = "red";
+                    else if (proceso.includes("final") && (esHoraMayor(horaReg, "23:00") || hNum < 6)) colorInicio = "red";
+                }
+
+                // --- LÓGICA DE COLOR DE TIEMPO (Duración) ---
+                let colorTiempo = "black";
+                const minsTranscurridos = convertirAMinutos(r.tiempo); // "121:25" -> 121.41
+                
+                if (typeof obtenerLimiteTiempo === 'function') {
+                    const limite = obtenerLimiteTiempo(r.producto, r.proceso, r.ansi);
+                    if (limite > 0 && minsTranscurridos > limite) colorTiempo = "red";
+                } else {
+                    // Si no existe la función, marcamos rojo si pasa de 90 min como estándar
+                    if (minsTranscurridos > 90) colorTiempo = "red";
+                }
+
+                const colorRes = String(r.resultado).includes("RECHAZADO") ? "red" : "black";
+
+                html += `
+                    <tr style="border-bottom:1px solid #eee; text-align:center;">
+                        <td style="color:${colorInicio}; font-weight:bold; padding:12px;">${horaReg}</td>
+                        <td style="font-weight:bold;">${r.horaFin || '-'}</td>
+                        <td>${r.lote || '-'}</td>
+                        <td style="font-size:0.85em;">${r.producto || '-'}</td>
+                        <td style="font-weight:bold; color:#555;">${r.proceso || '-'}</td>
+                        <td style="color:#666; font-style:italic;">${r.ansi || r.estado || '-'}</td>
+                        <td style="color:${colorTiempo}; font-weight:bold;">${r.tiempo || '00:00'}</td>
+                        <td style="color:${colorRes}; font-weight:bold;">${r.resultado}</td>
+                    </tr>`;
+            });
+            html += `</tbody></table></div>`;
+            contenedor.innerHTML += html;
+        }
+
+        if (contenedor.innerHTML === "") {
+            contenedor.innerHTML = `<p style='text-align:center; padding:20px;'>📅 No hay registros para hoy (${hoyID}).</p>`;
+        }
+    } catch (error) {
+        console.error("Error:", error);
+        contenedor.innerHTML = "<p style='text-align:center; color:red; padding:20px;'>❌ Error al conectar con Google Sheets.</p>";
+    }
+}
+
+// --- FUNCIONES DE APOYO CRÍTICAS ---
+
+function esHoraMayor(hReg, hLim) {
+    if (!hReg || hReg === "-" || hReg.length < 4) return false;
+    const [h1, m1] = hReg.split(':').map(Number);
+    const [h2, m2] = hLim.split(':').map(Number);
+    let minReg = h1 * 60 + m1;
+    let minLim = h2 * 60 + m2;
+    // Si el registro es madrugada (0-5) y el límite es noche (18-23), sumamos 24h
+    if (h1 < 6 && h2 >= 18) minReg += 1440; 
+    return minReg > minLim;
+}
+
+function convertirAMinutos(t) {
+    if (!t || !t.includes(':')) return 0;
+    const partes = t.split(':').map(Number);
+    // Interpretamos HH:MM como total de minutos (ej: 84:37 son 84 minutos)
+    return partes[0] + (partes[1] / 60);
+}
+let miGraficoFlujo = null;
+
+function alternarVista(vista) {
+    const contTabla = document.getElementById('contenedor-tablas-maestras');
+    const contFlujo = document.getElementById('contenedor-flujo-maestro');
+    const btnFlujo = document.getElementById('btn-vista-flujo');
+    const btnTabla = document.getElementById('btn-vista-tabla');
+
+    if (vista === 'flujo') {
+        contTabla.style.display = 'none';
+        contFlujo.style.display = 'block';
+        btnFlujo.style.display = 'none';
+        btnTabla.style.display = 'block';
+        generarGraficoFlujo();
+    } else {
+        contTabla.style.display = 'block';
+        contFlujo.style.display = 'none';
+        btnFlujo.style.display = 'block';
+        btnTabla.style.display = 'none';
+    }
+}
+
+// Registrar el plugin de etiquetas globalmente
+Chart.register(ChartDataLabels);
+
+async function generarGraficoFlujo() {
+    const canvas = document.getElementById('graficoFlujoMaestro');
+    if (!canvas) return;
+
+    const filtroTurno = document.getElementById('filtro-turno-maestro').value;
+
+    try {
+        const respuesta = await fetch(SHEETS_URL);
+        const resJson = await respuesta.json();
+        const datos = resJson.historial || [];
+        
+        const ahora = new Date();
+        if (ahora.getHours() < 6) ahora.setDate(ahora.getDate() - 1);
+        const hoyStr = `${ahora.getDate()}/${ahora.getMonth()+1}/${ahora.getFullYear()}`;
+
+        let labelsOrdenadas = [];
+        let ordenHoras = [];
+
+        // Lógica de filtrado dinámico
+        if (filtroTurno === "TA") {
+            labelsOrdenadas = ["6am", "7am", "8am", "9am", "10am", "11am", "12md", "1pm", "2pm", "3pm"];
+            ordenHoras = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+        } else if (filtroTurno === "TB") {
+            labelsOrdenadas = ["3pm", "4pm", "5pm", "6pm", "7pm", "8pm", "9pm", "10pm", "11pm", "12mn"];
+            ordenHoras = [15, 16, 17, 18, 19, 20, 21, 22, 23, 0];
+        } else {
+            // OPCIÓN POR DEFECTO: 6 AM a 12 MN
+            labelsOrdenadas = ["6am", "7am", "8am", "9am", "10am", "11am", "12md", "1pm", "2pm", "3pm", "4pm", "5pm", "6pm", "7pm", "8pm", "9pm", "10pm", "11pm", "12mn"];
+            ordenHoras = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0];
+        }
+
+        const conteo = {};
+        ordenHoras.forEach(h => conteo[h] = 0);
+
+        datos.forEach(reg => {
+            if (!reg.hora || !reg.fecha) return;
+            let fReg = String(reg.fecha).trim().replace(/-/g, '/');
+            if (fReg === hoyStr) {
+                const hora = parseInt(reg.hora.split(':')[0]);
+                if (conteo.hasOwnProperty(hora)) conteo[hora]++;
+            }
+        });
+
+        const dataValores = ordenHoras.map(h => conteo[h]);
+
+        if (window.miGraficoFlujo) window.miGraficoFlujo.destroy();
+
+        window.miGraficoFlujo = new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: labelsOrdenadas,
+                datasets: [{
+                    data: dataValores,
+                    borderColor: '#27ae60',
+                    backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 6,
+                    pointBackgroundColor: '#27ae60',
+                    datalabels: {
+                        display: true,
+                        align: 'top',
+                        anchor: 'end',
+                        color: '#2c3e50',
+                        font: { weight: 'bold', size: 12 },
+                        offset: 4
+                    }
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: { padding: { top: 35, right: 20, left: 10 } },
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } },
+                    x: { grid: { display: false } }
+                }
+            },
+            plugins: [ChartDataLabels]
+        });
+    } catch (e) { console.error(e); }
+}
+async function exportarExcelSeguro() {
+    try {
+        // 1. Verificación y carga de Librería
+        if (typeof XLSX === 'undefined') {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+            document.head.appendChild(script);
+            await new Promise(res => script.onload = res);
+        }
+
+        // 2. Localizar contenedor y asegurar datos
+        const contenedor = document.getElementById('contenedor-tablas-maestras');
+        
+        // Si no hay tablas generadas aún, las creamos en memoria
+        if (contenedor.children.length === 0) {
+            await renderizarContenidoMaestro(); 
+        }
+
+        const wb = XLSX.utils.book_new();
+        // Buscamos los bloques de cada línea
+        const bloques = contenedor.querySelectorAll('div[style*="margin-bottom:30px"]');
+
+        if (bloques.length === 0) {
+            alert("No hay datos cargados para exportar. Por favor, selecciona un turno primero.");
+            return;
+        }
+
+        bloques.forEach((bloque) => {
+            const titulo = bloque.querySelector('div');
+            const tabla = bloque.querySelector('table');
+            
+            if (tabla) {
+                // Clonamos la tabla para que la vista del usuario no se dañe
+                const tablaClonada = tabla.cloneNode(true);
+                const ws = XLSX.utils.table_to_sheet(tablaClonada);
+                
+                // --- CORRECCIÓN DE NOMBRE DE HOJA (Evita error técnico) ---
+                let nombreHoja = titulo ? titulo.innerText.replace('📍 LÍNEA: ', '').trim() : "Datos";
+                
+                // Eliminamos caracteres prohibidos por Excel: / \ ? * [ ] :
+                nombreHoja = nombreHoja.replace(/[\/\\?*\[\]:]/g, "-").substring(0, 31); 
+                
+                XLSX.utils.book_append_sheet(wb, ws, nombreHoja);
+            }
+        });
+
+        // 3. Generar y descargar el archivo
+        const fecha = new Date().toLocaleDateString().replace(/\//g, '-');
+        XLSX.writeFile(wb, `Reporte_QC_Maestro_${fecha}.xlsx`);
+
+    } catch (e) {
+        console.error("Error detallado:", e);
+        alert("Error técnico: " + e.message);
+    }
+}
 </script>
 </body>
 </html>
